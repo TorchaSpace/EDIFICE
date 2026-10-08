@@ -9,6 +9,7 @@ from pathlib import Path
 from PySide6.QtGui import (QBrush, QColor, QFont, QImage, QLinearGradient, QPageSize, QPainter, QPainterPath,
                            QPdfWriter, QPen)
 
+from ..engine.rating import CLASS_COLORS
 from ..engine.relevance import LABELS as FIT_LABELS
 from ..service import Project
 from .widgets import MONO, SANS, fmt, fmt_years, grade_for
@@ -93,6 +94,13 @@ def build_pdf(project: Project, codes: list[str], path: str) -> str:
     c.rrect(PAGE_W - MARGIN - 112, y + 2, 112, 38, 10, fill="#FFFFFF", border=gcol)
     c.text(PAGE_W - MARGIN - 112, y + 4, 112, 20, f"{h.total:.0f} / 100", 13, gcol, QFont.Bold, Qt.AlignHCenter, mono=True)
     c.text(PAGE_W - MARGIN - 112, y + 22, 112, 14, f"Health Score · {h.grade}", 7.5, MUTED, align=Qt.AlignHCenter)
+    rating = project.rating()
+    after = project.rating_after(project.applicable_codes()) if project.applicable_codes() else rating["class"]
+    cls_col = CLASS_COLORS[rating["class"]]
+    c.rrect(PAGE_W - MARGIN - 112 - 128, y + 2, 118, 38, 10, fill="#FFFFFF", border=cls_col)
+    c.text(PAGE_W - MARGIN - 112 - 128, y + 4, 118, 20, f"{rating['class']}  →  {after}" if after != rating["class"] else rating["class"],
+           13, "#1B2B27", QFont.Bold, Qt.AlignHCenter, mono=True)
+    c.text(PAGE_W - MARGIN - 112 - 128, y + 22, 118, 14, "Tahmini enerji sınıfı", 7.5, MUTED, align=Qt.AlignHCenter)
 
     # ---- KPI kartları
     y = 164
@@ -167,7 +175,7 @@ def build_pdf(project: Project, codes: list[str], path: str) -> str:
                    al, mono=j in (2, 3, 4))
 
     # ---- senaryo
-    y = 682
+    y = 660
     c.text(MARGIN, y, cw, 18, "Seçili senaryo", 12, INK, QFont.Bold)
     names = ", ".join(o.name for o in scen.selected) or "Henüz öneri seçilmedi"
     c.text(MARGIN, y + 17, cw, 14, names, 8, MUTED)
@@ -184,6 +192,13 @@ def build_pdf(project: Project, codes: list[str], path: str) -> str:
     line = (f"EUI {fmt(cur.eui_kwh_m2, 1)} → {fmt(tgt.eui_kwh_m2, 1)} kWh/m²   ·   Karbon {fmt(cur.carbon_kg / 1000, 1)} → "
             f"{fmt(tgt.carbon_kg / 1000, 1)} tCO₂   ·   Yıllık maliyet {fmt(cur.total_cost / 1e6, 2)} → {fmt(tgt.total_cost / 1e6, 2)} M ₺")
     c.text(MARGIN, by + 58, cw, 16, line, 8.2, MUTED, mono=False)
+    if scen.selected:
+        fin = project.finance(codes)
+        irr = f"%{fmt(fin.irr * 100, 1)}" if fin.irr is not None else "-"
+        a = project.assumptions
+        c.text(MARGIN, by + 74, cw, 16,
+               f"NPV {fmt(fin.npv / 1e6, 2)} M ₺   ·   IRR {irr}   ·   {a.horizon_years} yıl net kazanç {fmt(fin.total_net / 1e6, 2)} M ₺"
+               f"   (reel, iskonto %{fmt(a.discount_rate * 100, 0)})", 8.2, INK, QFont.DemiBold)
 
     # ---- alt bilgi
     p.setPen(QPen(QColor(LINE), 0.8))

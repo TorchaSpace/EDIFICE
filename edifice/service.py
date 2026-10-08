@@ -4,7 +4,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from . import mock_data
+from .engine.finance import FinanceResult, analyze
 from .engine.health import compute_health
+from .engine.optimizer import best_package
+from .engine.rating import energy_class, percentile_worse_than
 from .engine.kpi import compute_kpis, latest_full_year
 from .engine.opportunities import evaluate_all, run_scenario, unit_prices
 from .models import (Assumptions, Building, Equipment, HealthScore, KPIs, Opportunity,
@@ -82,6 +85,28 @@ class Project:
     def opportunity_results(self) -> list[OpportunityResult]:
         return evaluate_all(self.opportunities, self.building, self.kpis(),
                             self.prices(), self.assumptions, self.equipment)
+
+    def rating(self) -> dict:
+        k, a = self.kpis(), self.assumptions
+        return {"class": energy_class(k.eui_kwh_m2, a.benchmark_eui_kwh_m2),
+                "percentile": percentile_worse_than(k.eui_kwh_m2, a.benchmark_eui_kwh_m2),
+                "eui": k.eui_kwh_m2, "benchmark": a.benchmark_eui_kwh_m2}
+
+    def rating_after(self, codes: list[str]) -> str:
+        s = self.scenario(codes)
+        return energy_class(s.target.eui_kwh_m2, self.assumptions.benchmark_eui_kwh_m2)
+
+    def applicable_codes(self) -> list[str]:
+        return [r.opportunity.code for r in self.opportunity_results() if r.fit != "none"]
+
+    def finance(self, codes: list[str]) -> FinanceResult:
+        s = self.scenario(codes)
+        return analyze(s.capex, s.annual_saving, self.assumptions)
+
+    def best_package(self, budget: float):
+        ok = {r.opportunity.code for r in self.opportunity_results() if r.fit != "none"}
+        opps = [o for o in self.opportunities if o.code in ok]
+        return best_package(opps, self.building, self.kpis(), self.prices(), self.assumptions, budget)
 
     def scenario(self, codes: list[str]) -> ScenarioResult:
         sel = [o for o in self.opportunities if o.code in codes]

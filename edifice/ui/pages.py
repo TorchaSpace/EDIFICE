@@ -2,14 +2,15 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import (QAbstractItemView, QGridLayout, QHBoxLayout, QHeaderView, QLabel,
+from PySide6.QtWidgets import (QAbstractItemView, QSizePolicy, QSlider, QGridLayout, QHBoxLayout, QHeaderView, QLabel,
                                QPushButton, QScrollArea, QTableWidget, QTableWidgetItem,
                                QVBoxLayout, QWidget)
 
+from ..engine.rating import CLASS_COLORS, z_of
 from ..engine.relevance import LABELS as FIT_LABELS
 from ..models import UTILITY_UNITS, UtilityType
 from ..service import Project
-from .charts import AreaChart, BarChart
+from .charts import AreaChart, BarChart, CashFlowChart, ClassScale, PercentileBar
 from .forms import SmoothSelectTable
 from .widgets import (AMBER, G, GRADE_COLORS, INDIGO, MUTED, RED, SUB, TEXT, Card, Gauge, Panel, ScoreBar, badge,
                       fmt, fmt_years, header, muted, qfont, section)
@@ -149,6 +150,40 @@ class OverviewPage:
         mid.addWidget(chart_panel, 1)
         lay.addLayout(mid)
 
+        rating = project.rating()
+        after_codes = project.applicable_codes()
+        after = project.rating_after(after_codes) if after_codes else None
+        rp = Panel(eyebrow="Enerji performansı", title="Enerji sınıfı ve benzer binalarla kıyas",
+                   subtitle="Tahmini sınıf: enerji yoğunluğu (EUI) ayarlardaki kıyas değerine oranlanır. Resmi enerji kimlik belgesi değildir.")
+        rrow = QHBoxLayout()
+        rrow.setSpacing(28)
+        left = QVBoxLayout()
+        left.addWidget(ClassScale(rating["class"], after))
+        if after and after != rating["class"]:
+            note = QLabel(f"Tüm uygun öneriler uygulanırsa <b style='color:{CLASS_COLORS[after]}'>{rating['class']} → {after}</b>")
+            note.setStyleSheet(f"color: {SUB}; font-size: 13px; background: transparent;")
+            left.addWidget(note)
+        left.addStretch()
+        rrow.addLayout(left, 5)
+        right = QVBoxLayout()
+        pct = rating["percentile"]
+        worse = pct >= 50
+        big = QLabel(f"%{fmt(pct if worse else 100 - pct)}")
+        big.setStyleSheet(f"color: {RED if pct >= 65 else AMBER if pct >= 35 else G}; font-size: 38px; font-weight: 500; "
+                          "font-family: 'DM Mono','SF Mono',Menlo,monospace; background: transparent;")
+        cap = QLabel(f"benzer {project.building.use_type.lower()} binasından <b>{'daha fazla' if worse else 'daha az'}</b> enerji tüketiyor "
+                     f"(EUI {fmt(rating['eui'], 0)} · kıyas {fmt(rating['benchmark'], 0)} kWh/m²·yıl)")
+        cap.setWordWrap(True)
+        cap.setStyleSheet(f"color: {SUB}; font-size: 13px; background: transparent;")
+        right.addWidget(big)
+        right.addWidget(cap)
+        right.addWidget(PercentileBar(z_of(rating["eui"], rating["benchmark"]), pct))
+        right.addStretch()
+        rrow.addLayout(right, 4)
+        rp.lay.addLayout(rrow)
+        rp.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
+        lay.addWidget(rp)
+
         bottom = QHBoxLayout()
         bottom.setSpacing(18)
         recs = Panel(eyebrow="EDIFI'CE öneri motoru", title="Öne çıkan fırsatlar")
@@ -265,6 +300,30 @@ class ScenarioPage:
         self.project, self.store = project, store
         self.widget, lay = _page()
         lay.addWidget(header("Senaryo", "Mevcut vs Hedef", "Uygulanacak önerileri seçin; hedef durum anında hesaplanır."))
+        total_capex = sum(o.capex_per_m2 for o in project.opportunities) * project.building.floor_area_m2
+        self.slider_max = int(-(-total_capex // 50_000) * 50_000) or 50_000
+        sim = Panel("Bütçe simülatörü", "Bütçeyi kaydırın: o bütçeyle en yüksek net bugünkü değeri (NPV) veren öneri paketi otomatik seçilir.")
+        srow = QHBoxLayout()
+        srow.setSpacing(18)
+        self.slider = QSlider(Qt.Horizontal)
+        self.slider.setRange(0, self.slider_max // 50_000)
+        self.slider.setCursor(Qt.PointingHandCursor)
+        self.slider.setMinimumHeight(34)
+        self.budget_lbl = QLabel("0 ₺")
+        self.budget_lbl.setMinimumWidth(150)
+        self.budget_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.budget_lbl.setStyleSheet("font-size: 26px; font-weight: 500; font-family: 'DM Mono','SF Mono',Menlo,monospace; background: transparent;")
+        srow.addWidget(self.slider, 1)
+        srow.addWidget(self.budget_lbl)
+        sim.lay.addSpacing(6)
+        sim.lay.addLayout(srow)
+        self.sim_note = QLabel("")
+        self.sim_note.setWordWrap(True)
+        self.sim_note.setStyleSheet(f"color: {SUB}; font-size: 13px; background: transparent;")
+        sim.lay.addWidget(self.sim_note)
+        lay.addWidget(sim)
+        self.slider.valueChanged.connect(self._slider_moved)
+
         body = QHBoxLayout()
         body.setSpacing(18)
 
@@ -312,12 +371,30 @@ class ScenarioPage:
         body.addLayout(right, 1)
         lay.addLayout(body)
 
+        a = project.assumptions
+        self.fin_panel = Panel(eyebrow="Finansal analiz", title=f"{a.horizon_years} yıllık nakit akışı",
+                               subtitle=f"Reel (enflasyondan arındırılmış) değerler · iskonto %{fmt(a.discount_rate * 100, 1)} · enerji fiyat artışı %{fmt(a.energy_escalation * 100, 1)} · "
+                                        f"tasarruf kaybı %{fmt(a.savings_degradation * 100, 1)}/yıl")
+        frow = QHBoxLayout()
+        frow.setSpacing(14)
+        self.f_npv = Card("Net bugünkü değer (NPV)", accent=G)
+        self.f_irr = Card("İç verim oranı (IRR)", accent=INDIGO)
+        self.f_dpb = Card("İndirgenmiş geri ödeme", accent=AMBER)
+        self.f_net = Card("Toplam net kazanç", accent=G)
+        for c in (self.f_npv, self.f_irr, self.f_dpb, self.f_net):
+            frow.addWidget(c)
+        self.fin_panel.lay.addSpacing(6)
+        self.fin_panel.lay.addLayout(frow)
+        self.cash_chart = CashFlowChart(list(range(a.horizon_years + 1)), [0.0] * (a.horizon_years + 1), None, min_h=250)
+        self.fin_panel.lay.addWidget(self.cash_chart, 1)
+        lay.addWidget(self.fin_panel)
+
         self.chart_panel = Panel(eyebrow="Karşılaştırma", title="Mevcut vs Hedef", subtitle="mevcut durum = 100")
         self.chart = BarChart(["Elektrik", "Doğalgaz", "Enerji", "Karbon", "Maliyet"],
                               {"Mevcut": [100] * 5, "Hedef": [100] * 5}, min_h=230,
                               colors=["slate", "green"], unit="%", fixed_max=100)
         self.chart_panel.lay.addWidget(self.chart, 1)
-        lay.addWidget(self.chart_panel, 1)
+        lay.addWidget(self.chart_panel)
         if store is not None and project.building_id is not None:
             for code in store.load_scenario(project.building_id):
                 if code in self.checks:
@@ -328,6 +405,21 @@ class ScenarioPage:
 
     def selected_codes(self) -> list[str]:
         return [c for c, cb in self.checks.items() if cb.isChecked()]
+
+    def _slider_moved(self, v: int):
+        budget = v * 50_000
+        self.budget_lbl.setText(f"{fmt(budget / 1e6, 2)} M ₺")
+        codes, fin = self.project.best_package(budget)
+        for code, btn in self.checks.items():
+            btn.blockSignals(True)
+            btn.setChecked(code in codes)
+            btn.blockSignals(False)
+        if codes:
+            names = ", ".join(o.name for o in self.project.opportunities if o.code in codes)
+            self.sim_note.setText(f"En iyi paket: {names}  ·  CAPEX {fmt(fin.capex / 1e6, 2)} M ₺  ·  NPV {fmt(fin.npv / 1e6, 2)} M ₺")
+        else:
+            self.sim_note.setText("Bu bütçeyle net bugünkü değeri pozitif bir paket yok; bütçeyi artırın." if budget else "Bütçeyi kaydırın.")
+        self._toggled()
 
     def _toggled(self, *_):
         if self.store is not None and self.project.building_id is not None:
@@ -356,6 +448,21 @@ class ScenarioPage:
                        100 * t.total_energy_kwh / c.total_energy_kwh, 100 * t.carbon_kg / c.carbon_kg,
                        100 * t.total_cost / c.total_cost]})
 
+        fin = self.project.finance(self.selected_codes())
+        pb = fin.simple_payback if fin.simple_payback != float("inf") else None
+        self.cash_chart.update_data(fin.cumulative, pb)
+        self.f_npv.set_number(fin.npv / 1e6, lambda v: f"{fmt(v, 2)} M ₺", "bugünkü değerle", live=True,
+                              color=None if fin.npv >= 0 else RED)
+        if fin.irr is None:
+            self.f_irr.set("-", "tanımsız")
+        else:
+            self.f_irr.set_number(fin.irr * 100, lambda v: f"%{fmt(v, 1)}", f"iskonto %{fmt(self.project.assumptions.discount_rate * 100, 0)} üstünde" if fin.irr > self.project.assumptions.discount_rate else "iskontonun altında", live=True)
+        if fin.discounted_payback is None:
+            self.f_dpb.set("-", "analiz süresinde dönmüyor")
+        else:
+            self.f_dpb.set_number(fin.discounted_payback, lambda v: f"{fmt(v, 1)} yıl", "iskontolu", live=True)
+        self.f_net.set_number(fin.total_net / 1e6, lambda v: f"{fmt(v, 2)} M ₺", f"{self.project.assumptions.horizon_years} yıl sonunda", live=True,
+                              color=None if fin.total_net >= 0 else RED)
         self.c_capex.set_number(s.capex / 1e6, lambda v: f"{fmt(v, 2)} M ₺", "toplam yatırım", live=True)
         self.c_save.set_number(s.annual_saving / 1e6, lambda v: f"{fmt(v, 2)} M ₺", "her yıl", live=True)
         pb = s.payback_years if s.payback_years != float("inf") else 0.0

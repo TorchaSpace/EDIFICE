@@ -157,6 +157,11 @@ QLabel#ddCheck {{ color: {G}; font-size: 13px; font-weight: 800; background: tra
 QTableWidget#smoothSel {{ selection-background-color: transparent; selection-color: {TEXT}; }}
 QTableWidget#smoothSel::item:selected {{ background: transparent; }}
 QFrame#selPill {{ background: rgba(13,221,150,0.09); border: 1px solid rgba(13,221,150,0.32); border-radius: 12px; }}
+QSlider::groove:horizontal {{ height: 8px; background: rgba(255,255,255,0.08); border-radius: 4px; }}
+QSlider::sub-page:horizontal {{ background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #0A8F69, stop:1 {G}); border-radius: 4px; }}
+QSlider::handle:horizontal {{ width: 24px; height: 24px; margin: -9px 0; border-radius: 12px; background: white;
+    border: 5px solid {G}; }}
+QSlider::handle:horizontal:hover {{ border: 5px solid #5BF0BD; }}
 QFrame#rowPill {{ background: rgba(13,221,150,0.07); border: 1px solid rgba(13,221,150,0.30); border-radius: 15px; }}
 QToolTip {{ background: {SIDEBAR_BG}; color: {TEXT}; border: 1px solid {BORDER}; padding: 6px; }}
 """

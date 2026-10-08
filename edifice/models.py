@@ -67,7 +67,10 @@ class Assumptions:
     default_tariffs: dict = field(default_factory=lambda: {
         UtilityType.ELECTRICITY: 4.2, UtilityType.GAS: 1.3, UtilityType.WATER: 38.0})  # TRY/kWh, TRY/kWh, TRY/m3
     equipment_life_years: int = 20
-    discount_rate: float = 0.0                 # MVP: basit geri ödeme
+    discount_rate: float = 0.08                # reel iskonto oranı (enflasyondan arındırılmış)
+    energy_escalation: float = 0.03            # reel enerji fiyat artışı (yıllık)
+    horizon_years: int = 15                    # finansal analiz süresi
+    savings_degradation: float = 0.005         # tasarrufun yıllık azalması
 
 
 # ---- Hesaplanan veri ------------------------------------------------------

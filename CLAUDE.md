@@ -63,3 +63,6 @@ PDF rapor: `edifice/ui/report_pdf.py` (QPdfWriter, tek sayfa A4; "Rapor" butonu 
 
 ## Excel ile bina ekleme (eklendi)
 "+ Bina Ekle" önce yöntem seçtirir (`ui/add_choice.py`): formu doldur ya da Excel şablonu. `edifice/excel_io.py`: `build_template(path, example)` talimatlı/doğrulamalı .xlsx üretir (boş ya da örnek dolu), `read_workbook(path, tariffs)` okur ve `validation.build_from_inputs` ile doğrular; hatalar hücre/sayfa adıyla listelenir. Başarılıysa veri Bina Ekle penceresinde "Gözden Geçir" modunda açılır, kullanıcı kontrol edip kaydeder. Şablon yerleşimi sabittir (sayfa adları Bina/Tüketim/Ekipman, hücre konumları excel_io.py üstünde).
+
+## Yatırımcı paketi (eklendi)
+Enerji sınıfı + benchmark (`engine/rating.py`, Genel Bakış'ta sınıf skalası ve dağılım eğrisi; tahmini, resmi belge değil), finans motoru (`engine/finance.py`: NPV, IRR, indirgenmiş geri ödeme, 15 yıl reel nakit akışı; varsayımlar Ayarlar'da), bütçe simülatörü (`engine/optimizer.py` + Senaryo ekranında kaydırıcı: bütçeye göre NPV'yi maksimize eden paket otomatik seçilir). PDF'e sınıf rozeti ve NPV/IRR satırı eklendi. Fikir listesinde kalanlar: anomali yakalama, portföy görünümü, hazır demo binalar.

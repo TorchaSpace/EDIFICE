@@ -48,7 +48,9 @@ def assumptions_to_json(a: Assumptions) -> str:
         "benchmark_eui": a.benchmark_eui_kwh_m2, "benchmark_carbon": a.benchmark_carbon_kg_m2,
         "benchmark_water": a.benchmark_water_m3_m2, "target_eui": a.target_eui_kwh_m2,
         "equipment_life": a.equipment_life_years, "weights": a.health_weights,
-        "tariffs": {k.value: v for k, v in a.default_tariffs.items()}}, ensure_ascii=False)
+        "tariffs": {k.value: v for k, v in a.default_tariffs.items()},
+        "finance": {"discount": a.discount_rate, "escalation": a.energy_escalation, "horizon": a.horizon_years,
+                    "degradation": a.savings_degradation}}, ensure_ascii=False)
 
 
 def assumptions_from_json(text: str) -> Assumptions:
@@ -58,6 +60,10 @@ def assumptions_from_json(text: str) -> Assumptions:
     a.benchmark_water_m3_m2, a.target_eui_kwh_m2 = d["benchmark_water"], d["target_eui"]
     a.equipment_life_years, a.health_weights = d["equipment_life"], d["weights"]
     a.default_tariffs = {UtilityType(k): v for k, v in d["tariffs"].items()}
+    f = d.get("finance")
+    if f:
+        a.discount_rate, a.energy_escalation = f["discount"], f["escalation"]
+        a.horizon_years, a.savings_degradation = int(f["horizon"]), f["degradation"]
     return a
 
 

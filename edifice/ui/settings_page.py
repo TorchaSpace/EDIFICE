@@ -97,6 +97,21 @@ class SettingsPage:
         row2.addWidget(hw, 1)
         lay.addLayout(row2)
 
+        fp = Panel("Finansal varsayımlar", "NPV, IRR ve nakit akışı reel (enflasyondan arındırılmış) değerlerle hesaplanır")
+        self.f_disc = _spin(a.discount_rate * 100, 0, 60, 1, " %")
+        self.f_esc = _spin(a.energy_escalation * 100, -10, 30, 1, " %")
+        self.f_years = _spin(a.horizon_years, 3, 40, 0, " yıl")
+        self.f_deg = _spin(a.savings_degradation * 100, 0, 10, 1, " %")
+        g = QGridLayout()
+        g.setHorizontalSpacing(16)
+        g.addWidget(field("Reel iskonto oranı", self.f_disc, "Yatırımın fırsat maliyeti"), 0, 0)
+        g.addWidget(field("Enerji fiyat artışı (reel)", self.f_esc, "Enflasyonun üstündeki yıllık artış"), 0, 1)
+        g.addWidget(field("Analiz süresi", self.f_years, "NPV ve nakit akışı ufku"), 0, 2)
+        g.addWidget(field("Yıllık tasarruf kaybı", self.f_deg, "Ekipman yıpranması"), 0, 3)
+        fp.lay.addSpacing(6)
+        fp.lay.addLayout(g)
+        lay.addWidget(fp)
+
         cat = Panel("Dönüşüm önerileri kataloğu", "Her öneri için beklenen tasarruf oranı ve birim yatırım maliyeti")
         self.table = QTableWidget(len(project.opportunities), 5)
         self.table.setHorizontalHeaderLabels(["Öneri", "Kategori", "Etkilediği kalem", "Tasarruf oranı", "Yatırım (₺/m²)"])
@@ -194,6 +209,8 @@ class SettingsPage:
         a.benchmark_eui_kwh_m2, a.benchmark_carbon_kg_m2 = self.b_eui.value(), self.b_co2.value()
         a.benchmark_water_m3_m2, a.equipment_life_years = self.b_w.value(), int(self.life.value())
         a.health_weights = {n: sp.value() / 100 for n, sp in self.w_spins.items()}
+        a.discount_rate, a.energy_escalation = self.f_disc.value() / 100, self.f_esc.value() / 100
+        a.horizon_years, a.savings_degradation = int(self.f_years.value()), self.f_deg.value() / 100
         return a
 
     def save(self):

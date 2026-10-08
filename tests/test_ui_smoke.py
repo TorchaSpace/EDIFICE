@@ -124,3 +124,16 @@ def test_excel_import_flow(tmp_path, monkeypatch):
     w.add_building()
     assert seen["review"] == "Örnek Ofis Binası"
     assert w.project.building.name == "Örnek Ofis Binası" and store.count() == 2
+
+
+def test_budget_slider_selects_package_and_finance_updates():
+    _app()
+    store = Store(":memory:")
+    bid = store.seed_demo()
+    w = MainWindow(store.load_project(bid), store)
+    sc = w.pages[3][1]
+    sc.slider.setValue(0)
+    assert sc.selected_codes() == []
+    sc.slider.setValue(60)           # 3,0 M ₺
+    assert sc.selected_codes() and w.project.finance(sc.selected_codes()).npv > 0
+    assert store.load_scenario(bid) == sc.selected_codes()
