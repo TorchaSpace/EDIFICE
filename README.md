@@ -17,3 +17,6 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 - `edifice/mock_data.py`: Gerçek veri gelene kadar mock pilot bina
 
 Not: Health Score ağırlıkları, kıyas değerleri, emisyon faktörleri ve tasarruf oranları varsayımdır; pilot bina verisiyle doğrulanmalı.
+
+## Masaüstü ikonu
+`tools/make_app.sh` Masaüstü'ne ikonlu `EDIFICE.app` oluşturur (çift tıklayınca uygulamayı açar). Proje klasörü taşınırsa yeniden çalıştırın.
