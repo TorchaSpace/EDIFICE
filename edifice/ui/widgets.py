@@ -117,6 +117,8 @@ QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {{ background: rgba(255,255,255,0
 QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus {{ border: 1px solid rgba(13,221,150,0.55); }}
 QComboBox::drop-down {{ border: none; width: 30px; subcontrol-origin: padding; subcontrol-position: center right; }}
 QComboBox::down-arrow {{ image: url(__ARROW__); width: 12px; height: 12px; }}
+QTableWidget QLineEdit#cellInput {{ background: rgba(255,255,255,0.04); color: {TEXT}; border: 1px solid {BORDER}; border-radius: 10px; padding: 0 12px; }}
+QTableWidget QLineEdit#cellInput:focus {{ border: 1px solid rgba(13,221,150,0.55); }}
 QTableWidget QLineEdit {{ background: #0F1D30; color: {TEXT}; border: 1px solid rgba(13,221,150,0.6); border-radius: 6px;
     padding: 0 8px; font-size: 13px; }}
 QComboBox QAbstractItemView {{ background: {SURFACE}; color: {TEXT}; border: 1px solid {BORDER}; selection-background-color: {G_SOFT}; outline: 0; }}
@@ -142,6 +144,12 @@ QMenu {{ background: {SURFACE}; color: {TEXT}; border: 1px solid {BORDER}; borde
 QMenu::item {{ padding: 8px 18px; border-radius: 8px; }}
 QMenu::item:selected {{ background: {G_SOFT}; color: {G}; }}
 QMenu::separator {{ height: 1px; background: {BORDER}; margin: 6px 4px; }}
+QFrame#ddCard {{ background: #0D1A2B; border: 1px solid rgba(255,255,255,0.10); border-radius: 16px; }}
+QPushButton#ddItem {{ background: transparent; border: none; border-radius: 11px; text-align: left; }}
+QPushButton#ddItem:hover {{ background: rgba(255,255,255,0.06); }}
+QPushButton#ddItem:checked {{ background: {G_SOFT}; }}
+QLabel#ddText {{ color: {TEXT}; font-size: 13px; background: transparent; }}
+QLabel#ddCheck {{ color: {G}; font-size: 13px; font-weight: 800; background: transparent; }}
 QToolTip {{ background: {SIDEBAR_BG}; color: {TEXT}; border: 1px solid {BORDER}; padding: 6px; }}
 """
 

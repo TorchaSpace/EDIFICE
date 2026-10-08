@@ -41,7 +41,10 @@ def test_add_building_dialog_flow():
         for c, v in enumerate(["40000", "", "15000", "", "90", ""]):
             d.grids["base"].setItem(r, c, make_item(v, c))
     d.add_equipment_row()
-    d.eq.item(0, 1).setText("Chiller")
+    d.eq.cellWidget(0, 1).inner.setText("Chiller")
+    d.use_type.showPopup()
+    d.use_type._popup.card.findChildren(type(d.use_type._popup.card.layout().itemAt(1).widget()))[1].click()
+    assert d.use_type.currentIndex() == 1
     d.save()
     assert d.result_data is not None
     building, readings, equipment = d.result_data

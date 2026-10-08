@@ -5,13 +5,14 @@ from datetime import date
 
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt
 from PySide6.QtGui import QColor, QGuiApplication, QKeySequence
-from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QDoubleSpinBox,
+from PySide6.QtWidgets import (QAbstractItemView, QDialog, QDoubleSpinBox,
                                QGraphicsOpacityEffect, QGridLayout, QHBoxLayout, QHeaderView, QLabel,
                                QLineEdit, QPushButton, QSpinBox, QTabBar, QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
 from ..validation import (COLUMNS, EQUIPMENT_CATEGORIES, MONTH_NAMES, USE_TYPES, ValidationError,
                           build_from_inputs)
+from .dropdown import PremiumCombo
 from .widgets import FadeStack, Panel, header, muted, qfont
 
 
@@ -141,7 +142,7 @@ class BuildingDialog(QDialog):
         self.name.setPlaceholderText("Örn. Merkez Ofis Binası")
         self.address = QLineEdit()
         self.address.setPlaceholderText("İl / ilçe / adres")
-        self.use_type = QComboBox()
+        self.use_type = PremiumCombo()
         self.use_type.addItems(USE_TYPES)
         self.area = _tune_spin(QDoubleSpinBox())
         self.area.setRange(0, 5_000_000)
@@ -248,10 +249,11 @@ class BuildingDialog(QDialog):
         self.eq.setHorizontalHeaderLabels(["KATEGORİ", "EKİPMAN", "KURULUM YILI", "DURUM (1-5)", "NOT"])
         hh = self.eq.horizontalHeader()
         hh.setSectionResizeMode(QHeaderView.Stretch)
-        hh.setSectionResizeMode(0, QHeaderView.Fixed)
-        self.eq.setColumnWidth(0, 170)
+        for col, width in ((0, 180), (2, 140), (3, 130)):
+            hh.setSectionResizeMode(col, QHeaderView.Fixed)
+            self.eq.setColumnWidth(col, width)
         self.eq.verticalHeader().setVisible(False)
-        self.eq.verticalHeader().setDefaultSectionSize(52)
+        self.eq.verticalHeader().setDefaultSectionSize(56)
         self.eq.setShowGrid(False)
         self.eq.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.empty = QLabel("Henüz ekipman eklenmedi.\n«+ Ekipman ekle» ile başlayın.")
@@ -281,27 +283,39 @@ class BuildingDialog(QDialog):
         self.eq.setVisible(has)
         self.empty.setVisible(not has)
 
+    @staticmethod
+    def _cell(w: QWidget) -> QWidget:
+        """Hücre içeriğine nefes payı bırakan kapsayıcı."""
+        box = QWidget()
+        lay = QHBoxLayout(box)
+        lay.setContentsMargins(6, 6, 6, 6)
+        lay.addWidget(w)
+        box.inner = w
+        return box
+
     def add_equipment_row(self, data: dict | None = None):
         r = self.eq.rowCount()
         self.eq.insertRow(r)
-        cat = QComboBox()
+        cat = PremiumCombo()
         cat.addItems(EQUIPMENT_CATEGORIES)
+        name = QLineEdit()
+        name.setObjectName("cellInput")
+        name.setPlaceholderText("Örn. Su soğutmalı chiller")
         yr = _tune_spin(QSpinBox())
         yr.setRange(1900, date.today().year)
         yr.setValue(2010)
         cond = _tune_spin(QSpinBox())
         cond.setRange(1, 5)
         cond.setValue(3)
-        for w in (cat, yr, cond):
+        note = QLineEdit()
+        note.setObjectName("cellInput")
+        note.setPlaceholderText("İsteğe bağlı not")
+        for col, w in enumerate((cat, name, yr, cond, note)):
             w.setMinimumHeight(38)
-        self.eq.setCellWidget(r, 0, cat)
-        self.eq.setItem(r, 1, QTableWidgetItem(""))
-        self.eq.setCellWidget(r, 2, yr)
-        self.eq.setCellWidget(r, 3, cond)
-        self.eq.setItem(r, 4, QTableWidgetItem(""))
+            self.eq.setCellWidget(r, col, self._cell(w))
         self._sync_empty()
         self.eq.setCurrentCell(r, 1)
-        self.eq.editItem(self.eq.item(r, 1))
+        name.setFocus()
 
     def remove_equipment_row(self):
         r = self.eq.currentRow()
@@ -322,11 +336,9 @@ class BuildingDialog(QDialog):
         grids = {y: grid_text(self.grids["base"]), y - 1: grid_text(self.grids["prev"])}
         eq = []
         for r in range(self.eq.rowCount()):
-            eq.append(dict(category=self.eq.cellWidget(r, 0).currentText(),
-                           name=self.eq.item(r, 1).text() if self.eq.item(r, 1) else "",
-                           year_installed=self.eq.cellWidget(r, 2).value(),
-                           condition=self.eq.cellWidget(r, 3).value(),
-                           notes=self.eq.item(r, 4).text() if self.eq.item(r, 4) else ""))
+            w = [self.eq.cellWidget(r, c).inner for c in range(5)]
+            eq.append(dict(category=w[0].currentText(), name=w[1].text(), year_installed=w[2].value(),
+                           condition=w[3].value(), notes=w[4].text()))
         return build_from_inputs(info, grids, eq, y)
 
     def _show_error(self, text: str):
