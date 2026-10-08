@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+from .relevance import assess
 from ..models import (Assumptions, Building, KPIs, Opportunity, OpportunityResult,
                       ScenarioResult, UtilityType)
 
@@ -31,9 +32,21 @@ def unit_prices(readings, year: int) -> dict:
     return prices
 
 
-def evaluate_all(opps, building, kpis, prices, a) -> list[OpportunityResult]:
-    results = [evaluate_opportunity(o, building, kpis, prices, a) for o in opps]
-    return sorted(results, key=lambda r: r.payback_years)
+_FIT_WEIGHT = {"high": 0.6, "medium": 0.85, "unknown": 1.0, "low": 1.5}
+
+
+def evaluate_all(opps, building, kpis, prices, a, equipment=()) -> list[OpportunityResult]:
+    """Uygun olanlar önce; aralarında geri ödeme süresine, ekipman önceliği ağırlıklandırılarak sıralanır."""
+    results = []
+    for o in opps:
+        r = evaluate_opportunity(o, building, kpis, prices, a)
+        r.fit, r.reason = assess(o.code, list(equipment), a.equipment_life_years)
+        results.append(r)
+    def key(r):
+        if r.fit == "none":
+            return (1, r.payback_years)
+        return (0, r.payback_years * _FIT_WEIGHT[r.fit])
+    return sorted(results, key=key)
 
 
 def run_scenario(selected: list[Opportunity], building: Building, current: KPIs,

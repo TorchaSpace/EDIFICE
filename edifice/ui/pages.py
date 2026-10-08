@@ -6,10 +6,11 @@ from PySide6.QtWidgets import (QAbstractItemView, QGridLayout, QHBoxLayout, QHea
                                QPushButton, QScrollArea, QTableWidget, QTableWidgetItem,
                                QVBoxLayout, QWidget)
 
+from ..engine.relevance import LABELS as FIT_LABELS
 from ..models import UTILITY_UNITS, UtilityType
 from ..service import Project
 from .charts import AreaChart, BarChart
-from .widgets import (AMBER, G, INDIGO, MUTED, RED, SUB, TEXT, Card, Gauge, Panel, ScoreBar, badge,
+from .widgets import (AMBER, G, GRADE_COLORS, INDIGO, MUTED, RED, SUB, TEXT, Card, Gauge, Panel, ScoreBar, badge,
                       fmt, fmt_years, header, muted, qfont, section)
 
 UTILITY_NAMES = {UtilityType.ELECTRICITY: "Elektrik", UtilityType.GAS: "Doğalgaz", UtilityType.WATER: "Su"}
@@ -76,6 +77,9 @@ def _fit_height(t: QTableWidget, rows: int):
     t.setFixedHeight(48 + 46 * rows)
 
 
+FIT_COLORS = {"high": G, "medium": GRADE_COLORS["B"], "low": AMBER, "none": RED, "unknown": SUB}
+
+
 def _trend_text(pct: float) -> tuple[str, bool]:
     arrow = "↓" if pct < 0 else "↑"
     return f"{arrow} {fmt(abs(pct), 1)}%", pct <= 0  # azalma = iyi
@@ -139,7 +143,7 @@ class OverviewPage:
         bottom.setSpacing(18)
         recs = Panel(eyebrow="EDIFI'CE öneri motoru", title="Öne çıkan fırsatlar")
         recs.setFixedWidth(340)
-        for r in project.opportunity_results()[:3]:
+        for r in [r for r in project.opportunity_results() if r.fit != "none"][:3]:
             pb = r.payback_years
             col = G if pb <= 5 else AMBER if pb <= 15 else RED
             qc = QColor(col)
@@ -220,15 +224,19 @@ class OpportunitiesPage:
             grid.addWidget(c)
         lay.addLayout(grid)
 
-        t = _table(["Öneri", "Kategori", "Enerji kWh/yıl", "Karbon kg/yıl", "Tasarruf ₺/yıl", "CAPEX ₺", "Geri ödeme"], left_cols=2)
+        t = _table(["Öneri", "Kategori", "Uygunluk", "Enerji kWh/yıl", "Karbon kg/yıl", "Tasarruf ₺/yıl", "CAPEX ₺", "Geri ödeme"], left_cols=3)
         t.setRowCount(len(res))
         for i, r in enumerate(res):
             pb = r.payback_years
             col = G if pb <= 5 else AMBER if pb <= 15 else RED
-            _set_row(t, i, [r.opportunity.name, r.opportunity.category, fmt(r.saved_kwh), fmt(r.saved_carbon_kg),
-                            fmt(r.annual_saving), fmt(r.capex), fmt_years(pb)], left_cols=2, colors={6: col})
+            _set_row(t, i, [r.opportunity.name, r.opportunity.category, FIT_LABELS[r.fit], fmt(r.saved_kwh),
+                            fmt(r.saved_carbon_kg), fmt(r.annual_saving), fmt(r.capex), fmt_years(pb)],
+                     left_cols=3, colors={2: FIT_COLORS[r.fit], 7: col}, mono_from=3)
             t.item(i, 1).setForeground(QColor(SUB))
             t.item(i, 1).setFont(qfont(13))
+            t.item(i, 2).setFont(qfont(13, 700))
+            for c in range(8):
+                t.item(i, c).setToolTip(r.reason or "")
         t.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         _fit_height(t, len(res))
         panel = Panel()
@@ -243,8 +251,8 @@ class OpportunitiesPage:
 
 
 class ScenarioPage:
-    def __init__(self, project: Project):
-        self.project = project
+    def __init__(self, project: Project, store=None):
+        self.project, self.store = project, store
         self.widget, lay = _page()
         lay.addWidget(header("Senaryo", "Mevcut vs Hedef", "Uygulanacak önerileri seçin; hedef durum anında hesaplanır."))
         body = QHBoxLayout()
@@ -263,7 +271,10 @@ class ScenarioPage:
             btn.setCheckable(True)
             btn.setCursor(Qt.PointingHandCursor)
             btn.setMinimumHeight(64)
-            btn.toggled.connect(self.refresh)
+            btn.setToolTip(r.reason or "")
+            if r.fit == "none":
+                btn.setText(btn.text() + "  ·  uygun değil")
+            btn.toggled.connect(self._toggled)
             self.checks[o.code] = btn
             left.addWidget(btn)
         left.addStretch()
@@ -297,10 +308,21 @@ class ScenarioPage:
                               colors=["slate", "green"], unit="%", fixed_max=100)
         self.chart_panel.lay.addWidget(self.chart, 1)
         lay.addWidget(self.chart_panel, 1)
+        if store is not None and project.building_id is not None:
+            for code in store.load_scenario(project.building_id):
+                if code in self.checks:
+                    self.checks[code].blockSignals(True)
+                    self.checks[code].setChecked(True)
+                    self.checks[code].blockSignals(False)
         self.refresh()
 
     def selected_codes(self) -> list[str]:
         return [c for c, cb in self.checks.items() if cb.isChecked()]
+
+    def _toggled(self, *_):
+        if self.store is not None and self.project.building_id is not None:
+            self.store.save_scenario(self.project.building_id, self.selected_codes())
+        self.refresh()
 
     def refresh(self, *_):
         s = self.project.scenario(self.selected_codes())

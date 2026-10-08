@@ -81,7 +81,7 @@ class Project:
 
     def opportunity_results(self) -> list[OpportunityResult]:
         return evaluate_all(self.opportunities, self.building, self.kpis(),
-                            self.prices(), self.assumptions)
+                            self.prices(), self.assumptions, self.equipment)
 
     def scenario(self, codes: list[str]) -> ScenarioResult:
         sel = [o for o in self.opportunities if o.code in codes]

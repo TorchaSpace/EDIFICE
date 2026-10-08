@@ -113,6 +113,8 @@ class OpportunityResult:
     annual_saving: float
     capex: float
     payback_years: float
+    fit: str = "unknown"          # high | medium | low | none | unknown
+    reason: str = ""
 
 
 @dataclass

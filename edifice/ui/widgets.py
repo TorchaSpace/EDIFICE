@@ -95,9 +95,9 @@ QPushButton#toggle:hover {{ border: 1px solid rgba(13,221,150,0.25); }}
 QPushButton#toggle:checked {{ background: {G_SOFT}; border: 1px solid rgba(13,221,150,0.35); font-weight: 700; color: {G}; }}
 QTableWidget {{ background: transparent; color: {TEXT}; border: none; outline: 0; font-size: 13px;
     selection-background-color: rgba(13,221,150,0.10); selection-color: {TEXT}; }}
-QTableWidget::item {{ color: {TEXT}; border-bottom: 1px solid {BORDER}; padding: 4px 8px; }}
+QTableWidget::item {{ border-bottom: 1px solid {BORDER}; padding: 4px 8px; }}
 QTableWidget::item:hover {{ background: rgba(255,255,255,0.025); }}
-QTableWidget::item:selected {{ background: {G_SOFT}; color: {TEXT}; }}
+QTableWidget::item:selected {{ background: {G_SOFT}; }}
 QHeaderView {{ background: transparent; }}
 QTableCornerButton::section {{ background: transparent; border: none; }}
 QHeaderView::section {{ background: rgba(255,255,255,0.02); border: none; border-bottom: 1px solid {BORDER}; color: {MUTED};

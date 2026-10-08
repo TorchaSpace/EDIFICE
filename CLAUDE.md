@@ -57,3 +57,6 @@ UI, kullanıcının Figma Make çıktısına ("Premium SaaS Dashboard Design", k
 
 ## Ayarlar ve düzenleme (eklendi)
 Hesap varsayımları (emisyon faktörü, tarifeler, kıyas değerleri, Health Score ağırlıkları, ekipman ömrü) ve öneri kataloğu artık SQLite'ta (`settings`, `opportunities`) ve **Ayarlar** ekranından düzenlenir (`edifice/ui/settings_page.py`). Binalar sonradan düzenlenebilir (sidebar bina kartı > "Bu binayı düzenle"). Kalan: öneri kataloğunu ekipmana göre otomatik seçme, PDF rapor, senaryo kaydı, fontları gömme.
+
+## Rapor, uygunluk, senaryo (eklendi)
+PDF rapor: `edifice/ui/report_pdf.py` (QPdfWriter, tek sayfa A4; "Rapor" butonu PDF üretir). Ekipmana göre öneri uygunluğu: `edifice/engine/relevance.py` (yüksek/orta/düşük öncelik, uygun değil, veri yok). Senaryo seçimi bina başına SQLite'ta (`scenarios`). Kalan: Manrope/DM Mono fontlarını gömmek (kullanıcı izniyle indirilecek), gerçek pilot bina verisiyle deneme.

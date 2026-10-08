@@ -73,3 +73,23 @@ def test_edit_building_and_settings_flow():
     sp.save()
     assert w.project.assumptions.benchmark_eui_kwh_m2 == 400
     assert w.project.opportunities[0].saving_pct == 0.3
+
+
+def test_scenario_restored_after_reload():
+    _app()
+    store = Store(":memory:")
+    bid = store.seed_demo()
+    w = MainWindow(store.load_project(bid), store)
+    w.pages[3][1].checks["LED"].setChecked(True)
+    w.set_project(store.load_project(bid))
+    assert w.pages[3][1].selected_codes() == ["LED"]
+
+
+def test_pdf_report_generated(tmp_path):
+    _app()
+    from edifice.ui.report_pdf import build_pdf
+    p = Project.mock()
+    out = tmp_path / "r.pdf"
+    build_pdf(p, ["LED", "CHILLER"], str(out))
+    data = out.read_bytes()
+    assert data.startswith(b"%PDF") and len(data) > 5000

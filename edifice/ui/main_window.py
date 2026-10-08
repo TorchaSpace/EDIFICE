@@ -3,7 +3,8 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QTimer, Qt
+from PySide6.QtCore import QTimer, QUrl, Qt
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (QFileDialog, QHBoxLayout, QLabel, QMainWindow, QMenu, QMessageBox,
                                QPushButton, QVBoxLayout, QWidget)
 
@@ -11,7 +12,7 @@ from ..db import Store
 from ..service import Project
 from .pages import ConsumptionPage, OpportunitiesPage, OverviewPage, ScenarioPage
 from .building_dialog import BuildingDialog
-from .report import build_report
+from .report_pdf import build_pdf
 from .settings_page import SettingsPage
 from .widgets import get_style, FadeStack, Logo, NavBar, section
 
@@ -152,7 +153,7 @@ class MainWindow(QMainWindow):
             self.stack.removeWidget(w)
             w.deleteLater()
         self.pages = [(self.nav_specs[0][0], OverviewPage(project)), (self.nav_specs[1][0], ConsumptionPage(project)),
-                      (self.nav_specs[2][0], OpportunitiesPage(project)), (self.nav_specs[3][0], ScenarioPage(project)),
+                      (self.nav_specs[2][0], OpportunitiesPage(project)), (self.nav_specs[3][0], ScenarioPage(project, self.store)),
                       (self.nav_specs[4][0], SettingsPage(project, self.store, self._settings_saved))]
         for _, page in self.pages:
             self.stack.addWidget(page.widget)
@@ -213,12 +214,13 @@ class MainWindow(QMainWindow):
         self.crumb.setText(self.pages[index][0])
 
     def export_report(self):
-        scenario_page = self.pages[3][1]
-        path, _ = QFileDialog.getSaveFileName(self, "Raporu kaydet", "edifice_rapor.html", "HTML (*.html)")
+        codes = self.pages[3][1].selected_codes()
+        default = f"EDIFICE_{self.project.building.name.replace(' ', '_')}_{datetime.now():%Y-%m-%d}.pdf"
+        path, _ = QFileDialog.getSaveFileName(self, "Raporu kaydet", default, "PDF (*.pdf)")
         if not path:
             return
-        Path(path).write_text(build_report(self.project, scenario_page.selected_codes()), encoding="utf-8")
-        QMessageBox.information(self, "Rapor", f"Rapor kaydedildi:\n{path}")
+        build_pdf(self.project, codes, path)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(path))
 
 
 def section_label(text: str) -> QLabel:
