@@ -48,3 +48,6 @@ Her adım çalışır halde teslim edilen küçük milestone'lara bölünür.
 ## Çalışma kuralları
 - Yanıtlar Türkçe.
 - Önce hesap mantığını netleştir, sonra UI.
+
+## Durum (Milestone 1 tamam)
+Mock veriyle çalışan arayüz + hesap motoru hazır: `main.py`, `edifice/` (models, engine, service, ui), `tests/`. Çalıştırma için README. Sıradaki: Excel/CSV import + doğrulama, SQLite, gerçek pilot bina verisi, formüllerin netleştirilmesi.
