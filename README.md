@@ -18,5 +18,5 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 
 Not: Health Score ağırlıkları, kıyas değerleri, emisyon faktörleri ve tasarruf oranları varsayımdır; pilot bina verisiyle doğrulanmalı.
 
-## Masaüstü ikonu
-`tools/make_app.sh` Masaüstü'ne ikonlu `EDIFICE.app` oluşturur (çift tıklayınca uygulamayı açar). Proje klasörü taşınırsa yeniden çalıştırın.
+## Uygulama ikonu
+Proje klasöründeki `EDIFICE.app` çift tıklayınca uygulamayı açar (önce yukarıdaki kurulum yapılmış olmalı). Masaüstüne kısayol için `EDIFICE.app`'i Option+Cmd ile sürükleyip alias oluşturun. İkonu/başlatıcıyı yeniden üretmek için `tools/make_app.sh`.

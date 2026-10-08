@@ -1,0 +1,8 @@
+#!/bin/bash
+# Proje klasörü: EDIFICE.app'in bulunduğu klasör (symlink ile de çalışır)
+SELF="$(python3 -c 'import os,sys;print(os.path.realpath(sys.argv[1]))' "$0")"
+ROOT="$(cd "$(dirname "$SELF")/../../.." && pwd)"
+cd "$ROOT"
+PY="$ROOT/.venv/bin/python"
+[ -x "$PY" ] || PY="python3"
+exec "$PY" "$ROOT/main.py"

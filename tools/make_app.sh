@@ -1,8 +1,8 @@
 #!/bin/bash
-# EDIFICE.app başlatıcısını oluşturur. Kullanım: tools/make_app.sh [hedef_klasör]  (varsayılan: ~/Desktop)
+# EDIFICE.app başlatıcısını oluşturur. Kullanım: tools/make_app.sh [hedef_klasör]  (varsayılan: proje klasörü)
 set -e
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-DEST="${1:-$HOME/Desktop}"
+DEST="${1:-$ROOT}"
 APP="$DEST/EDIFICE.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
@@ -19,10 +19,15 @@ cat > "$APP/Contents/Info.plist" <<PL
 <key>LSMinimumSystemVersion</key><string>11.0</string>
 </dict></plist>
 PL
-cat > "$APP/Contents/MacOS/edifice" <<SH
+cat > "$APP/Contents/MacOS/edifice" <<'SH'
 #!/bin/bash
+# Proje klasörü: EDIFICE.app'in bulunduğu klasör (symlink ile de çalışır)
+SELF="$(python3 -c 'import os,sys;print(os.path.realpath(sys.argv[1]))' "$0")"
+ROOT="$(cd "$(dirname "$SELF")/../../.." && pwd)"
 cd "$ROOT"
-exec "$ROOT/.venv/bin/python" "$ROOT/main.py"
+PY="$ROOT/.venv/bin/python"
+[ -x "$PY" ] || PY="python3"
+exec "$PY" "$ROOT/main.py"
 SH
 chmod +x "$APP/Contents/MacOS/edifice"
 TMP="$(mktemp -d)"
