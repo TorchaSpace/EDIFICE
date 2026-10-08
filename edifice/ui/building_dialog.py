@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QCompleter, QDialog, QDoubleSp
 from ..validation import (COLUMNS, EQUIPMENT_CATEGORIES, EQUIPMENT_NAMES, MONTH_NAMES, USE_TYPES, ValidationError,
                           build_from_inputs)
 from .dropdown import PremiumCombo
-from .forms import field, scroll, tune_spin
+from .forms import PillTable, field, scroll, tune_spin
 from .widgets import FadeStack, Panel, header, muted, qfont
 
 
@@ -247,7 +247,7 @@ class BuildingDialog(QDialog):
     # ---- sekme 3
     def _equipment_tab(self) -> QWidget:
         panel = Panel("Ekipman envanteri", "Saha etüdünden HVAC, aydınlatma ve bina kabuğu ekipmanlarını ekleyin. Bu adım isteğe bağlıdır.")
-        self.eq = QTableWidget(0, 5)
+        self.eq = PillTable(0, 5)
         self.eq.setHorizontalHeaderLabels(["Kategori", "Ekipman adı", "Kurulum yılı", "Durum (1 kötü – 5 iyi)", "Not"])
         hh = self.eq.horizontalHeader()
         hh.setSectionResizeMode(QHeaderView.Stretch)
@@ -258,7 +258,6 @@ class BuildingDialog(QDialog):
         self.eq.verticalHeader().setDefaultSectionSize(56)
         self.eq.setShowGrid(False)
         self.eq.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
-        self.eq.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.empty = QLabel("Henüz ekipman eklenmedi.\nBaşlamak için aşağıdaki «+ Ekipman ekle» düğmesine basın.")
         self.empty.setAlignment(Qt.AlignCenter)
         self.empty.setObjectName("muted")
@@ -286,6 +285,7 @@ class BuildingDialog(QDialog):
     def _sync_empty(self):
         has = self.eq.rowCount() > 0
         self.eq.setVisible(has)
+        self.eq.refresh_selection()
         self.empty.setVisible(not has)
 
     @staticmethod
@@ -329,10 +329,12 @@ class BuildingDialog(QDialog):
         note.setPlaceholderText("İsteğe bağlı not")
         for col, w in enumerate((cat, name, yr, cond, note)):
             w.setMinimumHeight(38)
-            self.eq.setCellWidget(r, col, self._cell(w))
+            cell = self._cell(w)
+            self.eq.setCellWidget(r, col, cell)
+            self.eq.attach_widget(cell)
         self._sync_empty()
-        self.eq.setCurrentCell(r, 1)
         if not data:
+            self.eq.select_row(r)
             name.setFocus()
 
     def _prefill(self, p):
@@ -358,9 +360,10 @@ class BuildingDialog(QDialog):
                                         condition=e.condition, notes=e.notes))
 
     def remove_equipment_row(self):
-        r = self.eq.currentRow()
+        r = self.eq.selected_row()
         if r >= 0:
             self.eq.removeRow(r)
+            self.eq.select_row(min(r, self.eq.rowCount() - 1), animate=False)
         self._sync_empty()
 
     # ---- toplama / kaydetme

@@ -154,6 +154,7 @@ QPushButton#ddItem:hover {{ background: rgba(255,255,255,0.06); }}
 QPushButton#ddItem:checked {{ background: {G_SOFT}; }}
 QLabel#ddText {{ color: {TEXT}; font-size: 13px; background: transparent; }}
 QLabel#ddCheck {{ color: {G}; font-size: 13px; font-weight: 800; background: transparent; }}
+QFrame#rowPill {{ background: rgba(13,221,150,0.07); border: 1px solid rgba(13,221,150,0.30); border-radius: 15px; }}
 QToolTip {{ background: {SIDEBAR_BG}; color: {TEXT}; border: 1px solid {BORDER}; padding: 6px; }}
 """
 
