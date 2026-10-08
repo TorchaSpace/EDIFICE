@@ -57,9 +57,9 @@ QPushButton#toggle {{ background: {SURFACE}; color: {INK}; border: 1.5px solid {
     text-align: left; padding: 12px 16px; font-size: 13px; }}
 QPushButton#toggle:hover {{ border-color: #BFE3D5; }}
 QPushButton#toggle:checked {{ background: {ACCENT_SOFT}; border: 1.5px solid {ACCENT}; font-weight: 600; }}
-QTableWidget {{ background: transparent; border: none; outline: 0; font-size: 13px; }}
-QTableWidget::item {{ border-bottom: 1px solid #F2F0EA; padding: 4px 8px; }}
-QTableWidget::item:hover {{ background: #F8F7F3; }}
+QTableWidget {{ background: transparent; color: {INK}; border: none; outline: 0; font-size: 13px; }}
+QTableWidget::item {{ color: {INK}; border-bottom: 1px solid #F2F0EA; padding: 4px 8px; }}
+QTableWidget::item:hover {{ background: #F8F7F3; color: {INK}; }}
 QTableWidget::item:selected {{ background: {ACCENT_SOFT}; color: {INK}; }}
 QHeaderView {{ background: transparent; }}
 QTableCornerButton::section {{ background: transparent; border: none; }}
