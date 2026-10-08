@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtWidgets import (QFileDialog, QHBoxLayout, QListWidget, QMainWindow, QMessageBox,
-                               QPushButton, QStackedWidget, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QButtonGroup, QFileDialog, QHBoxLayout, QLabel, QMainWindow,
+                               QMessageBox, QPushButton, QVBoxLayout, QWidget)
 
 from ..service import Project
 from .pages import ConsumptionPage, OpportunitiesPage, OverviewPage, ScenarioPage
 from .report import build_report
-from .widgets import STYLE
+from .widgets import STYLE, FadeStack, Logo, NavButton
 
 
 class MainWindow(QMainWindow):
@@ -16,34 +16,46 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.project = project
         self.setWindowTitle("EDIFI'CE")
-        self.resize(1200, 780)
+        self.resize(1360, 860)
+        self.setMinimumSize(1100, 700)
         self.setStyleSheet(STYLE)
 
-        self.pages = [
-            ("Genel Bakış", OverviewPage(project)),
-            ("Tüketim", ConsumptionPage(project)),
-            ("Öneriler", OpportunitiesPage(project)),
-            ("Mevcut vs Hedef", ScenarioPage(project)),
+        specs = [
+            ("Genel Bakış", "overview", OverviewPage(project)),
+            ("Tüketim", "consumption", ConsumptionPage(project)),
+            ("Öneriler", "opportunities", OpportunitiesPage(project)),
+            ("Mevcut vs Hedef", "scenario", ScenarioPage(project)),
         ]
-        self.nav = QListWidget()
-        self.nav.setObjectName("nav")
-        self.nav.setFixedWidth(200)
-        self.stack = QStackedWidget()
-        for name, page in self.pages:
-            self.nav.addItem(name)
-            self.stack.addWidget(page.widget)
-        self.nav.currentRowChanged.connect(self.stack.setCurrentIndex)
-        self.nav.setCurrentRow(0)
+        self.pages = [(name, page) for name, _, page in specs]
 
-        report_btn = QPushButton("Rapor oluştur")
-        report_btn.clicked.connect(self.export_report)
+        self.stack = FadeStack()
+        group = QButtonGroup(self)
+        group.setExclusive(True)
         side = QVBoxLayout()
-        side.setContentsMargins(0, 0, 0, 12)
-        side.addWidget(self.nav, 1)
+        side.setContentsMargins(0, 0, 0, 20)
+        side.setSpacing(2)
+        side.addWidget(Logo())
+        self.buttons = []
+        for i, (name, icon, page) in enumerate(specs):
+            btn = NavButton(name, icon)
+            group.addButton(btn, i)
+            btn.clicked.connect(lambda _=False, idx=i: self.stack.setCurrentIndex(idx))
+            side.addWidget(btn)
+            self.buttons.append(btn)
+            self.stack.addWidget(page.widget)
+        side.addStretch()
+        report_btn = QPushButton("Rapor oluştur")
+        report_btn.setObjectName("ghost")
+        report_btn.setCursor(self.buttons[0].cursor())
+        report_btn.clicked.connect(self.export_report)
         side.addWidget(report_btn)
+        note = QLabel("Pilot bina · mock veri")
+        note.setObjectName("side")
+        note.setContentsMargins(22, 12, 0, 0)
+        side.addWidget(note)
         side_w = QWidget()
         side_w.setObjectName("side")
-        report_btn.setStyleSheet("margin: 0 12px;")
+        side_w.setFixedWidth(232)
         side_w.setLayout(side)
 
         root = QWidget()
@@ -53,6 +65,12 @@ class MainWindow(QMainWindow):
         lay.addWidget(side_w)
         lay.addWidget(self.stack, 1)
         self.setCentralWidget(root)
+        self.buttons[0].setChecked(True)
+        self.stack.setCurrentIndex(0)
+
+    def select(self, index: int):
+        self.buttons[index].setChecked(True)
+        self.stack.setCurrentIndex(index)
 
     def export_report(self):
         scenario_page = self.pages[3][1]

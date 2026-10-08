@@ -1,218 +1,289 @@
 from __future__ import annotations
 
-from PySide6.QtCharts import (QBarCategoryAxis, QBarSeries, QBarSet, QChart, QChartView,
-                              QValueAxis)
+from PySide6.QtCharts import QBarCategoryAxis, QBarSeries, QBarSet, QChart, QChartView, QValueAxis
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPainter
-from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QGridLayout, QHBoxLayout,
-                               QHeaderView, QLabel, QProgressBar, QPushButton, QTableWidget,
-                               QTableWidgetItem, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QAbstractItemView, QGridLayout, QHBoxLayout, QHeaderView, QLabel,
+                               QPushButton, QScrollArea, QTableWidget, QTableWidgetItem,
+                               QVBoxLayout, QWidget)
 
 from ..models import UTILITY_UNITS, UtilityType
 from ..service import Project
-from .widgets import ACCENT, GRADE_COLORS, Card, fmt, fmt_years, h1, muted
+from .widgets import (ACCENT, GRADE_COLORS, INK, MUTED, SERIES_COLORS, Card, Gauge, Panel,
+                      ScoreBar, fmt, fmt_years, grade_for, header, muted, score_color, section,
+                      style_chart)
 
 UTILITY_NAMES = {UtilityType.ELECTRICITY: "Elektrik", UtilityType.GAS: "Doğalgaz",
                  UtilityType.WATER: "Su"}
-
-
-def _page() -> tuple[QWidget, QVBoxLayout]:
-    w = QWidget()
-    w.setObjectName("page")
-    lay = QVBoxLayout(w)
-    lay.setContentsMargins(28, 24, 28, 24)
-    lay.setSpacing(14)
-    return w, lay
-
-
 MONTHS = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"]
-PALETTE = ["#9ec9b8", ACCENT, "#e0a030"]
 
 
-def clustered_chart(title: str, categories: list[str], groups: dict[str, list[float]],
-                    label_format: str = "%.0f", min_h: int = 160) -> QChartView:
-    """Kategori başına yan yana çubuklar (ör. aylar x yıllar, mevcut x hedef)."""
+def _page() -> tuple[QScrollArea, QVBoxLayout]:
+    """Kaydırılabilir sayfa: dışta ScrollArea, içte dikey layout."""
+    inner = QWidget()
+    inner.setObjectName("page")
+    lay = QVBoxLayout(inner)
+    lay.setContentsMargins(36, 30, 36, 30)
+    lay.setSpacing(18)
+    area = QScrollArea()
+    area.setWidgetResizable(True)
+    area.setWidget(inner)
+    area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+    return area, lay
+
+
+def _nice_step(raw: float) -> float:
+    import math
+    if raw <= 0:
+        return 1.0
+    mag = 10 ** math.floor(math.log10(raw))
+    for m in (1, 2, 2.5, 5, 10):
+        if raw <= m * mag:
+            return m * mag
+    return 10 * mag
+
+
+def bar_chart(categories: list[str], groups: dict[str, list[float]], scale: float = 1.0,
+              label_format: str = "%.0f", min_h: int = 170, legend: bool | None = None) -> QChartView:
     series = QBarSeries()
+    series.setBarWidth(0.72)
     for i, (name, values) in enumerate(groups.items()):
         bs = QBarSet(name)
-        bs.setColor(QColor(PALETTE[i % len(PALETTE)]))
+        bs.setColor(QColor(SERIES_COLORS[i % len(SERIES_COLORS)]))
+        bs.setBorderColor(Qt.transparent)
         for v in values:
-            bs.append(v)
+            bs.append(v / scale)
         series.append(bs)
     chart = QChart()
     chart.addSeries(series)
-    chart.setTitle(title)
-    chart.setMargins(chart.margins())
-    chart.legend().setVisible(len(groups) > 1)
-    chart.legend().setAlignment(Qt.AlignBottom)
     ax = QBarCategoryAxis()
     ax.append(categories)
     ay = QValueAxis()
     ay.setLabelFormat(label_format)
-    ay.setMin(0)
+    top = max((v for vals in groups.values() for v in vals), default=1) / scale
+    step = _nice_step(top / 4)
+    ay.setRange(0, step * (int(top / step) + 1))
+    ay.setTickCount(int(ay.max() / step) + 1)
     chart.addAxis(ax, Qt.AlignBottom)
     chart.addAxis(ay, Qt.AlignLeft)
     series.attachAxis(ax)
     series.attachAxis(ay)
+    style_chart(chart, len(groups) > 1 if legend is None else legend)
     view = QChartView(chart)
     view.setRenderHint(QPainter.Antialiasing)
     view.setMinimumHeight(min_h)
+    view.setStyleSheet("background: transparent; border: none;")
     return view
 
 
-def _table(headers: list[str]) -> QTableWidget:
+def _table(headers: list[str], left_cols: int = 1) -> QTableWidget:
     t = QTableWidget(0, len(headers))
-    t.setHorizontalHeaderLabels(headers)
+    t.setHorizontalHeaderLabels([h.upper() for h in headers])
     t.setEditTriggers(QAbstractItemView.NoEditTriggers)
     t.setSelectionBehavior(QAbstractItemView.SelectRows)
+    t.setShowGrid(False)
+    t.setFocusPolicy(Qt.NoFocus)
     t.verticalHeader().setVisible(False)
+    t.verticalHeader().setDefaultSectionSize(40)
     t.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+    t.horizontalHeader().setHighlightSections(False)
+    for c in range(len(headers)):
+        t.horizontalHeaderItem(c).setTextAlignment(
+            (Qt.AlignLeft if c < left_cols else Qt.AlignRight) | Qt.AlignVCenter)
     return t
 
 
-def _set_row(t: QTableWidget, r: int, values: list[str], right_from: int = 2):
+def _set_row(t: QTableWidget, r: int, values: list[str], left_cols: int = 1, colors: dict | None = None):
     for c, v in enumerate(values):
         it = QTableWidgetItem(v)
-        if c >= right_from:
-            it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        it.setTextAlignment((Qt.AlignLeft if c < left_cols else Qt.AlignRight) | Qt.AlignVCenter)
+        if colors and c in colors:
+            it.setForeground(QColor(colors[c]))
+            f = it.font()
+            f.setBold(True)
+            it.setFont(f)
         t.setItem(r, c, it)
+
+
+def _fit_height(t: QTableWidget, rows: int):
+    t.setFixedHeight(46 + 40 * rows)
 
 
 class OverviewPage:
     def __init__(self, project: Project):
         self.widget, lay = _page()
         b, k, h = project.building, project.kpis(), project.health()
-        lay.addWidget(h1(b.name))
-        lay.addWidget(muted(f"{b.address} · {b.use_type} · {fmt(b.floor_area_m2)} m² · "
-                            f"{b.floors} kat · {b.year_built} · {b.occupants} kişi · "
-                            f"Baz yıl: {project.year}"))
+        lay.addWidget(header("Genel bakış", b.name,
+                             f"{b.address} · {b.use_type} · {fmt(b.floor_area_m2)} m² · {b.floors} kat · "
+                             f"{b.year_built} · {b.occupants} kişi · Baz yıl {project.year}"))
 
-        grid = QGridLayout()
-        grid.setSpacing(12)
-        score = Card("Building Health Score", f"{h.total:.0f} / 100", f"Not: {h.grade}")
-        score.set(f"{h.total:.0f} / 100", f"Not: {h.grade}", GRADE_COLORS[h.grade])
-        cards = [
-            score,
-            Card("Toplam enerji", f"{fmt(k.total_energy_kwh / 1000)} MWh",
-                 f"EUI {fmt(k.eui_kwh_m2, 1)} kWh/m²·yıl"),
-            Card("Karbon", f"{fmt(k.carbon_kg / 1000, 1)} tCO₂",
-                 f"{fmt(k.carbon_kg_m2, 1)} kgCO₂/m²·yıl"),
-            Card("Su", f"{fmt(k.water_m3)} m³", f"{fmt(k.water_m3_m2, 2)} m³/m²·yıl"),
-            Card("Elektrik", f"{fmt(k.electricity_kwh / 1000)} MWh", ""),
-            Card("Doğalgaz", f"{fmt(k.gas_kwh / 1000)} MWh", ""),
-            Card("Yıllık enerji maliyeti", f"{fmt(k.energy_cost / 1e6, 2)} M ₺", ""),
-            Card("Yıllık toplam maliyet", f"{fmt(k.total_cost / 1e6, 2)} M ₺", "enerji + su"),
-        ]
-        for i, c in enumerate(cards):
-            grid.addWidget(c, i // 4, i % 4)
-        lay.addLayout(grid)
-
-        lay.addWidget(QLabel("<b>Health Score bileşenleri</b>"))
+        top = QHBoxLayout()
+        top.setSpacing(18)
+        score = Panel("Building Health Score", "Bileşenlerin ağırlıklı ortalaması")
+        score.setMinimumWidth(430)
+        score.lay.addWidget(Gauge(h.total, h.grade))
         for name, (pts, weight) in h.components.items():
             row = QHBoxLayout()
-            lbl = QLabel(f"{name} (ağırlık %{weight * 100:.0f})")
-            lbl.setMinimumWidth(240)
-            bar = QProgressBar()
-            bar.setRange(0, 100)
-            bar.setValue(int(pts))
-            bar.setFormat(f"{pts:.0f}")
-            col = GRADE_COLORS["A" if pts >= 80 else "B" if pts >= 65 else "C" if pts >= 50 else "D" if pts >= 35 else "E"]
-            bar.setStyleSheet(f"QProgressBar {{ border: 1px solid #dde3e0; border-radius: 4px; background: white; text-align: center; color: #17352b; }} QProgressBar::chunk {{ background: {col}; border-radius: 3px; }}")
+            lbl = QLabel(f"{name}  <span style='color:{MUTED}'>%{weight * 100:.0f}</span>")
+            lbl.setMinimumWidth(190)
             row.addWidget(lbl)
-            row.addWidget(bar)
-            lay.addLayout(row)
+            row.addWidget(ScoreBar(pts), 1)
+            score.lay.addLayout(row)
+        top.addWidget(score, 4)
+
+        grid = QGridLayout()
+        grid.setSpacing(16)
+        specs = [
+            ("Toplam enerji", k.total_energy_kwh / 1000, lambda v: f"{fmt(v)} MWh",
+             f"EUI {fmt(k.eui_kwh_m2, 1)} kWh/m²·yıl"),
+            ("Karbon", k.carbon_kg / 1000, lambda v: f"{fmt(v, 1)} tCO₂",
+             f"{fmt(k.carbon_kg_m2, 1)} kgCO₂/m²·yıl"),
+            ("Su", k.water_m3, lambda v: f"{fmt(v)} m³", f"{fmt(k.water_m3_m2, 2)} m³/m²·yıl"),
+            ("Elektrik", k.electricity_kwh / 1000, lambda v: f"{fmt(v)} MWh",
+             f"%{fmt(100 * k.electricity_kwh / k.total_energy_kwh)} enerji payı"),
+            ("Doğalgaz", k.gas_kwh / 1000, lambda v: f"{fmt(v)} MWh",
+             f"%{fmt(100 * k.gas_kwh / k.total_energy_kwh)} enerji payı"),
+            ("Yıllık toplam maliyet", k.total_cost / 1e6, lambda v: f"{fmt(v, 2)} M ₺",
+             f"enerji {fmt(k.energy_cost / 1e6, 2)} M ₺ + su"),
+        ]
+        for i, (title, val, f, sub) in enumerate(specs):
+            c = Card(title, sub=sub)
+            c.set_number(val, f, sub)
+            grid.addWidget(c, i // 2, i % 2)
+        top.addLayout(grid, 5)
+        lay.addLayout(top)
+
         cost: dict[str, list[float]] = {}
         for r in sorted(project.readings, key=lambda r: (r.year, r.month)):
             if r.utility != UtilityType.WATER:
                 cost.setdefault(str(r.year), [0.0] * 12)[r.month - 1] += r.cost
-        lay.addWidget(clustered_chart("Aylık enerji maliyeti (₺)", MONTHS, cost, min_h=200), 1)
+        panel = Panel("Aylık enerji maliyeti", "Bin ₺, yıllar yan yana")
+        panel.lay.addWidget(bar_chart(MONTHS, cost, scale=1000, min_h=210), 1)
+        lay.addWidget(panel, 1)
 
 
 class ConsumptionPage:
     def __init__(self, project: Project):
         self.widget, lay = _page()
-        lay.addWidget(h1("Tüketim takibi"))
-        lay.addWidget(muted("Aylık tüketim, yıllar yan yana (fatura verisi)."))
+        lay.addWidget(header("Tüketim takibi", "Elektrik, doğalgaz ve su",
+                             "Fatura verisinden aylık tüketim; yıllar yan yana karşılaştırılır."))
+        scale = {UtilityType.ELECTRICITY: (1000, "MWh"), UtilityType.GAS: (1000, "MWh"),
+                 UtilityType.WATER: (1, "m³")}
         for u in UtilityType:
-            lay.addWidget(self._chart(project, u), 1)
-
-    def _chart(self, project: Project, utility: UtilityType) -> QChartView:
-        groups: dict[str, list[float]] = {}
-        for r in sorted(project.readings, key=lambda r: (r.year, r.month)):
-            if r.utility == utility:
-                groups.setdefault(str(r.year), []).append(r.consumption)
-        return clustered_chart(f"{UTILITY_NAMES[utility]} ({UTILITY_UNITS[utility]})",
-                               MONTHS, groups)
+            groups: dict[str, list[float]] = {}
+            for r in sorted(project.readings, key=lambda r: (r.year, r.month)):
+                if r.utility == u:
+                    groups.setdefault(str(r.year), []).append(r.consumption)
+            sc, unit = scale[u]
+            panel = Panel(UTILITY_NAMES[u], f"Aylık tüketim · {unit}")
+            panel.lay.addWidget(bar_chart(MONTHS, groups, scale=sc, min_h=170), 1)
+            lay.addWidget(panel, 1)
 
 
 class OpportunitiesPage:
     def __init__(self, project: Project):
         self.widget, lay = _page()
-        lay.addWidget(h1("Dönüşüm önerileri"))
-        lay.addWidget(muted("Geri ödeme süresine göre sıralı. Tasarruf oranları ve birim "
-                            "maliyetler varsayımdır, pilot bina etüdüyle güncellenecek."))
+        lay.addWidget(header("Dönüşüm önerileri", "Fırsatlar",
+                             "Geri ödeme süresine göre sıralı. Tasarruf oranları ve birim maliyetler "
+                             "varsayımdır, pilot bina etüdüyle güncellenecek."))
         res = project.opportunity_results()
         quick = [r for r in res if r.payback_years <= 5]
         grid = QGridLayout()
-        c1 = Card("Öneri sayısı", str(len(res)), f"{len(quick)} tanesi 5 yıl altında geri ödeyen")
-        c2 = Card("Hızlı kazanç tasarrufu", f"{fmt(sum(r.annual_saving for r in quick) / 1e6, 2)} M ₺",
-                  "geri ödemesi ≤ 5 yıl olanlar, yıllık")
-        c3 = Card("Hızlı kazanç CAPEX", f"{fmt(sum(r.capex for r in quick) / 1e6, 2)} M ₺", "")
+        grid.setSpacing(16)
+        c1 = Card("Öneri sayısı")
+        c1.set_number(len(res), lambda v: f"{v:.0f}", f"{len(quick)} tanesi 5 yıl altında geri ödüyor")
+        c2 = Card("Hızlı kazanç · yıllık tasarruf")
+        c2.set_number(sum(r.annual_saving for r in quick) / 1e6, lambda v: f"{fmt(v, 2)} M ₺",
+                      "geri ödemesi ≤ 5 yıl olanlar")
+        c3 = Card("Hızlı kazanç · CAPEX")
+        c3.set_number(sum(r.capex for r in quick) / 1e6, lambda v: f"{fmt(v, 2)} M ₺", "gerekli yatırım")
         for i, c in enumerate((c1, c2, c3)):
             grid.addWidget(c, 0, i)
         lay.addLayout(grid)
-        t = _table(["Öneri", "Kategori", "Tasarruf (kWh/yıl)", "Karbon (kgCO₂/yıl)",
-                    "Yıllık tasarruf (₺)", "CAPEX (₺)", "Geri ödeme"])
+
+        t = _table(["Öneri", "Kategori", "Enerji kWh/yıl", "Karbon kg/yıl",
+                    "Tasarruf ₺/yıl", "CAPEX ₺", "Geri ödeme"], left_cols=2)
         t.setRowCount(len(res))
         for i, r in enumerate(res):
+            pb = r.payback_years
+            col = GRADE_COLORS["A"] if pb <= 5 else GRADE_COLORS["C"] if pb <= 15 else GRADE_COLORS["E"]
             _set_row(t, i, [r.opportunity.name, r.opportunity.category, fmt(r.saved_kwh),
                             fmt(r.saved_carbon_kg), fmt(r.annual_saving), fmt(r.capex),
-                            fmt_years(r.payback_years)])
+                            fmt_years(pb)], left_cols=2, colors={6: col})
         t.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        t.setMaximumHeight(34 + 30 * len(res))
-        lay.addWidget(t)
-        lay.addWidget(clustered_chart(
-            "Yıllık tasarruf (₺) ve CAPEX (₺)", [r.opportunity.code for r in res],
+        _fit_height(t, len(res))
+        panel = Panel()
+        panel.lay.addWidget(t)
+        lay.addWidget(panel)
+
+        chart_panel = Panel("Tasarruf ve yatırım", "Milyon ₺")
+        chart_panel.lay.addWidget(bar_chart(
+            [r.opportunity.name for r in res],
             {"Yıllık tasarruf": [r.annual_saving for r in res], "CAPEX": [r.capex for r in res]},
-            min_h=220), 1)
+            scale=1e6, label_format="%.1f", min_h=230), 1)
+        lay.addWidget(chart_panel, 1)
 
 
 class ScenarioPage:
     def __init__(self, project: Project):
         self.project = project
         self.widget, lay = _page()
-        lay.addWidget(h1("Mevcut vs Hedef"))
-        lay.addWidget(muted("Uygulanacak önerileri seçin; hedef durum anında hesaplanır."))
-        top = QHBoxLayout()
+        lay.addWidget(header("Senaryo", "Mevcut vs Hedef",
+                             "Uygulanacak önerileri seçin; hedef durum anında hesaplanır."))
+        body = QHBoxLayout()
+        body.setSpacing(18)
+
         left = QVBoxLayout()
-        self.checks: dict[str, QCheckBox] = {}
+        left.setSpacing(10)
+        left.addWidget(section("Önerileri seç"))
+        self.checks: dict[str, QPushButton] = {}
+        res = {r.opportunity.code: r for r in project.opportunity_results()}
         for o in project.opportunities:
-            cb = QCheckBox(f"{o.name}  (%{o.saving_pct * 100:.0f} {UTILITY_NAMES[o.affects].lower()})")
-            cb.toggled.connect(self.refresh)
-            self.checks[o.code] = cb
-            left.addWidget(cb)
+            r = res[o.code]
+            btn = QPushButton(f"{o.name}\n%{o.saving_pct * 100:.0f} {UTILITY_NAMES[o.affects].lower()} · "
+                              f"{fmt(r.capex / 1e6, 2)} M ₺ · {fmt_years(r.payback_years)}")
+            btn.setObjectName("toggle")
+            btn.setCheckable(True)
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setMinimumHeight(64)
+            btn.toggled.connect(self.refresh)
+            self.checks[o.code] = btn
+            left.addWidget(btn)
         left.addStretch()
-        top.addLayout(left, 1)
-        self.table = _table(["Gösterge", "Mevcut", "Hedef", "Değişim"])
-        self.table.setMaximumHeight(34 + 30 * 5)
-        top.addWidget(self.table, 2)
-        lay.addLayout(top)
-        self.chart_box = QVBoxLayout()
-        lay.addLayout(self.chart_box, 1)
+        lw = QWidget()
+        lw.setLayout(left)
+        lw.setFixedWidth(360)
+        body.addWidget(lw)
+
+        right = QVBoxLayout()
+        right.setSpacing(16)
         grid = QGridLayout()
-        self.c_capex = Card("Toplam CAPEX", "-")
-        self.c_save = Card("Yıllık tasarruf", "-")
-        self.c_pay = Card("Geri ödeme süresi", "-")
-        self.c_co2 = Card("Karbon azalımı", "-")
+        grid.setSpacing(16)
+        self.c_capex = Card("Toplam CAPEX")
+        self.c_save = Card("Yıllık tasarruf")
+        self.c_pay = Card("Geri ödeme süresi")
+        self.c_co2 = Card("Karbon azalımı")
         for i, c in enumerate((self.c_capex, self.c_save, self.c_pay, self.c_co2)):
-            grid.addWidget(c, 0, i)
-        lay.addLayout(grid)
+            grid.addWidget(c, i // 2, i % 2)
+        right.addLayout(grid)
+        self.table = _table(["Gösterge", "Mevcut", "Hedef", "Değişim"])
+        _fit_height(self.table, 5)
+        tp = Panel()
+        tp.lay.addWidget(self.table)
+        right.addWidget(tp)
+        body.addLayout(right, 1)
+        lay.addLayout(body)
+
+        self.chart_panel = Panel("Mevcut vs Hedef", "Mevcut durum = 100")
+        self.chart_box = QVBoxLayout()
+        self.chart_panel.lay.addLayout(self.chart_box, 1)
+        lay.addWidget(self.chart_panel, 1)
         self.refresh()
 
     def selected_codes(self) -> list[str]:
         return [c for c, cb in self.checks.items() if cb.isChecked()]
 
-    def refresh(self):
+    def refresh(self, *_):
         s = self.project.scenario(self.selected_codes())
         c, t = s.current, s.target
         rows = [
@@ -226,18 +297,23 @@ class ScenarioPage:
         for i, (name, cur, tgt, d) in enumerate(rows):
             pct = (tgt / cur - 1) * 100 if cur else 0
             _set_row(self.table, i, [name, fmt(cur, d), fmt(tgt, d), f"{pct:+.1f}%".replace(".", ",")],
-                     right_from=1)
+                     colors={3: GRADE_COLORS["A"] if pct < -0.05 else MUTED})
+
         while self.chart_box.count():
-            self.chart_box.takeAt(0).widget().deleteLater()
-        self.chart_box.addWidget(clustered_chart(
-            "Mevcut vs Hedef (normalize edilmiş: mevcut = 100)",
+            old = self.chart_box.takeAt(0).widget()
+            old.setParent(None)
+            old.deleteLater()
+        self.chart_box.addWidget(bar_chart(
             ["Elektrik", "Doğalgaz", "Enerji", "Karbon", "Maliyet"],
             {"Mevcut": [100] * 5,
              "Hedef": [100 * t.electricity_kwh / c.electricity_kwh, 100 * t.gas_kwh / c.gas_kwh,
                        100 * t.total_energy_kwh / c.total_energy_kwh,
                        100 * t.carbon_kg / c.carbon_kg, 100 * t.total_cost / c.total_cost]},
-            min_h=200))
-        self.c_capex.set(f"{fmt(s.capex / 1e6, 2)} M ₺")
-        self.c_save.set(f"{fmt(s.annual_saving / 1e6, 2)} M ₺", "her yıl")
-        self.c_pay.set(fmt_years(s.payback_years))
-        self.c_co2.set(f"%{fmt(s.carbon_reduction_pct * 100, 1)}", f"enerji %{fmt(s.energy_reduction_pct * 100, 1)}")
+            min_h=210))
+
+        self.c_capex.set_number(s.capex / 1e6, lambda v: f"{fmt(v, 2)} M ₺", "toplam yatırım", live=True)
+        self.c_save.set_number(s.annual_saving / 1e6, lambda v: f"{fmt(v, 2)} M ₺", "her yıl", live=True)
+        pb = s.payback_years if s.payback_years != float("inf") else 0.0
+        self.c_pay.set_number(pb, lambda v: f"{fmt(v, 1)} yıl" if v > 0.05 else "-", "basit geri ödeme", live=True)
+        self.c_co2.set_number(s.carbon_reduction_pct * 100, lambda v: f"%{fmt(v, 1)}",
+                              f"enerji %{fmt(s.energy_reduction_pct * 100, 1)} azalır", live=True)
