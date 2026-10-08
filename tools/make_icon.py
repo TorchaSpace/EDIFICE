@@ -1,35 +1,39 @@
-"""EDIFI'CE uygulama ikonu (1024px PNG) üretir."""
+"""EDIFI'CE uygulama ikonu (1024px PNG): lacivert zemin üzerinde logonun anahtar+bina amblemi."""
 import os
 import sys
+from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtCore import QRectF, Qt
-from PySide6.QtGui import QBrush, QColor, QFont, QGuiApplication, QImage, QPainter, QPainterPath
+from PySide6.QtGui import (QBrush, QColor, QGuiApplication, QImage, QLinearGradient, QPainter, QPainterPath,
+                           QRadialGradient)
 
 app = QGuiApplication(sys.argv)
 out = sys.argv[1]
+emblem = QImage(str(Path(__file__).resolve().parent.parent / "edifice" / "assets" / "logo_emblem_white.png"))
 S = 1024
 img = QImage(S, S, QImage.Format_ARGB32)
 img.fill(Qt.transparent)
 p = QPainter(img)
 p.setRenderHint(QPainter.Antialiasing)
+p.setRenderHint(QPainter.SmoothPixmapTransform)
+rect = QRectF(40, 40, S - 80, S - 80)
 path = QPainterPath()
-path.addRoundedRect(QRectF(40, 40, S - 80, S - 80), 200, 200)
-p.fillPath(path, QBrush(QColor("#17352b")))
-p.setBrush(QColor("#1f7a5c"))
-p.setPen(Qt.NoPen)
-# bina siluetleri
-for x, y, w, h in [(230, 380, 190, 420), (440, 250, 200, 550), (660, 460, 140, 340)]:
-    p.drawRoundedRect(QRectF(x, y, w, h), 14, 14)
-p.setBrush(QColor("#cfe5dc"))
-for bx, by, n in [(255, 410, 3), (470, 280, 5), (680, 490, 3)]:
-    for i in range(n):
-        for j in range(2):
-            p.drawRect(QRectF(bx + j * 80 if bx != 680 else bx + j * 55, by + i * 85, 36, 44))
-p.setPen(QColor("#cfe5dc"))
-f = QFont("Helvetica Neue", 96)
-f.setBold(True)
-p.setFont(f)
-p.drawText(QRectF(0, 810, S, 140), Qt.AlignCenter, "EDIFI'CE")
+path.addRoundedRect(rect, 220, 220)
+bg = QLinearGradient(rect.topLeft(), rect.bottomRight())
+bg.setColorAt(0, QColor("#1747B8"))
+bg.setColorAt(1, QColor("#071A52"))
+p.fillPath(path, QBrush(bg))
+glow = QRadialGradient(rect.center().x(), rect.top() + 160, 620)
+glow.setColorAt(0, QColor(255, 255, 255, 46))
+glow.setColorAt(1, QColor(255, 255, 255, 0))
+p.fillPath(path, QBrush(glow))
+w = S * 0.56
+h = w * emblem.height() / emblem.width()
+p.drawImage(QRectF((S - w) / 2, (S - h) / 2 - 10, w, h), emblem)
+bar = QRectF(S / 2 - 90, (S + h) / 2 + 40, 180, 14)   # yeşil vurgu çizgisi
+bp = QPainterPath()
+bp.addRoundedRect(bar, 7, 7)
+p.fillPath(bp, QColor("#0DDD96"))
 p.end()
 img.save(out)
