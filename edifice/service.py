@@ -113,7 +113,9 @@ class Project:
         rows = [("Beklenen (tipik değerler)", self.finance(codes)),
                 ("Düşük tasarruf (literatür alt sınırı)", self.finance(codes, "low")),
                 ("Yüksek tasarruf (literatür üst sınırı)", self.finance(codes, "high")),
-                (f"İskonto oranı +2 puan (%{a.discount_rate * 100 + 2:.0f})", self.finance(codes, assumptions=replace(a, discount_rate=a.discount_rate + 0.02))),
+                (f"İskonto oranı %{a.discount_rate * 100 - 2:.0f} (−2 puan)", self.finance(codes, assumptions=replace(a, discount_rate=a.discount_rate - 0.02))),
+                (f"İskonto oranı %{a.discount_rate * 100 + 2:.0f} (+2 puan)", self.finance(codes, assumptions=replace(a, discount_rate=a.discount_rate + 0.02))),
+                ("İskonto %3 (AB makroekonomik referans, reel)", self.finance(codes, assumptions=replace(a, discount_rate=0.03))),
                 ("Enerji fiyatı reel artışı %0", self.finance(codes, assumptions=replace(a, energy_escalation=0.0))),
                 ("Tasarruf kaybı %3/yıl", self.finance(codes, assumptions=replace(a, savings_degradation=0.03)))]
         return rows
@@ -122,6 +124,12 @@ class Project:
         ok = {r.opportunity.code for r in self.opportunity_results() if r.fit != "none"}
         opps = [o for o in self.opportunities if o.code in ok]
         return best_package(opps, self.building, self.kpis(), self.prices(), self.assumptions, budget)
+
+    def replacement_cost(self) -> float | None:
+        """Binanın yaklaşık yeniden inşa bedeli (₺): 2026 Yapı Yaklaşık Birim Maliyetleri Tebliği × alan; yalnız ofis/ticari için."""
+        from .evidence import replacement_cost_per_m2
+        c = replacement_cost_per_m2(self.building.use_type, self.building.floors)
+        return c * self.building.floor_area_m2 if c else None
 
     def opportunity_ranges(self) -> dict:
         """Her öneri için (düşük, yüksek) yıllık tasarruf ₺ (literatür aralığı)."""

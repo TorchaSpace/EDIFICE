@@ -42,7 +42,7 @@ class SettingsPage:
         self.ef_g = _spin(a.emission_factor_kg_per_kwh[UtilityType.GAS], 0, 5, 3, " kgCO₂/kWh")
         g = QGridLayout()
         g.setHorizontalSpacing(16)
-        g.addWidget(field("Elektrik", self.ef_e, "Türkiye 2020 üretim bazlı: 0,437 (Şahin & Esen 2022)"), 0, 0)
+        g.addWidget(field("Elektrik", self.ef_e, "ETKB 2023 resmî: dağıtımdan bağlı 0,469 · iletimden 0,436"), 0, 0)
         g.addWidget(field("Doğalgaz", self.ef_g, "IPCC 2006, net ısıl değer. Fatura kWh'si üst ısıl değere göreyse ≈0,182"), 0, 1)
         em.lay.addSpacing(6)
         em.lay.addLayout(g)

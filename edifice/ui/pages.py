@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QSizePolicy, QSlider, QGridLay
                                QPushButton, QScrollArea, QTableWidget, QTableWidgetItem,
                                QVBoxLayout, QWidget)
 
-from ..engine.rating import CLASS_COLORS, z_of
+from ..engine.rating import CLASS_COLORS, CLASSES, z_of
 from ..engine.relevance import LABELS as FIT_LABELS
 from ..models import UTILITY_UNITS, UtilityType
 from ..service import Project
@@ -162,11 +162,19 @@ class OverviewPage:
         after_codes = project.applicable_codes()
         after = project.rating_after(after_codes) if after_codes else None
         rp = Panel(eyebrow="Enerji performansı", title="Enerji sınıfı ve benzer binalarla kıyas",
-                   subtitle="Tahmini sınıf: EUI, kullanım tipinin kıyas değerine oranlanır (varsayılan: ENERGY STAR ABD medyanı, 2024). Resmi enerji kimlik belgesi değildir.")
+                   subtitle="Sınıf aralıkları resmî BEP-TR ölçeğidir (Ep: referans bina = 100); girdi olarak EUI, kullanım tipinin kıyas değerine (varsayılan ENERGY STAR ABD medyanı) oranlanır. Resmî Enerji Kimlik Belgesi değildir.")
         rrow = QHBoxLayout()
         rrow.setSpacing(28)
         left = QVBoxLayout()
         left.addWidget(ClassScale(rating["class"], after))
+        order = CLASSES.index(rating["class"])
+        pills = QHBoxLayout()
+        pills.setSpacing(8)
+        for label, need in (("Yeni bina eşiği ≥ C", "C"), ("Düşük karbonlu belge (enerji) ≥ C", "C"), ("NSEB eşiği ≥ B", "B")):
+            ok = order <= CLASSES.index(need)
+            pills.addWidget(badge(("✓ " if ok else "✗ ") + label, G if ok else RED))
+        pills.addStretch()
+        left.addLayout(pills)
         if after and after != rating["class"]:
             note = QLabel(f"Tüm uygun öneriler uygulanırsa <b style='color:{CLASS_COLORS[after]}'>{rating['class']} → {after}</b>")
             note.setStyleSheet(f"color: {SUB}; font-size: 13px; background: transparent;")
@@ -406,7 +414,7 @@ class ScenarioPage:
         self.fin_panel.lay.addWidget(section("Duyarlılık analizi"))
         self.fin_panel.lay.addWidget(muted("Varsayımlar değişirse sonuç nasıl etkilenir? (AB 244/2012 metodolojisi duyarlılık analizi ister.)"))
         self.sens_table = _table(["Senaryo", "NPV (M ₺)", "IRR", "Geri ödeme"])
-        _fit_height(self.sens_table, 6)
+        _fit_height(self.sens_table, 8)
         self.fin_panel.lay.addWidget(self.sens_table)
         lay.addWidget(self.fin_panel)
 
@@ -492,7 +500,9 @@ class ScenarioPage:
             self.f_dpb.set_number(fin.discounted_payback, lambda v: f"{fmt(v, 1)} yıl", "iskontolu", live=True)
         self.f_net.set_number(fin.total_net / 1e6, lambda v: f"{fmt(v, 2)} M ₺", f"{self.project.assumptions.horizon_years} yıl sonunda", live=True,
                               color=None if fin.total_net >= 0 else RED)
-        self.c_capex.set_number(s.capex / 1e6, lambda v: f"{fmt(v, 2)} M ₺", "toplam yatırım", live=True)
+        rc = self.project.replacement_cost()
+        capex_sub = f"yeniden inşa bedelinin %{fmt(100 * s.capex / rc, 1)}'i" if rc and s.capex else "toplam yatırım"
+        self.c_capex.set_number(s.capex / 1e6, lambda v: f"{fmt(v, 2)} M ₺", capex_sub, live=True)
         self.c_save.set_number(s.annual_saving / 1e6, lambda v: f"{fmt(v, 2)} M ₺", "her yıl", live=True)
         pb = s.payback_years if s.payback_years != float("inf") else 0.0
         self.c_pay.set_number(pb, lambda v: f"{fmt(v, 1)} yıl" if v > 0.05 else "-", "basit geri ödeme", live=True)

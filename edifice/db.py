@@ -77,7 +77,7 @@ class Store:
         self.conn.executescript(SCHEMA)
         self._migrate_evidence_defaults()
 
-    EVIDENCE_VERSION = "2"
+    EVIDENCE_VERSION = "3"
 
     def _migrate_evidence_defaults(self):
         """Kanıta dayalı varsayılanlara geçiş: eski (kaynaksız) kayıtlı varsayımlar ve katalog bir kez sıfırlanır."""

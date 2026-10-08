@@ -6,7 +6,7 @@ from collections import Counter
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
 
-from ..evidence import LEVELS, SOURCES, parameter_rows
+from ..evidence import LEVELS, OFFICIAL_THRESHOLDS, SOURCES, parameter_rows
 from ..service import Project
 from .pages import _page
 from .widgets import AMBER, G, INDIGO, MUTED, RED, SUB, TEXT, Panel, badge, header, muted
@@ -80,6 +80,11 @@ class MethodPage:
                 group = g
             pp.lay.addWidget(_row(name, value, level, note, srcs))
         lay.addWidget(pp)
+
+        ot = Panel("Resmî eşikler (Türkiye)", "Binalarda Enerji Performansı Yönetmeliği ve ÇŞİDB belgesinden, doğrudan okunarak alındı")
+        for title, text, src in OFFICIAL_THRESHOLDS:
+            ot.lay.addWidget(_row(title, "", "birincil", text, [src]))
+        lay.addWidget(ot)
 
         op = Panel("Dönüşüm önerileri: tasarruf aralıkları", "Etkilenen kalemde bina düzeyinde tasarruf: düşük · tipik · yüksek")
         for o in opps:

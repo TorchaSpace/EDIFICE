@@ -11,20 +11,21 @@ Bu dosya `edifice/evidence.py` kaydından üretilir (`python tools/make_docs.py`
 
 | Grup | Parametre | Değer | Düzey | Kaynak | Not |
 |---|---|---|---|---|---|
-| Karbon | Elektrik emisyon faktörü | 0,437 kgCO₂/kWh | Özet okundu | SAHIN2022, EMBER2024 | 2020 üretim bazlı değer; iletim-dağıtım kayıpları ve yıllık değişim hariç. Güncel resmi faktörle değiştirin. |
+| Karbon | Elektrik emisyon faktörü | 0,469 kgCO₂e/kWh | Kaynak okundu | ETKB_EF2023, SAHIN2022 | ETKB resmî 2023 değeri, dağıtım hattından bağlı tüketim noktası (iletimden bağlıysa 0,436). Şahin & Esen (2022) 2020 üretim bazlı 0,437 ile tutarlı. |
 | Karbon | Doğalgaz emisyon faktörü | 0,202 kgCO₂/kWh | İkincil aktarım | IPCC2006 | Net kalorifik değer bazı. Fatura kWh'si üst ısıl değere göreyse yaklaşık 0,182 kullanın. |
 | Kıyas | Kullanım tipine göre EUI kıyas değerleri | Ayarlar'daki tablo | Kaynak okundu | ES2024, ES_SCORE | ABD ulusal medyanı (CBECS). Türkiye iklimi/uygulaması farklıdır; BEP-TR referans değerleri girilirse değiştirin. |
 | Kıyas | Karbon yoğunluğu kıyas değeri | kıyas EUI x ağırlıklı emisyon faktörü | Varsayım | - | Elektrik/gaz payı %50 varsayımıyla türetilir; doğrudan kaynak yok. |
 | Kıyas | Su yoğunluğu kıyas değeri | 0,90 m³/m²·yıl | Varsayım | - | Kaynak bulunamadı. |
-| Sınıf | Enerji sınıfı (A-G) sınırları | EUI/kıyas oranı: 0,5-0,75-1,0-1,3-1,65-2,0 | Varsayım | BEPTR | Resmi BEP-TR sınır tablosu doğrulanamadığı için göstergedir; resmi Enerji Kimlik Belgesi yerine geçmez. |
+| Sınıf | Enerji sınıfı (A-G) sınırları | Ep = 100×EUI/kıyas: 40-80-100-120-140-175 | Kaynak okundu | CSB_EKB, BEPYON | Resmî BEP-TR ölçeği (referans bina Ep=100, D'nin üst sınırı). |
+| Sınıf | Referans bina yerine kıyas değeri | ENERGY STAR medyanı (Ayarlar) | Varsayım | ES2024 | Resmî sınıf, modellenmiş referans binaya ve birincil enerjiye göredir; burada kıyas medyanı ve nihai enerji (EUI) kullanılır. Sonuç göstergedir, Enerji Kimlik Belgesi değildir. |
 | Sınıf | Benzer binalara göre yüzdelik | log-normal model, σ=0,35 | Varsayım | ES_SCORE | Medyan = kıyas değeri; dağılım şekli varsayımdır, ENERGY STAR regresyon kullanır. |
 | Skor | Health Score yöntemi | 4 bileşen, ağırlıklı ortalama | Özet okundu | JRC2008 | Normalizasyon eşikleri ve ağırlıklar uzman kararıdır; skor ağırlık duyarlılığı aralığıyla birlikte gösterilir. |
 | Skor | Ekipman ömrü | Tür başına 15-30 yıl | İkincil aktarım | ASHRAE_LIFE | Soğutucu, kazan, santral ve pompa için ayrı ömür kullanılır. |
-| Finans | İskonto oranı | %8,0 (reel) | Varsayım | EU244 | AB metodolojisi reel oran ve duyarlılık analizi ister; sayısal oran kaynaktan doğrulanamadı, duyarlılık tablosunda ±2 puan gösterilir. |
+| Finans | İskonto oranı | %8,0 (reel) | Varsayım | EU244 | AB metodolojisi reel oran ve en az iki oranla duyarlılık analizi ister (makroekonomik referans reel %3); finansal oranın değeri belirtilmez. Duyarlılık tablosunda %3 ve ±2 puan gösterilir. |
 | Finans | Enerji fiyat artışı | %3,0 (reel) | Varsayım | - | Kaynak yok; duyarlılık tablosunda %0 senaryosu var. |
-| Finans | Analiz süresi | 15 yıl | Varsayım | EU244 | Önlemlerin ömrüne göre seçilmelidir. |
+| Finans | Analiz süresi | 20 yıl | Kaynak okundu | EU244 | AB 244/2012: ticari konut dışı binalar için 20 yıl, konut ve kamu binaları için 30 yıl. |
 | Finans | Tasarruf kaybı | %0,5/yıl | İkincil aktarım | PERSISTENCE | Donanım değişikliği için doğrudan veri yok; işletme önlemleri çok daha hızlı erir (SMUD: %10,5 → %8, 2 yılda). |
-| Finans | Yatırım maliyetleri (₺/m²) | Öneri kataloğunda | Varsayım | - | Piyasa fiyatı/keşif bedeliyle değiştirin. |
+| Finans | Yatırım maliyetleri (₺/m²) | Öneri kataloğunda | Varsayım | - | Resmî bir yenileme birim fiyatı bulunamadı; teklif ya da keşifle değiştirin. Bağlam için paket yatırımı, 2026 yeniden inşa birim maliyetiyle (YAPI2026) oranlanır. |
 
 ## Dönüşüm önerileri: tasarruf aralıkları
 
@@ -53,6 +54,38 @@ U.S. EPA ENERGY STAR. How the 1-100 ENERGY STAR score is calculated.
 Benzer binalarla kıyas; işletme saatleri ve yoğunluk gibi etkenler regresyonla düzeltilir; 50 puan medyan performanstır.
 
 https://www.energystar.gov/buildings/benchmark/understand-metrics/how-score-calculated
+
+### ETKB_EF2023 (Kaynak okundu)
+
+T.C. Enerji ve Tabii Kaynaklar Bakanlığı, EVÇED. Türkiye Elektrik Üretimi ve Elektrik Tüketim Noktası Emisyon Faktörleri Bilgi Formu (ETKB-EVÇED-FRM-042 Rev.01), hesaplama dönemi 2023, yayım 26.12.2025.
+
+Resmî faktörler (tCO2e/MWh): Türkiye geneli elektrik üretimi 0,434; iletim hattından bağlı tüketim noktası 0,436; dağıtım hattından bağlı tüketim noktası 0,469 (CO2 olarak 0,430 / 0,433 / 0,465). Binalar çoğunlukla dağıtımdan bağlı olduğu için 0,469 kullanılır.
+
+https://enerji.gov.tr/Media/Dizin/EVCED/tr/%C3%87evreVe%C4%B0klim/%C4%B0klimDe%C4%9Fi%C5%9Fikli%C4%9Fi/EmisyonFaktorleri/2023_Turkiye_Elektrik_UretimiveElektrik_Tuketim_Noktasi_Emisyon_Faktorleri.pdf
+
+### BEPYON (Kaynak okundu)
+
+Binalarda Enerji Performansı Yönetmeliği (RG 5.12.2008/27075; son değişiklik RG 16.5.2026/33255), mevzuat.gov.tr.
+
+Md. 26: EKB'de birincil enerji tüketiminin A-G referans ölçeğine göre sınıfı ve CO2 salımı sınıfı gösterilir. Md. 27(5): BEP-TR ile belge alacak yeni binalar D veya daha kötü sınıfta olamaz. NSEB: sınıf B veya daha iyi ve birincil enerjinin en az %10'u yerinde yenilenebilir. Md. 27/A (2026): düşük karbonlu bina belgesi için sera gazı sınıfı en az B ve enerji performans sınıfı en az C. Sınıf eşikleri yönetmelikte değil, ÇŞİDB sınıflandırma tablosundadır.
+
+https://www.mevzuat.gov.tr/MevzuatMetin/yonetmelik/7.5.13594.pdf
+
+### CSB_EKB (Kaynak okundu)
+
+T.C. Çevre, Şehircilik ve İklim Değişikliği Bakanlığı. Binalarda Enerji Kimlik Belgesi (EKB) Nedir? (BEP-TR bilgilendirme belgesi).
+
+Referans binanın birincil enerji değeri Ep=100 (D sınıfının üst sınırı). Sınıflar: A 0-39, B 40-79, C 80-99, D 100-119, E 120-139, F 140-174, G 175 ve üzeri. EKB 10 yıl geçerlidir. Mücavir alan dışında 1.000 m²'den küçük binalar kapsam dışıdır.
+
+https://webdosya.csb.gov.tr/db/samsun/webmenu/webmenu4379.pdf
+
+### YAPI2026 (Kaynak okundu)
+
+Mimarlık ve Mühendislik Hizmet Bedellerinin Hesabında Kullanılacak 2026 Yılı Yapı Yaklaşık Birim Maliyetleri Hakkında Tebliğ, ÇŞİDB, Resmî Gazete 3.2.2026 / 33157.
+
+KDV hariç, genel gider ve kâr dahil yaklaşık birim maliyet (TL/m²). İş merkezleri/ticari yapılar: ≤3 kat 21.050; 21,5 m altı 23.400; 21,5-30,5 m 26.450; 30,5-51,5 m 33.900; 51,5 m üzeri 40.500-42.350. Metin resmî gazete içeriğinin bir aynasından okundu. Yeniden inşa maliyeti bağlamı içindir, yenileme maliyeti değildir.
+
+https://www.hukukihaber.net/mimarlik-ve-muhendislik-hizmet-bedellerinin-hesabinda-kullanilacak-2026-yili-yapi-yaklasik-birim-maliyetleri-hakkinda-teblig
 
 ### SAHIN2022 (Özet okundu)
 
@@ -182,13 +215,13 @@ Aylık veride kalibrasyon ölçütleri: CV(RMSE) ≤ %15, NMBE ≤ ±%5 (saatlik
 
 https://www.ashrae.org
 
-### EU244 (Özet okundu)
+### EU244 (Kaynak okundu)
 
-Commission Delegated Regulation (EU) No 244/2012 (maliyet-optimal enerji performansı gereksinimleri için karşılaştırmalı metodoloji).
+Commission Delegated Regulation (EU) No 244/2012, Annex I (maliyet-optimal enerji performansı için karşılaştırmalı metodoloji).
 
-İskonto oranı reel terimlerle ifade edilir; oran duyarlılık analiziyle belirlenir; küresel maliyet = yatırım+işletme+yenileme maliyetlerinin bugünkü değeri. Sayısal oranlar doğrulanamadı.
+Hesap süresi: konut ve kamu binaları 30 yıl, ticari konut dışı binalar 20 yıl. İskonto oranı reel terimlerle ifade edilir; en az iki oranla duyarlılık analizi yapılır (makroekonomik hesapta oranlardan biri reel %3). Duyarlılık analizi en azından enerji fiyat gelişimini ve iskonto oranını kapsamalıdır. Finansal iskonto oranının değeri üye devletlerce belirlenir (sayısal değer verilmez).
 
-https://eur-lex.europa.eu/eli/reg_del/2012/244/2013-04-06/eng
+https://www.legislation.gov.uk/eur/2012/244/annex/I/data.htm
 
 ### JRC2008 (Özet okundu)
 
@@ -197,14 +230,6 @@ Nardo M., Saisana M., Saltelli A., Tarantola S., Hoffmann A., Giovannini E. (200
 Bileşik gösterge kurma adımları: normalizasyon, ağırlıklandırma, birleştirme, güçlülük ve duyarlılık analizi. Health Score bu çerçeveyle kurgulandı.
 
 https://knowledge4policy.ec.europa.eu/sites/default/files/jrc47008_handbook_final.pdf
-
-### BEPTR (İkincil aktarım)
-
-Binalarda Enerji Performansı Yönetmeliği ve BEP-TR (Çevre, Şehircilik ve İklim Değişikliği Bakanlığı).
-
-Türkiye'de enerji sınıfı A-G, binanın yıllık birim alan enerji tüketimi ve CO2 salımının referans binayla kıyaslanmasına dayanır; NSEB için B veya daha iyi sınıf ve %10 yenilenebilir pay istenir. Sınıf sınırlarının sayısal tablosu doğrulanamadı.
-
-https://eyb.metu.edu.tr/sites/eyb.metu.edu.tr/files/binalarda_enerji_performansi_yonetmeligi.pdf
 
 ### EPBD2024 (İkincil aktarım)
 

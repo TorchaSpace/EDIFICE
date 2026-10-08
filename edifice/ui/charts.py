@@ -303,7 +303,7 @@ class BarChart(_Chart):
 
 
 # ============================================================ yatırımcı paketi görselleri
-from ..engine.rating import CLASS_COLORS, CLASSES, pdf_curve  # noqa: E402
+from ..engine.rating import CLASS_COLORS, CLASSES, EP_RANGES, pdf_curve  # noqa: E402
 from PySide6.QtGui import QPolygonF  # noqa: E402
 from .widgets import SIDEBAR_BG  # noqa: E402
 
@@ -382,7 +382,9 @@ class ClassScale(_Progress):
                     p.drawPath(path)
                 p.setPen(rgba(col.name(), 0.85 if i == ai else 0.55))
             p.setFont(qfont(20, 800))
-            p.drawText(r, Qt.AlignCenter, letter)
+            p.drawText(QRectF(r.x(), r.y() + 4, r.width(), 30), Qt.AlignCenter, letter)
+            p.setFont(qfont(10, mono=True))
+            p.drawText(QRectF(r.x(), r.bottom() - 21, r.width(), 16), Qt.AlignCenter, EP_RANGES[letter])
         t = self._p
         start_x = self._chip(0).center().x()
         # şimdi işaretçisi

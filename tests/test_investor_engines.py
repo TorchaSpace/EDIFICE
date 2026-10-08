@@ -7,7 +7,10 @@ from edifice.models import Assumptions
 
 
 def test_energy_class_boundaries():
-    assert energy_class(60, 150) == "A" and energy_class(150, 150) == "C" and energy_class(400, 150) == "G"
+    # resmî BEP-TR ölçeği: Ep = 100 x EUI/kıyas; A 0-39, B 40-79, C 80-99, D 100-119, E 120-139, F 140-174, G 175+
+    assert energy_class(59, 150) == "A" and energy_class(60, 150) == "B" and energy_class(150, 150) == "D"
+    assert energy_class(149, 150) == "C" and energy_class(179, 150) == "D" and energy_class(180, 150) == "E"
+    assert energy_class(262, 150) == "F" and energy_class(263, 150) == "G" and energy_class(400, 150) == "G"
 
 
 def test_percentile_monotonic_and_median():

@@ -59,7 +59,7 @@ DEFAULT_EUI_BY_USE = {k: round(v * 3.15459, 1) for k, v in _ES.items()}
 @dataclass
 class Assumptions:
     emission_factor_kg_per_kwh: dict = field(default_factory=lambda: {
-        UtilityType.ELECTRICITY: 0.437,   # Şahin & Esen 2022 (2020, üretim bazlı)
+        UtilityType.ELECTRICITY: 0.469,   # ETKB 2023, dağıtım hattından bağlı tüketim noktası (tCO2e/MWh)
         UtilityType.GAS: 0.202,           # IPCC 2006: 56,1 kg/GJ (NCV)
     })
     # Bina kullanım tipine göre kıyas değerleri (placeholder, doğrulanmalı)
@@ -75,7 +75,7 @@ class Assumptions:
     equipment_life_years: int = 20
     discount_rate: float = 0.08                # reel iskonto oranı (enflasyondan arındırılmış)
     energy_escalation: float = 0.03            # reel enerji fiyat artışı (yıllık)
-    horizon_years: int = 15                    # finansal analiz süresi
+    horizon_years: int = 20                    # AB 244/2012: konut dışı ticari binalar için en az 20 yıl
     savings_degradation: float = 0.005         # tasarrufun yıllık azalması
 
 

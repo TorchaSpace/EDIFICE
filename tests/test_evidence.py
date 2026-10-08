@@ -27,7 +27,7 @@ def test_energy_star_conversion_matches_published_values():
 
 def test_emission_factors_follow_sources():
     ef = Assumptions().emission_factor_kg_per_kwh
-    assert ef[UtilityType.ELECTRICITY] == 0.437
+    assert ef[UtilityType.ELECTRICITY] == 0.469      # ETKB 2023 dağıtım hattı (tCO2e/MWh)
     assert math.isclose(ef[UtilityType.GAS], 56.1 * 0.0036, abs_tol=0.0005)         # IPCC 56,1 kg/GJ
 
 
@@ -46,7 +46,7 @@ def test_scenario_modes_and_sensitivity_ordering():
     low, typ, high = (p.finance(codes, m).npv for m in ("low", "typ", "high"))
     assert low < typ < high
     rows = dict(p.sensitivity(codes))
-    assert len(rows) == 6 and rows["Beklenen (tipik değerler)"].npv == typ
+    assert len(rows) == 8 and rows["Beklenen (tipik değerler)"].npv == typ
     assert rows["Enerji fiyatı reel artışı %0"].npv < typ and rows["Tasarruf kaybı %3/yıl"].npv < typ
 
 
@@ -66,3 +66,13 @@ def test_old_saved_defaults_are_reset_once():
     store.conn.commit()
     store._migrate_evidence_defaults()
     assert store.conn.execute("SELECT COUNT(*) FROM settings WHERE key='assumptions'").fetchone()[0] == 0
+
+
+def test_official_parameters_and_context():
+    from edifice.evidence import OFFICIAL_THRESHOLDS, replacement_cost_per_m2
+    a = Assumptions()
+    assert a.horizon_years == 20                                   # AB 244/2012: ticari konut dışı 20 yıl
+    assert replacement_cost_per_m2("Ofis", 8) == 26450.0 and replacement_cost_per_m2("Otel", 5) is None
+    assert replacement_cost_per_m2("Ofis", 3) == 21050.0 and replacement_cost_per_m2("Ofis", 20) == 40500.0
+    assert all(s in SOURCES for _, _, s in OFFICIAL_THRESHOLDS)
+    assert SOURCES["EU244"]["level"] == SOURCES["ETKB_EF2023"]["level"] == "birincil"

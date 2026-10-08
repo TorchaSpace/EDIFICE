@@ -1,21 +1,25 @@
-"""Tahmini enerji sınıfı (A-G) ve benzer binalara göre yüzdelik sıralama.
+"""Enerji sınıfı (A-G) ve benzer binalara göre yüzdelik sıralama.
 
-Dikkat: Bunlar resmi Enerji Kimlik Belgesi değil, kıyas değerine (Ayarlar) göre gösterge niteliğinde tahminlerdir."""
+Sınıf aralıkları resmî BEP-TR ölçeğidir (ÇŞİDB, "Binalarda Enerji Kimlik Belgesi Nedir?"): referans binanın birincil enerji değeri Ep=100,
+A 0-39, B 40-79, C 80-99, D 100-119, E 120-139, F 140-174, G 175+. Bu uygulamada referans bina yerine kıyas değeri (Ayarlar) ve
+birincil enerji yerine nihai enerji (EUI) kullanıldığı için sonuç GÖSTERGEDİR, resmi Enerji Kimlik Belgesi değildir."""
 from __future__ import annotations
 
 import math
 
 CLASSES = ["A", "B", "C", "D", "E", "F", "G"]
-# EUI / kıyas değeri oranı için üst sınırlar; üstü G
-LIMITS = [0.50, 0.75, 1.00, 1.30, 1.65, 2.00]
+# Ep = 100 x EUI / kıyas; sınıfın (hariç) üst sınırı
+LIMITS_EP = [40, 80, 100, 120, 140, 175]
+LIMITS = [x / 100 for x in LIMITS_EP]
+EP_RANGES = {"A": "0-39", "B": "40-79", "C": "80-99", "D": "100-119", "E": "120-139", "F": "140-174", "G": "175+"}
 CLASS_COLORS = {"A": "#0DDD96", "B": "#67D46E", "C": "#B9D940", "D": "#F5C033", "E": "#F59E0B", "F": "#F2703C", "G": "#F43F5E"}
 LOG_SIGMA = 0.35   # benzer binaların EUI dağılımının (log-normal) yayılımı; medyan = kıyas değeri
 
 
 def energy_class(eui: float, benchmark: float) -> str:
-    r = eui / benchmark if benchmark > 0 else float("inf")
-    for letter, limit in zip(CLASSES, LIMITS):
-        if r <= limit:
+    ep = 100 * eui / benchmark if benchmark > 0 else float("inf")
+    for letter, limit in zip(CLASSES, LIMITS_EP):
+        if ep < limit:
             return letter
     return "G"
 

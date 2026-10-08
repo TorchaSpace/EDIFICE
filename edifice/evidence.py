@@ -24,6 +24,31 @@ SOURCES: dict[str, dict] = {
         cite="U.S. EPA ENERGY STAR. How the 1-100 ENERGY STAR score is calculated.",
         url="https://www.energystar.gov/buildings/benchmark/understand-metrics/how-score-calculated", level="birincil",
         note="Benzer binalarla kıyas; işletme saatleri ve yoğunluk gibi etkenler regresyonla düzeltilir; 50 puan medyan performanstır."),
+    "ETKB_EF2023": dict(
+        cite="T.C. Enerji ve Tabii Kaynaklar Bakanlığı, EVÇED. Türkiye Elektrik Üretimi ve Elektrik Tüketim Noktası Emisyon Faktörleri Bilgi Formu "
+             "(ETKB-EVÇED-FRM-042 Rev.01), hesaplama dönemi 2023, yayım 26.12.2025.",
+        url="https://enerji.gov.tr/Media/Dizin/EVCED/tr/%C3%87evreVe%C4%B0klim/%C4%B0klimDe%C4%9Fi%C5%9Fikli%C4%9Fi/EmisyonFaktorleri/2023_Turkiye_Elektrik_UretimiveElektrik_Tuketim_Noktasi_Emisyon_Faktorleri.pdf",
+        level="birincil",
+        note="Resmî faktörler (tCO2e/MWh): Türkiye geneli elektrik üretimi 0,434; iletim hattından bağlı tüketim noktası 0,436; "
+             "dağıtım hattından bağlı tüketim noktası 0,469 (CO2 olarak 0,430 / 0,433 / 0,465). Binalar çoğunlukla dağıtımdan bağlı olduğu için 0,469 kullanılır."),
+    "BEPYON": dict(
+        cite="Binalarda Enerji Performansı Yönetmeliği (RG 5.12.2008/27075; son değişiklik RG 16.5.2026/33255), mevzuat.gov.tr.",
+        url="https://www.mevzuat.gov.tr/MevzuatMetin/yonetmelik/7.5.13594.pdf", level="birincil",
+        note="Md. 26: EKB'de birincil enerji tüketiminin A-G referans ölçeğine göre sınıfı ve CO2 salımı sınıfı gösterilir. Md. 27(5): BEP-TR ile belge alacak yeni binalar D "
+             "veya daha kötü sınıfta olamaz. NSEB: sınıf B veya daha iyi ve birincil enerjinin en az %10'u yerinde yenilenebilir. Md. 27/A (2026): düşük karbonlu bina belgesi için "
+             "sera gazı sınıfı en az B ve enerji performans sınıfı en az C. Sınıf eşikleri yönetmelikte değil, ÇŞİDB sınıflandırma tablosundadır."),
+    "CSB_EKB": dict(
+        cite="T.C. Çevre, Şehircilik ve İklim Değişikliği Bakanlığı. Binalarda Enerji Kimlik Belgesi (EKB) Nedir? (BEP-TR bilgilendirme belgesi).",
+        url="https://webdosya.csb.gov.tr/db/samsun/webmenu/webmenu4379.pdf", level="birincil",
+        note="Referans binanın birincil enerji değeri Ep=100 (D sınıfının üst sınırı). Sınıflar: A 0-39, B 40-79, C 80-99, D 100-119, E 120-139, F 140-174, G 175 ve üzeri. "
+             "EKB 10 yıl geçerlidir. Mücavir alan dışında 1.000 m²'den küçük binalar kapsam dışıdır."),
+    "YAPI2026": dict(
+        cite="Mimarlık ve Mühendislik Hizmet Bedellerinin Hesabında Kullanılacak 2026 Yılı Yapı Yaklaşık Birim Maliyetleri Hakkında Tebliğ, "
+             "ÇŞİDB, Resmî Gazete 3.2.2026 / 33157.",
+        url="https://www.hukukihaber.net/mimarlik-ve-muhendislik-hizmet-bedellerinin-hesabinda-kullanilacak-2026-yili-yapi-yaklasik-birim-maliyetleri-hakkinda-teblig",
+        level="birincil",
+        note="KDV hariç, genel gider ve kâr dahil yaklaşık birim maliyet (TL/m²). İş merkezleri/ticari yapılar: ≤3 kat 21.050; 21,5 m altı 23.400; 21,5-30,5 m 26.450; "
+             "30,5-51,5 m 33.900; 51,5 m üzeri 40.500-42.350. Metin resmî gazete içeriğinin bir aynasından okundu. Yeniden inşa maliyeti bağlamı içindir, yenileme maliyeti değildir."),
     "SAHIN2022": dict(
         cite="Sahin H., Esen H. (2022). The usage of renewable energy sources and its effects on GHG emission intensity of electricity "
              "generation in Turkey. Renewable Energy 192: 859-869. doi:10.1016/j.renene.2022.03.141",
@@ -99,20 +124,16 @@ SOURCES: dict[str, dict] = {
         url="https://www.ashrae.org", level="ikincil",
         note="Aylık veride kalibrasyon ölçütleri: CV(RMSE) ≤ %15, NMBE ≤ ±%5 (saatlik: %30 / ±%10). Gelecekte veri kalitesi kontrolünde kullanılabilir."),
     "EU244": dict(
-        cite="Commission Delegated Regulation (EU) No 244/2012 (maliyet-optimal enerji performansı gereksinimleri için karşılaştırmalı metodoloji).",
-        url="https://eur-lex.europa.eu/eli/reg_del/2012/244/2013-04-06/eng", level="özet",
-        note="İskonto oranı reel terimlerle ifade edilir; oran duyarlılık analiziyle belirlenir; küresel maliyet = yatırım+işletme+yenileme maliyetlerinin bugünkü değeri. "
-             "Sayısal oranlar doğrulanamadı."),
+        cite="Commission Delegated Regulation (EU) No 244/2012, Annex I (maliyet-optimal enerji performansı için karşılaştırmalı metodoloji).",
+        url="https://www.legislation.gov.uk/eur/2012/244/annex/I/data.htm", level="birincil",
+        note="Hesap süresi: konut ve kamu binaları 30 yıl, ticari konut dışı binalar 20 yıl. İskonto oranı reel terimlerle ifade edilir; en az iki oranla duyarlılık analizi yapılır "
+             "(makroekonomik hesapta oranlardan biri reel %3). Duyarlılık analizi en azından enerji fiyat gelişimini ve iskonto oranını kapsamalıdır. Finansal iskonto oranının değeri "
+             "üye devletlerce belirlenir (sayısal değer verilmez)."),
     "JRC2008": dict(
         cite="Nardo M., Saisana M., Saltelli A., Tarantola S., Hoffmann A., Giovannini E. (2008). Handbook on Constructing Composite Indicators: "
              "Methodology and User Guide. OECD/JRC, ISBN 978-92-64-04345-9.",
         url="https://knowledge4policy.ec.europa.eu/sites/default/files/jrc47008_handbook_final.pdf", level="özet",
         note="Bileşik gösterge kurma adımları: normalizasyon, ağırlıklandırma, birleştirme, güçlülük ve duyarlılık analizi. Health Score bu çerçeveyle kurgulandı."),
-    "BEPTR": dict(
-        cite="Binalarda Enerji Performansı Yönetmeliği ve BEP-TR (Çevre, Şehircilik ve İklim Değişikliği Bakanlığı).",
-        url="https://eyb.metu.edu.tr/sites/eyb.metu.edu.tr/files/binalarda_enerji_performansi_yonetmeligi.pdf", level="ikincil",
-        note="Türkiye'de enerji sınıfı A-G, binanın yıllık birim alan enerji tüketimi ve CO2 salımının referans binayla kıyaslanmasına dayanır; "
-             "NSEB için B veya daha iyi sınıf ve %10 yenilenebilir pay istenir. Sınıf sınırlarının sayısal tablosu doğrulanamadı."),
     "EPBD2024": dict(
         cite="Directive (EU) 2024/1275 (EPBD yeniden düzenleme, 2024).",
         url="https://eur-lex.europa.eu/eli/dir/2024/1275/oj", level="ikincil",
@@ -125,8 +146,8 @@ def parameter_rows(a) -> list[tuple]:
     from .models import UtilityType
     ef_e, ef_g = a.emission_factor_kg_per_kwh[UtilityType.ELECTRICITY], a.emission_factor_kg_per_kwh[UtilityType.GAS]
     rows = [
-        ("Karbon", "Elektrik emisyon faktörü", f"{ef_e:.3f} kgCO₂/kWh", ["SAHIN2022", "EMBER2024"], "özet",
-         "2020 üretim bazlı değer; iletim-dağıtım kayıpları ve yıllık değişim hariç. Güncel resmi faktörle değiştirin."),
+        ("Karbon", "Elektrik emisyon faktörü", f"{ef_e:.3f} kgCO₂e/kWh", ["ETKB_EF2023", "SAHIN2022"], "birincil",
+         "ETKB resmî 2023 değeri, dağıtım hattından bağlı tüketim noktası (iletimden bağlıysa 0,436). Şahin & Esen (2022) 2020 üretim bazlı 0,437 ile tutarlı."),
         ("Karbon", "Doğalgaz emisyon faktörü", f"{ef_g:.3f} kgCO₂/kWh", ["IPCC2006"], "ikincil",
          "Net kalorifik değer bazı. Fatura kWh'si üst ısıl değere göreyse yaklaşık 0,182 kullanın."),
         ("Kıyas", "Kullanım tipine göre EUI kıyas değerleri", "Ayarlar'daki tablo", ["ES2024", "ES_SCORE"], "birincil",
@@ -134,20 +155,24 @@ def parameter_rows(a) -> list[tuple]:
         ("Kıyas", "Karbon yoğunluğu kıyas değeri", "kıyas EUI x ağırlıklı emisyon faktörü", [], "varsayım",
          "Elektrik/gaz payı %50 varsayımıyla türetilir; doğrudan kaynak yok."),
         ("Kıyas", "Su yoğunluğu kıyas değeri", f"{a.benchmark_water_m3_m2:.2f} m³/m²·yıl", [], "varsayım", "Kaynak bulunamadı."),
-        ("Sınıf", "Enerji sınıfı (A-G) sınırları", "EUI/kıyas oranı: 0,5-0,75-1,0-1,3-1,65-2,0", ["BEPTR"], "varsayım",
-         "Resmi BEP-TR sınır tablosu doğrulanamadığı için göstergedir; resmi Enerji Kimlik Belgesi yerine geçmez."),
+        ("Sınıf", "Enerji sınıfı (A-G) sınırları", "Ep = 100×EUI/kıyas: 40-80-100-120-140-175", ["CSB_EKB", "BEPYON"], "birincil",
+         "Resmî BEP-TR ölçeği (referans bina Ep=100, D'nin üst sınırı)."),
+        ("Sınıf", "Referans bina yerine kıyas değeri", "ENERGY STAR medyanı (Ayarlar)", ["ES2024"], "varsayım",
+         "Resmî sınıf, modellenmiş referans binaya ve birincil enerjiye göredir; burada kıyas medyanı ve nihai enerji (EUI) kullanılır. Sonuç göstergedir, Enerji Kimlik Belgesi değildir."),
         ("Sınıf", "Benzer binalara göre yüzdelik", "log-normal model, σ=0,35", ["ES_SCORE"], "varsayım",
          "Medyan = kıyas değeri; dağılım şekli varsayımdır, ENERGY STAR regresyon kullanır."),
         ("Skor", "Health Score yöntemi", "4 bileşen, ağırlıklı ortalama", ["JRC2008"], "özet",
          "Normalizasyon eşikleri ve ağırlıklar uzman kararıdır; skor ağırlık duyarlılığı aralığıyla birlikte gösterilir."),
         ("Skor", "Ekipman ömrü", "Tür başına 15-30 yıl", ["ASHRAE_LIFE"], "ikincil", "Soğutucu, kazan, santral ve pompa için ayrı ömür kullanılır."),
         ("Finans", "İskonto oranı", f"%{a.discount_rate * 100:.1f} (reel)", ["EU244"], "varsayım",
-         "AB metodolojisi reel oran ve duyarlılık analizi ister; sayısal oran kaynaktan doğrulanamadı, duyarlılık tablosunda ±2 puan gösterilir."),
+         "AB metodolojisi reel oran ve en az iki oranla duyarlılık analizi ister (makroekonomik referans reel %3); finansal oranın değeri belirtilmez. Duyarlılık tablosunda %3 ve ±2 puan gösterilir."),
         ("Finans", "Enerji fiyat artışı", f"%{a.energy_escalation * 100:.1f} (reel)", [], "varsayım", "Kaynak yok; duyarlılık tablosunda %0 senaryosu var."),
-        ("Finans", "Analiz süresi", f"{a.horizon_years} yıl", ["EU244"], "varsayım", "Önlemlerin ömrüne göre seçilmelidir."),
+        ("Finans", "Analiz süresi", f"{a.horizon_years} yıl", ["EU244"], "birincil",
+         "AB 244/2012: ticari konut dışı binalar için 20 yıl, konut ve kamu binaları için 30 yıl."),
         ("Finans", "Tasarruf kaybı", f"%{a.savings_degradation * 100:.1f}/yıl", ["PERSISTENCE"], "ikincil",
          "Donanım değişikliği için doğrudan veri yok; işletme önlemleri çok daha hızlı erir (SMUD: %10,5 → %8, 2 yılda)."),
-        ("Finans", "Yatırım maliyetleri (₺/m²)", "Öneri kataloğunda", [], "varsayım", "Piyasa fiyatı/keşif bedeliyle değiştirin."),
+        ("Finans", "Yatırım maliyetleri (₺/m²)", "Öneri kataloğunda", [], "varsayım",
+         "Resmî bir yenileme birim fiyatı bulunamadı; teklif ya da keşifle değiştirin. Bağlam için paket yatırımı, 2026 yeniden inşa birim maliyetiyle (YAPI2026) oranlanır."),
     ]
     return [(g, n, re.sub(r"(?<=\d)\.(?=\d)", ",", v), s, l, note) for g, n, v, s, l, note in rows]
 
@@ -179,3 +204,29 @@ def render_markdown(a) -> str:
             "- Yatırım maliyetleri doğrulanmış kaynağa dayanmaz.",
             "- Hava normalizasyonu ve M&V (IPMVP / ASHRAE Guideline 14) bu sürümde yok.", ""]
     return "\n".join(out)
+
+
+def replacement_cost_per_m2(use_type: str, floors: int) -> float | None:
+    """2026 Yapı Yaklaşık Birim Maliyetleri (TL/m²) - yalnız ofis/ticari için, kat sayısından (3,5 m/kat varsayımıyla) yüksekliğe göre sınıf."""
+    if use_type not in ("Ofis", "Ticari / AVM"):
+        return None
+    h = floors * 3.5
+    if floors <= 3:
+        return 21050.0
+    if h < 21.5:
+        return 23400.0
+    if h < 30.5:
+        return 26450.0
+    if h < 51.5:
+        return 33900.0
+    return 40500.0
+
+
+OFFICIAL_THRESHOLDS = [
+    ("Enerji sınıfı ölçeği", "A 0-39 · B 40-79 · C 80-99 · D 100-119 · E 120-139 · F 140-174 · G 175+ (referans bina = 100)", "CSB_EKB"),
+    ("Yeni binalar", "BEP-TR ile belge alacak yeni binalar D veya daha kötü sınıfta olamaz", "BEPYON"),
+    ("Neredeyse sıfır enerjili bina (NSEB)", "Enerji sınıfı B veya daha iyi ve birincil enerjinin en az %10'u yerinde yenilenebilir", "BEPYON"),
+    ("Düşük karbonlu bina belgesi (2026)", "Sera gazı sınıfı en az B ve enerji performans sınıfı en az C", "BEPYON"),
+    ("Enerji Kimlik Belgesi geçerliliği", "10 yıl; binanın birincil enerji ihtiyacı değişirse bir yıl içinde yenilenir", "CSB_EKB"),
+    ("Kapsam dışı", "Mücavir alan dışında toplam inşaat alanı 1.000 m²'den küçük binalar; 50 m² altı yapılar", "CSB_EKB"),
+]
