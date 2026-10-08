@@ -12,6 +12,7 @@ from ..service import Project
 from .pages import ConsumptionPage, OpportunitiesPage, OverviewPage, ScenarioPage
 from .building_dialog import BuildingDialog
 from .report import build_report
+from .settings_page import SettingsPage
 from .widgets import get_style, FadeStack, Logo, NavBar, section
 
 TR_MONTHS = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"]
@@ -28,7 +29,8 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(get_style())
 
         self.nav_specs = [("Genel Bakış", "overview"), ("Tüketim", "consumption"),
-                          ("Öneriler", "opportunities"), ("Mevcut vs Hedef", "scenario")]
+                          ("Öneriler", "opportunities"), ("Mevcut vs Hedef", "scenario"),
+                          ("Ayarlar", "settings")]
         self.pages = []
         self.stack = FadeStack()
 
@@ -142,7 +144,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(root)
         self.set_project(project)
 
-    def set_project(self, project: Project):
+    def set_project(self, project: Project, select: int = 0, notify: bool = False):
         """Seçili binayı değiştirir: sayfaları yeniden kurar."""
         self.project = project
         while self.stack.count():
@@ -150,15 +152,18 @@ class MainWindow(QMainWindow):
             self.stack.removeWidget(w)
             w.deleteLater()
         self.pages = [(self.nav_specs[0][0], OverviewPage(project)), (self.nav_specs[1][0], ConsumptionPage(project)),
-                      (self.nav_specs[2][0], OpportunitiesPage(project)), (self.nav_specs[3][0], ScenarioPage(project))]
+                      (self.nav_specs[2][0], OpportunitiesPage(project)), (self.nav_specs[3][0], ScenarioPage(project)),
+                      (self.nav_specs[4][0], SettingsPage(project, self.store, self._settings_saved))]
         for _, page in self.pages:
             self.stack.addWidget(page.widget)
         self.n1.setText(project.building.name)
         self.av.setText(project.building.name[:1].upper() or "B")
         self.live.setText(f"●  {project.building.name}")
-        self.nav.select(0, animate=False)
-        self.stack.setCurrentIndex(0)
-        self.crumb.setText(self.pages[0][0])
+        self.nav.select(select, animate=False)
+        self.stack.setCurrentIndex(select)
+        self.crumb.setText(self.pages[select][0])
+        if notify:
+            self.pages[4][1].saved_message()
 
     def show_building_menu(self):
         menu = QMenu(self)
@@ -167,16 +172,28 @@ class MainWindow(QMainWindow):
             act.triggered.connect(lambda _=False, i=bid: self.set_project(self.store.load_project(i)))
         menu.addSeparator()
         menu.addAction("+  Yeni bina ekle").triggered.connect(self.add_building)
+        if self.project.building_id is not None:
+            menu.addAction("✎  Bu binayı düzenle").triggered.connect(self.edit_building)
         if self.store.count() > 1 and self.project.building_id is not None:
             menu.addAction("Bu binayı sil").triggered.connect(self.delete_current)
         menu.exec(self.bldg_btn.mapToGlobal(self.bldg_btn.rect().topLeft() - self.bldg_btn.rect().bottomLeft()))
 
     def add_building(self):
-        dlg = BuildingDialog(self)
+        dlg = BuildingDialog(self, tariffs=self.project.assumptions.default_tariffs)
         if dlg.exec() == BuildingDialog.Accepted and dlg.result_data:
             building, readings, equipment = dlg.result_data
             bid = self.store.save_building(building, readings, equipment)
             self.set_project(self.store.load_project(bid))
+
+    def edit_building(self):
+        dlg = BuildingDialog(self, project=self.project, tariffs=self.project.assumptions.default_tariffs)
+        if dlg.exec() == BuildingDialog.Accepted and dlg.result_data:
+            building, readings, equipment = dlg.result_data
+            self.store.update_building(self.project.building_id, building, readings, equipment)
+            self.set_project(self.store.load_project(self.project.building_id))
+
+    def _settings_saved(self):
+        self.set_project(self.store.load_project(self.project.building_id), select=4, notify=True)
 
     def delete_current(self):
         name = self.project.building.name

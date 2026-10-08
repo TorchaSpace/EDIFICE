@@ -62,6 +62,10 @@ class Assumptions:
     benchmark_carbon_kg_m2: float = 45.0
     benchmark_water_m3_m2: float = 0.9
     target_eui_kwh_m2: float = 100.0
+    health_weights: dict = field(default_factory=lambda: {
+        "Enerji yoğunluğu": 0.35, "Karbon yoğunluğu": 0.25, "Su yoğunluğu": 0.10, "Ekipman durumu": 0.30})
+    default_tariffs: dict = field(default_factory=lambda: {
+        UtilityType.ELECTRICITY: 4.2, UtilityType.GAS: 1.3, UtilityType.WATER: 38.0})  # TRY/kWh, TRY/kWh, TRY/m3
     equipment_life_years: int = 20
     discount_rate: float = 0.0                 # MVP: basit geri ödeme
 

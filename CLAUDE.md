@@ -54,3 +54,6 @@ Mock veriyle çalışan arayüz + hesap motoru hazır: `main.py`, `edifice/` (mo
 
 ## Tasarım
 UI, kullanıcının Figma Make çıktısına ("Premium SaaS Dashboard Design", koyu tema) göre yapıldı: renkler `#070C12` zemin, `#0DDD96` yeşil, `#6366F1` indigo, `#F59E0B` amber, `#F43F5E` kırmızı; fontlar Manrope + DM Mono (yüklü değilse Menlo/Helvetica'ya düşer). Tasarım tokenları `edifice/ui/widgets.py` içinde, grafikler `edifice/ui/charts.py` içinde (özel çizim, aşağıdan yukarı yükselen animasyon). Figma'daki çoklu bina/portföy sayfaları MVP kapsamı dışında, sadece tek bina ekranları uygulandı.
+
+## Ayarlar ve düzenleme (eklendi)
+Hesap varsayımları (emisyon faktörü, tarifeler, kıyas değerleri, Health Score ağırlıkları, ekipman ömrü) ve öneri kataloğu artık SQLite'ta (`settings`, `opportunities`) ve **Ayarlar** ekranından düzenlenir (`edifice/ui/settings_page.py`). Binalar sonradan düzenlenebilir (sidebar bina kartı > "Bu binayı düzenle"). Kalan: öneri kataloğunu ekipmana göre otomatik seçme, PDF rapor, senaryo kaydı, fontları gömme.

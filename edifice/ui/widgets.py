@@ -472,6 +472,12 @@ def nav_icon(kind: str) -> QIcon:
         elif kind == "opportunities":
             p.drawPolyline([QPointF(2.5, 15), QPointF(8, 9), QPointF(11.5, 12.5), QPointF(17, 4.5)])
             p.drawPolyline([QPointF(12.5, 4.5), QPointF(17, 4.5), QPointF(17, 9)])
+        elif kind == "settings":
+            for y, x in ((5, 6), (10, 13), (15, 8)):
+                p.drawLine(QPointF(2.5, y), QPointF(17.5, y))
+                p.setBrush(QColor(SIDEBAR_BG))
+                p.drawEllipse(QPointF(x, y), 2.2, 2.2)
+                p.setBrush(Qt.NoBrush)
         else:
             p.drawEllipse(QRectF(2, 4, 10, 10))
             p.drawEllipse(QRectF(8, 6, 10, 10))

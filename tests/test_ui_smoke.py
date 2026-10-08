@@ -51,3 +51,25 @@ def test_add_building_dialog_flow():
     bid = store.save_building(building, readings, equipment)
     w.set_project(store.load_project(bid))
     assert w.project.building.name == "Yeni Bina" and store.count() == 2
+
+
+def test_edit_building_and_settings_flow():
+    _app()
+    store = Store(":memory:")
+    bid = store.seed_demo()
+    w = MainWindow(store.load_project(bid), store)
+    d = BuildingDialog(w, project=w.project)
+    assert d.name.text() == "Demo Ofis Binası" and d.eq.rowCount() == len(w.project.equipment)
+    d.name.setText("Düzenlenmiş")
+    d.save()
+    assert d.result_data is not None and d.result_data[0].name == "Düzenlenmiş"
+    assert len(d.result_data[1]) == len(w.project.readings)
+    store.update_building(bid, *d.result_data)
+    w.set_project(store.load_project(bid))
+    assert w.project.building.name == "Düzenlenmiş"
+    sp = w.pages[4][1]
+    sp.b_eui.setValue(400)
+    sp.opp_widgets[0][2].setValue(30)
+    sp.save()
+    assert w.project.assumptions.benchmark_eui_kwh_m2 == 400
+    assert w.project.opportunities[0].saving_pct == 0.3

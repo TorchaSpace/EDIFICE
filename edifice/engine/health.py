@@ -9,8 +9,6 @@ from datetime import date
 
 from ..models import Assumptions, Equipment, HealthScore, KPIs
 
-WEIGHTS = {"Enerji yoğunluğu": 0.35, "Karbon yoğunluğu": 0.25,
-           "Su yoğunluğu": 0.10, "Ekipman durumu": 0.30}
 
 
 _RATIO_POINTS = [(0.5, 100.0), (1.0, 70.0), (1.6, 0.0)]
@@ -57,7 +55,8 @@ def compute_health(kpis: KPIs, equipment: list[Equipment], a: Assumptions,
         "Su yoğunluğu": _ratio_score(kpis.water_m3_m2, a.benchmark_water_m3_m2),
         "Ekipman durumu": _equipment_score(equipment, a.equipment_life_years, today),
     }
-    total = sum(comps[k] * WEIGHTS[k] for k in comps)
+    w = a.health_weights
+    total = sum(comps[k] * w[k] for k in comps)
     return HealthScore(total=round(total, 1),
-                       components={k: (round(v, 1), WEIGHTS[k]) for k, v in comps.items()},
+                       components={k: (round(v, 1), w[k]) for k, v in comps.items()},
                        grade=grade(total))

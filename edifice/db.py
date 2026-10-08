@@ -1,11 +1,12 @@
 """SQLite kayıt katmanı: bina, tüketim ve ekipman. Ham veri burada, hesaplananlar motorda."""
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 from pathlib import Path
 
-from .models import Assumptions, Building, Equipment, UtilityReading, UtilityType
+from .models import Assumptions, Building, Equipment, Opportunity, UtilityReading, UtilityType
 from .service import Project
 from . import mock_data
 
@@ -19,6 +20,10 @@ CREATE TABLE IF NOT EXISTS readings (
   utility TEXT NOT NULL, year INTEGER NOT NULL, month INTEGER NOT NULL,
   consumption REAL NOT NULL, cost REAL NOT NULL,
   PRIMARY KEY (building_id, utility, year, month));
+CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS opportunities (
+  code TEXT PRIMARY KEY, name TEXT, category TEXT, affects TEXT, saving_pct REAL, capex_per_m2 REAL,
+  description TEXT, position INTEGER);
 CREATE TABLE IF NOT EXISTS equipment (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   building_id INTEGER NOT NULL REFERENCES buildings(id) ON DELETE CASCADE,
@@ -35,11 +40,71 @@ def default_path() -> str:
     return str(d / "edifice.db")
 
 
+def assumptions_to_json(a: Assumptions) -> str:
+    return json.dumps({
+        "emission": {k.value: v for k, v in a.emission_factor_kg_per_kwh.items()},
+        "benchmark_eui": a.benchmark_eui_kwh_m2, "benchmark_carbon": a.benchmark_carbon_kg_m2,
+        "benchmark_water": a.benchmark_water_m3_m2, "target_eui": a.target_eui_kwh_m2,
+        "equipment_life": a.equipment_life_years, "weights": a.health_weights,
+        "tariffs": {k.value: v for k, v in a.default_tariffs.items()}}, ensure_ascii=False)
+
+
+def assumptions_from_json(text: str) -> Assumptions:
+    d, a = json.loads(text), Assumptions()
+    a.emission_factor_kg_per_kwh = {UtilityType(k): v for k, v in d["emission"].items()}
+    a.benchmark_eui_kwh_m2, a.benchmark_carbon_kg_m2 = d["benchmark_eui"], d["benchmark_carbon"]
+    a.benchmark_water_m3_m2, a.target_eui_kwh_m2 = d["benchmark_water"], d["target_eui"]
+    a.equipment_life_years, a.health_weights = d["equipment_life"], d["weights"]
+    a.default_tariffs = {UtilityType(k): v for k, v in d["tariffs"].items()}
+    return a
+
+
 class Store:
     def __init__(self, path: str | None = None):
         self.conn = sqlite3.connect(path or default_path())
         self.conn.execute("PRAGMA foreign_keys = ON")
         self.conn.executescript(SCHEMA)
+
+    # ---- varsayımlar ve öneri kataloğu
+    def load_assumptions(self) -> Assumptions:
+        row = self.conn.execute("SELECT value FROM settings WHERE key='assumptions'").fetchone()
+        return assumptions_from_json(row[0]) if row else Assumptions()
+
+    def save_assumptions(self, a: Assumptions):
+        with self.conn:
+            self.conn.execute("INSERT OR REPLACE INTO settings VALUES ('assumptions', ?)", (assumptions_to_json(a),))
+
+    def reset_settings(self):
+        with self.conn:
+            self.conn.execute("DELETE FROM settings WHERE key='assumptions'")
+            self.conn.execute("DELETE FROM opportunities")
+
+    def load_opportunities(self) -> list[Opportunity]:
+        rows = self.conn.execute(
+            "SELECT code,name,category,affects,saving_pct,capex_per_m2,description FROM opportunities ORDER BY position").fetchall()
+        if not rows:
+            return mock_data.opportunities()
+        return [Opportunity(c, n, cat, UtilityType(aff), sp, cx, desc) for c, n, cat, aff, sp, cx, desc in rows]
+
+    def save_opportunities(self, opps: list[Opportunity]):
+        with self.conn:
+            self.conn.execute("DELETE FROM opportunities")
+            self.conn.executemany("INSERT INTO opportunities VALUES (?,?,?,?,?,?,?,?)", [
+                (o.code, o.name, o.category, o.affects.value, o.saving_pct, o.capex_per_m2, o.description, i)
+                for i, o in enumerate(opps)])
+
+    def update_building(self, bid: int, b: Building, readings: list[UtilityReading], equipment: list[Equipment]):
+        with self.conn:
+            self.conn.execute(
+                "UPDATE buildings SET name=?,address=?,use_type=?,floor_area_m2=?,year_built=?,floors=?,occupants=? WHERE id=?",
+                (b.name, b.address, b.use_type, b.floor_area_m2, b.year_built, b.floors, b.occupants, bid))
+            self.conn.execute("DELETE FROM readings WHERE building_id=?", (bid,))
+            self.conn.execute("DELETE FROM equipment WHERE building_id=?", (bid,))
+            self.conn.executemany("INSERT INTO readings VALUES (?,?,?,?,?,?)",
+                                  [(bid, r.utility.value, r.year, r.month, r.consumption, r.cost) for r in readings])
+            self.conn.executemany(
+                "INSERT INTO equipment (building_id,category,name,year_installed,condition,notes) VALUES (?,?,?,?,?,?)",
+                [(bid, e.category, e.name, e.year_installed, e.condition, e.notes) for e in equipment])
 
     def count(self) -> int:
         return self.conn.execute("SELECT COUNT(*) FROM buildings").fetchone()[0]
@@ -81,7 +146,7 @@ class Store:
             "SELECT utility,year,month,consumption,cost FROM readings WHERE building_id=? ORDER BY year,month", (bid,))]
         equipment = [Equipment(*r) for r in self.conn.execute(
             "SELECT category,name,year_installed,condition,notes FROM equipment WHERE building_id=?", (bid,))]
-        return Project(building, readings, equipment, mock_data.opportunities(), Assumptions(), building_id=bid)
+        return Project(building, readings, equipment, self.load_opportunities(), self.load_assumptions(), building_id=bid)
 
     def seed_demo(self) -> int:
         p = Project.mock()

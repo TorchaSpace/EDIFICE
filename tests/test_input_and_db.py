@@ -51,3 +51,31 @@ def test_db_roundtrip_and_delete():
     assert len(p.equipment) == 1
     store.delete_building(bid)
     assert store.count() == 0
+
+
+def test_settings_roundtrip_and_effect_on_health():
+    store = Store(":memory:")
+    bid = store.seed_demo()
+    base = store.load_project(bid).health().total
+    a = store.load_assumptions()
+    a.health_weights = {"Enerji yoğunluğu": 1.0, "Karbon yoğunluğu": 0.0, "Su yoğunluğu": 0.0, "Ekipman durumu": 0.0}
+    a.benchmark_eui_kwh_m2 = 400
+    store.save_assumptions(a)
+    p = store.load_project(bid)
+    assert p.assumptions.benchmark_eui_kwh_m2 == 400 and p.health().total != base
+    opps = store.load_opportunities()
+    opps[0].saving_pct = 0.5
+    store.save_opportunities(opps)
+    assert store.load_project(bid).opportunities[0].saving_pct == 0.5
+    store.reset_settings()
+    assert store.load_project(bid).assumptions.benchmark_eui_kwh_m2 == 150
+
+
+def test_update_building():
+    store = Store(":memory:")
+    bid = store.seed_demo()
+    p = store.load_project(bid)
+    p.building.name = "Yeni Ad"
+    store.update_building(bid, p.building, p.readings[:36], [])
+    q = store.load_project(bid)
+    assert q.building.name == "Yeni Ad" and len(q.readings) == 36 and q.equipment == []

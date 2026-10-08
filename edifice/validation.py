@@ -43,7 +43,7 @@ def parse_number(text: str) -> float | None:
         raise ValueError(f"'{text}' sayı değil")
 
 
-def _year_rows(year: int, rows: list[list[str]], label: str, errors: list[str]):
+def _year_rows(year: int, rows: list[list[str]], label: str, errors: list[str], tariffs: dict):
     """12 satır x 6 sütun metin -> UtilityReading listesi. Tamamen boşsa None."""
     parsed, any_value = [], False
     for m, row in enumerate(rows, start=1):
@@ -69,14 +69,15 @@ def _year_rows(year: int, rows: list[list[str]], label: str, errors: list[str]):
                 errors.append(f"{label} · {MONTH_NAMES[m - 1]} · {cons_name}: değer girilmeli (0'dan büyük)")
                 continue
             if cost is None:
-                cost = cons * DEFAULT_TARIFF[utility]  # fatura tutarı boşsa varsayılan tarife
+                cost = cons * tariffs[utility]  # fatura tutarı boşsa varsayılan tarife
             readings.append(UtilityReading(utility, year, m, cons, cost))
     return readings
 
 
 def build_from_inputs(info: dict, grids: dict[int, list[list[str]]], equipment_rows: list[dict],
-                      base_year: int):
+                      base_year: int, tariffs: dict | None = None):
     """info: ad/adres/kullanım/alan/yıl/kat/kişi. grids: {yıl: 12x6 metin}. -> (Building, readings, equipment)"""
+    tariffs = tariffs or DEFAULT_TARIFF
     errors: list[str] = []
     name = (info.get("name") or "").strip()
     if not name:
@@ -92,12 +93,12 @@ def build_from_inputs(info: dict, grids: dict[int, list[list[str]]], equipment_r
         errors.append("Kat sayısı en az 1 olmalı")
 
     readings: list[UtilityReading] = []
-    base = _year_rows(base_year, grids.get(base_year, []), f"Baz yıl {base_year}", errors)
+    base = _year_rows(base_year, grids.get(base_year, []), f"Baz yıl {base_year}", errors, tariffs)
     if base is None:
         errors.append(f"Baz yıl {base_year} için 12 aylık tüketim girilmeli")
     else:
         readings += base
-    prev = _year_rows(base_year - 1, grids.get(base_year - 1, []), f"Önceki yıl {base_year - 1}", errors)
+    prev = _year_rows(base_year - 1, grids.get(base_year - 1, []), f"Önceki yıl {base_year - 1}", errors, tariffs)
     if prev:
         readings += prev
 

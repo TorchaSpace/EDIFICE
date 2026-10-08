@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QDialog, QDoubleSpinBox,
 from ..validation import (COLUMNS, EQUIPMENT_CATEGORIES, MONTH_NAMES, USE_TYPES, ValidationError,
                           build_from_inputs)
 from .dropdown import PremiumCombo
+from .forms import field, scroll, tune_spin
 from .widgets import FadeStack, Panel, header, muted, qfont
 
 
@@ -46,47 +47,15 @@ class PasteTable(QTableWidget):
         super().keyPressEvent(e)
 
 
-def _field(label: str, widget: QWidget, hint: str = "") -> QWidget:
-    w = QWidget()
-    lay = QVBoxLayout(w)
-    lay.setContentsMargins(0, 0, 0, 0)
-    lay.setSpacing(7)
-    lb = QLabel(label)
-    lb.setObjectName("field")
-    lay.addWidget(lb)
-    lay.addWidget(widget)
-    if hint:
-        h = QLabel(hint)
-        h.setObjectName("hint")
-        h.setWordWrap(True)
-        lay.addWidget(h)
-    return w
-
-
-def _scroll(inner: QWidget) -> QScrollArea:
-    """İçerik doğal boyutunda kalır; sığmazsa yumuşakça kayar (alanlar asla birbirine girmez)."""
-    area = QScrollArea()
-    area.setWidgetResizable(True)
-    area.setFrameShape(QScrollArea.NoFrame)
-    area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-    area.setWidget(inner)
-    area.viewport().setAutoFillBackground(False)
-    inner.setAutoFillBackground(False)
-    return area
-
-
-def _tune_spin(sp):
-    """Spin kutularında metnin kenara yapışmasını önler."""
-    sp.lineEdit().setTextMargins(10, 0, 0, 0)
-    sp.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-    sp.setMinimumHeight(40)
-    return sp
+_field, _tune_spin, _scroll = field, tune_spin, scroll
 
 
 class BuildingDialog(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, project=None, tariffs: dict | None = None):
         super().__init__(parent)
-        self.setWindowTitle("Bina Ekle")
+        self.editing = project
+        self.tariffs = tariffs
+        self.setWindowTitle("Binayı Düzenle" if project else "Bina Ekle")
         screen = QGuiApplication.primaryScreen()
         avail = screen.availableGeometry().height() if screen else 900
         self.resize(1100, max(640, min(880, avail - 60)))
@@ -97,7 +66,7 @@ class BuildingDialog(QDialog):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(36, 30, 36, 26)
         lay.setSpacing(16)
-        lay.addWidget(header("Yeni bina", "Bina Ekle",
+        lay.addWidget(header("Düzenle" if project else "Yeni bina", "Binayı Düzenle" if project else "Bina Ekle",
                              "Üç kısa adımda binayı tanımlayın: bina bilgisi, son yılın aylık tüketimi ve (isteğe bağlı) ekipmanlar. "
                              "* işaretli alanlar zorunludur."))
 
@@ -131,7 +100,7 @@ class BuildingDialog(QDialog):
         cancel.setObjectName("secondary")
         cancel.setCursor(Qt.PointingHandCursor)
         cancel.clicked.connect(self.reject)
-        save = QPushButton("Binayı kaydet")
+        save = QPushButton("Değişiklikleri kaydet" if project else "Binayı kaydet")
         save.setObjectName("primary")
         save.setCursor(Qt.PointingHandCursor)
         save.clicked.connect(self.save)
@@ -139,6 +108,8 @@ class BuildingDialog(QDialog):
         row.addWidget(save)
         lay.addLayout(row)
 
+        if project:
+            self._prefill(project)
         self._open_anim = QPropertyAnimation(self, b"windowOpacity", self)
         self._open_anim.setDuration(320)
         self._open_anim.setStartValue(0.0)
@@ -330,6 +301,9 @@ class BuildingDialog(QDialog):
         cat = PremiumCombo()
         cat.addItems(EQUIPMENT_CATEGORIES)
         name = QLineEdit()
+        if data:
+            cat.setCurrentText(data["category"])
+            name.setText(data["name"])
         name.setObjectName("cellInput")
         name.setPlaceholderText("Örn. Su soğutmalı chiller")
         yr = _tune_spin(QSpinBox())
@@ -339,6 +313,10 @@ class BuildingDialog(QDialog):
         cond.setRange(1, 5)
         cond.setValue(3)
         note = QLineEdit()
+        if data:
+            yr.setValue(data["year_installed"])
+            cond.setValue(data["condition"])
+            note.setText(data["notes"])
         note.setObjectName("cellInput")
         note.setPlaceholderText("İsteğe bağlı not")
         for col, w in enumerate((cat, name, yr, cond, note)):
@@ -346,7 +324,30 @@ class BuildingDialog(QDialog):
             self.eq.setCellWidget(r, col, self._cell(w))
         self._sync_empty()
         self.eq.setCurrentCell(r, 1)
-        name.setFocus()
+        if not data:
+            name.setFocus()
+
+    def _prefill(self, p):
+        b = p.building
+        self.name.setText(b.name)
+        self.address.setText(b.address)
+        self.use_type.setCurrentText(b.use_type)
+        self.area.setValue(b.floor_area_m2)
+        self.year_built.setValue(b.year_built)
+        self.floors.setValue(b.floors)
+        self.occupants.setValue(b.occupants)
+        self.year.setValue(p.year)
+        col = {"electricity": 0, "gas": 2, "water": 4}
+        for r in p.readings:
+            key = "base" if r.year == p.year else "prev" if r.year == p.year - 1 else None
+            if key is None:
+                continue
+            c = col[r.utility.value]
+            self.grids[key].setItem(r.month - 1, c, make_item(f"{r.consumption:.0f}", c))
+            self.grids[key].setItem(r.month - 1, c + 1, make_item(f"{r.cost:.0f}", c + 1))
+        for e in p.equipment:
+            self.add_equipment_row(dict(category=e.category, name=e.name, year_installed=e.year_installed,
+                                        condition=e.condition, notes=e.notes))
 
     def remove_equipment_row(self):
         r = self.eq.currentRow()
@@ -370,7 +371,7 @@ class BuildingDialog(QDialog):
             w = [self.eq.cellWidget(r, c).inner for c in range(5)]
             eq.append(dict(category=w[0].currentText(), name=w[1].text(), year_installed=w[2].value(),
                            condition=w[3].value(), notes=w[4].text()))
-        return build_from_inputs(info, grids, eq, y)
+        return build_from_inputs(info, grids, eq, y, self.tariffs)
 
     def _show_error(self, text: str):
         self.error.setText(text)
