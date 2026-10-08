@@ -13,6 +13,7 @@ Bu dosya `edifice/evidence.py` kaydından üretilir (`python tools/make_docs.py`
 |---|---|---|---|---|---|
 | Karbon | Elektrik emisyon faktörü | 0,469 kgCO₂e/kWh | Kaynak okundu | ETKB_EF2023, SAHIN2022 | ETKB resmî 2023 değeri, dağıtım hattından bağlı tüketim noktası (iletimden bağlıysa 0,436). Şahin & Esen (2022) 2020 üretim bazlı 0,437 ile tutarlı. |
 | Karbon | Doğalgaz emisyon faktörü | 0,202 kgCO₂/kWh | İkincil aktarım | IPCC2006 | Net kalorifik değer bazı. Fatura kWh'si üst ısıl değere göreyse yaklaşık 0,182 kullanın. |
+| Kıyas | Gösterge seti (EUI, karbon, su) | SNET kWh/m²·yıl · kgCO₂e/m²·yıl · m³/m²·yıl | Kaynak okundu | ETKB_KIYASLAMA | Uygulamadaki göstergeler ETKB'nin önerdiği ölçülmüş (operasyonel) kıyaslama göstergeleriyle aynıdır; birincil enerji (SBET) için resmî katsayılara ulaşılamadı. |
 | Kıyas | Kullanım tipine göre EUI kıyas değerleri | Ayarlar'daki tablo | Kaynak okundu | ES2024, ES_SCORE | ABD ulusal medyanı (CBECS). Türkiye iklimi/uygulaması farklıdır; BEP-TR referans değerleri girilirse değiştirin. |
 | Kıyas | Karbon yoğunluğu kıyas değeri | kıyas EUI x ağırlıklı emisyon faktörü | Varsayım | - | Elektrik/gaz payı %50 varsayımıyla türetilir; doğrudan kaynak yok. |
 | Kıyas | Su yoğunluğu kıyas değeri | 0,90 m³/m²·yıl | Varsayım | - | Kaynak bulunamadı. |
@@ -78,6 +79,14 @@ T.C. Çevre, Şehircilik ve İklim Değişikliği Bakanlığı. Binalarda Enerji
 Referans binanın birincil enerji değeri Ep=100 (D sınıfının üst sınırı). Sınıflar: A 0-39, B 40-79, C 80-99, D 100-119, E 120-139, F 140-174, G 175 ve üzeri. EKB 10 yıl geçerlidir. Mücavir alan dışında 1.000 m²'den küçük binalar kapsam dışıdır.
 
 https://webdosya.csb.gov.tr/db/samsun/webmenu/webmenu4379.pdf
+
+### ETKB_KIYASLAMA (Kaynak okundu)
+
+T.C. Enerji ve Tabii Kaynaklar Bakanlığı, EVÇED. Binalarda Kıyaslama Raporu Hazırlama Rehberi (Enerji Verimliliğinde Kurumsal Kapasitenin Geliştirilmesi İçin Teknik Destek Projesi, AB finansmanlı).
+
+EKB değerleri teorik (standart iklim ve kapsam) olduğundan gerçek tüketimi yansıtmaz; bu yüzden fatura/sayaç verisine dayalı ölçülmüş (operasyonel) kıyaslama önerilir. Resmî göstergeler: spesifik nihai enerji (SNET, kWh/m²·yıl), spesifik birincil enerji (SBET), sera gazı (kg CO2e/m²·yıl), kişi başı enerji, su (m³/m²·yıl). 16 bina tipinden biri ofislerdir. Enerji akışları alt ısıl değere göre kWh'ye çevrilir. Sayısal kıyas değerleri belgede yer almaz.
+
+https://enerji.gov.tr/Media/Dizin/EVCED/tr/EnerjiVerimlili%C4%9Fi/OVDegerlendirme/Belgeler/K%C4%B1yaslamaC/BKRHRehberi.pdf
 
 ### YAPI2026 (Kaynak okundu)
 

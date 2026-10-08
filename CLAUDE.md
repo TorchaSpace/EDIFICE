@@ -72,3 +72,5 @@ Literatür taraması sonucu varsayımlar kaynaklara bağlandı: `edifice/evidenc
 
 ## Resmî kaynak doğrulaması (eklendi)
 Resmî belgeler doğrudan okundu ve işlendi: ETKB emisyon faktörü formu (elektrik 0,469 tCO2e/MWh dağıtım hattı), BEP Yönetmeliği (mevzuat.gov.tr; yeni bina D ve altı olamaz, NSEB ≥B, düşük karbonlu bina belgesi ≥C), ÇŞİDB sınıf tablosu (Ep: A 0-39 … G 175+, referans bina = 100), AB 244/2012 Annex I (ticari konut dışı için 20 yıl, reel iskonto, duyarlılık analizi), 2026 Yapı Yaklaşık Birim Maliyetleri Tebliği (yeniden inşa bedeli bağlamı). Hâlâ doğrulanamayanlar: BEP-TR referans bina EUI değerleri (yazılım hesaplar, herkese açık değil), birincil enerji katsayıları, yenileme yatırım birim fiyatları, tasarruf aralıklarının birçoğu (ikincil). Detay: docs/KAYNAKCA.md ve uygulamadaki Kaynaklar ve Yöntem ekranı.
+
+BEP-TR kalibrasyon denemesi: Gerçek EKB çıktıları ve BEP-TR referans bina EUI değerleri herkese açık bulunamadı (yazılım hesaplıyor); ETKB Kıyaslama Rehberi yalnız yöntemi ve gösterge setini veriyor. Sınıfı kalibre etmek için bir bina için gerçek EKB (Ep, sınıf, alan, birincil enerji) gerekir.

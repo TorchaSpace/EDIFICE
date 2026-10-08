@@ -129,6 +129,7 @@ class MethodPage:
             "Tasarruf aralıkları yayımlanmış çalışmalardan türetilmiştir ve bina özelinde etüt/ölçümün yerini tutmaz. Tahmin ile ölçüm arasında ortalama +%34 (SS %55) fark "
             "gözlenmiştir (van Dronkelaar ve ark. 2016); bu yüzden finans ekranında düşük-yüksek aralığı ve duyarlılık tablosu gösterilir.",
             "Yatırım maliyetleri (₺/m²) doğrulanmış bir kaynağa dayanmaz; teklif ya da keşif bedeliyle değiştirilmelidir.",
+            "Resmî Enerji Kimlik Belgesi teoriktir (standart iklim, belirli enerji hizmetleri); bu uygulama ETKB'nin önerdiği ikinci yöntemi, yani fatura/sayaç verisine dayalı ölçülmüş kıyaslamayı kullanır. İkisi birebir aynı sayıyı vermez.",
             "Hava durumu normalizasyonu (derece-gün) ve ölçüm-doğrulama (IPMVP / ASHRAE Guideline 14) bu sürümde yoktur; yıllık karşılaştırmalar hava farkından etkilenebilir.",
         ):
             l = QLabel("•  " + text)
