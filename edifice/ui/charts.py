@@ -24,12 +24,12 @@ def nice_step(raw: float) -> float:
 
 
 class _Chart(QWidget):
-    def __init__(self, categories, groups, scale=1.0, decimals=0, colors=None, unit="", min_h=180):
+    def __init__(self, categories, groups, scale=1.0, decimals=0, colors=None, unit="", min_h=180, fixed_max=None):
         super().__init__()
         self.categories, self.groups = categories, groups
         self.scale, self.decimals, self.unit = scale, decimals, unit
         self.colors = colors or ["green", "indigo", "amber"]
-        top = max((v for vals in groups.values() for v in vals), default=1) / scale
+        top = fixed_max if fixed_max else max((v for vals in groups.values() for v in vals), default=1) / scale
         self.step = nice_step(top / 4)
         self.ticks = int(top / self.step) + 1
         self.ymax = self.step * self.ticks
@@ -39,7 +39,7 @@ class _Chart(QWidget):
         self._hover: int | None = None
         self._progress = 0.0
         self._anim = QPropertyAnimation(self, b"progress", self)
-        self._anim.setDuration(1500)
+        self._anim.setDuration(1600)
 
     def _get(self) -> float:
         return self._progress
@@ -65,7 +65,7 @@ class _Chart(QWidget):
 
     def _plot(self) -> QRectF:
         top = 30 if len(self.groups) > 1 else 8
-        return QRectF(42, top, self.width() - 52, self.height() - top - 28)
+        return QRectF(48, top, self.width() - 58, self.height() - top - 32)
 
     def leaveEvent(self, e):
         self._hover = None
@@ -74,10 +74,10 @@ class _Chart(QWidget):
     @staticmethod
     def _ease(t: float) -> float:
         t = max(0.0, min(1.0, t))
-        return 1 - (1 - t) ** 3
+        return 1 - (1 - t) ** 4
 
     def _grid(self, p: QPainter, plot: QRectF):
-        p.setFont(qfont(10, mono=True))
+        p.setFont(qfont(11, mono=True))
         for i in range(self.ticks + 1):
             y = plot.bottom() - plot.height() * (i * self.step) / self.ymax
             pen = QPen(QColor(255, 255, 255, 12), 1, Qt.DashLine)
@@ -92,7 +92,7 @@ class _Chart(QWidget):
         if len(self.groups) < 2:
             return
         x = plot.left()
-        f = qfont(11, QFont_Medium)
+        f = qfont(12, QFont_Medium)
         p.setFont(f)
         for gi, name in enumerate(self.groups):
             p.setPen(Qt.NoPen)
@@ -110,7 +110,7 @@ class _Chart(QWidget):
         for gi, (name, vals) in enumerate(self.groups.items()):
             d = max(self.decimals, 1 if self.scale > 1 else 0)
             rows.append((self.color(gi), name, f"{fmt(vals[ci] / self.scale, d)} {self.unit}".strip()))
-        f_h, f_r = qfont(11, 700), qfont(11, mono=True)
+        f_h, f_r = qfont(12, 700), qfont(12, mono=True)
         fm_h, fm_r = QFontMetrics(f_h), QFontMetrics(f_r)
         w = max([fm_h.horizontalAdvance(head)] + [fm_r.horizontalAdvance(f"{n}: {v}") + 16 for _, n, v in rows]) + 28
         h = 24 + 20 * len(rows) + 6
@@ -173,7 +173,7 @@ class AreaChart(_Chart):
         if n < 2:
             return
         t = self._ease(self._progress)
-        p.setFont(qfont(10))
+        p.setFont(qfont(11))
         for i, c in enumerate(self.categories):
             p.setPen(QColor(TEXT if i == self._hover else MUTED))
             p.drawText(QRectF(self._x(plot, i, n) - 24, plot.bottom() + 8, 48, 16), Qt.AlignCenter, c)
@@ -221,6 +221,33 @@ class BarChart(_Chart):
     def __init__(self, *a, **k):
         k.setdefault("colors", ["green", "amber", "indigo"])
         super().__init__(*a, **k)
+        self._from = {n: list(v) for n, v in self.groups.items()}
+        self._mix = 1.0
+        self._morph = QPropertyAnimation(self, b"mix", self)
+        self._morph.setDuration(650)
+        self._morph.setEasingCurve(QEasingCurve.OutQuart)
+
+    def _gm(self) -> float:
+        return self._mix
+
+    def _sm(self, v: float):
+        self._mix = v
+        self.update()
+
+    mix = Property(float, _gm, _sm)
+
+    def _shown(self, name: str, ci: int) -> float:
+        a, b = self._from[name][ci], self.groups[name][ci]
+        return a + (b - a) * self._ease(self._mix)
+
+    def update_data(self, groups):
+        """Değerleri mevcut çizimden yenisine yumuşakça geçirir (grafiği yeniden kurmadan)."""
+        self._from = {n: [self._shown(n, i) for i in range(len(v))] for n, v in self.groups.items()}
+        self.groups = groups
+        self._morph.stop()
+        self._morph.setStartValue(0.0)
+        self._morph.setEndValue(1.0)
+        self._morph.start()
 
     def mouseMoveEvent(self, e):
         plot, n = self._plot(), len(self.categories)
@@ -246,14 +273,14 @@ class BarChart(_Chart):
             p.fillPath(hp, QColor(255, 255, 255, 8))
         bw, gap = min(slot * 0.62 / g, 30), 4
         total_w, total = g * bw + (g - 1) * gap, n * g
-        f = qfont(10)
+        f = qfont(11)
         p.setFont(f)
         for ci in range(n):
             x0 = plot.left() + slot * ci + (slot - total_w) / 2
             for gi, (name, vals) in enumerate(self.groups.items()):
                 idx = ci * g + gi
                 tt = self._ease((self._progress - idx / max(total - 1, 1) * 0.22) / 0.78)
-                h = plot.height() * (vals[ci] / self.scale) / self.ymax * tt
+                h = plot.height() * (self._shown(name, ci) / self.scale) / self.ymax * tt
                 if h < 0.5:
                     continue
                 r = min(bw / 2, 8)

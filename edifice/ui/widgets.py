@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-from PySide6.QtCore import (Property, QEasingCurve, QPointF, QPropertyAnimation, QRectF, QSize, Qt,
+from PySide6.QtCore import (Property, QEasingCurve, QParallelAnimationGroup, QPointF, QPropertyAnimation, QRectF, QSize, Qt,
                             QVariantAnimation)
 from PySide6.QtGui import (QBrush, QColor, QFont, QIcon, QLinearGradient, QPainter, QPainterPath,
                            QPen, QPixmap)
@@ -19,9 +19,9 @@ BG = "#070C12"
 SURFACE = "#0B1624"
 SIDEBAR_BG = "#05080E"
 TEXT = "#E8F2FF"
-SUB = "#6B8299"
-MUTED = "#3A526A"
-DIM = "#2A4055"
+SUB = "#A3B6C9"
+MUTED = "#7A90A8"
+DIM = "#5C7590"
 BORDER = "rgba(255,255,255,0.07)"
 G_SOFT = "rgba(13,221,150,0.10)"
 INK = TEXT  # geriye dönük isim
@@ -61,52 +61,52 @@ QWidget#topbar {{ background: {SIDEBAR_BG}; border-bottom: 1px solid {BORDER}; }
 QWidget#sidehead {{ border-bottom: 1px solid {BORDER}; }}
 QWidget#sidefoot {{ border-top: 1px solid {BORDER}; }}
 QLabel {{ background: transparent; color: {TEXT}; }}
-QPushButton#nav {{ background: transparent; color: {MUTED}; border: 1px solid transparent; border-radius: 10px;
-    text-align: left; padding: 9px 12px; font-size: 12px; font-weight: 500; }}
+QPushButton#nav {{ background: transparent; color: {SUB}; border: 1px solid transparent; border-radius: 12px;
+    text-align: left; padding: 11px 14px; font-size: 13px; font-weight: 500; }}
 QPushButton#nav:hover {{ color: {TEXT}; background: rgba(255,255,255,0.03); }}
 QPushButton#nav:checked {{ color: {G}; background: transparent; font-weight: 700; }}
-QFrame#navIndicator {{ background: {G_SOFT}; border: 1px solid rgba(13,221,150,0.18); border-radius: 10px; }}
+QFrame#navIndicator {{ background: {G_SOFT}; border: 1px solid rgba(13,221,150,0.22); border-radius: 12px; }}
 QPushButton#export {{ background: {G_SOFT}; color: {G}; border: 1px solid rgba(13,221,150,0.25); border-radius: 9px;
-    padding: 7px 16px; font-size: 12px; font-weight: 700; }}
+    padding: 7px 16px; font-size: 13px; font-weight: 700; }}
 QPushButton#export:hover {{ background: rgba(13,221,150,0.18); }}
 QFrame#card {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 18px; }}
 QFrame#card:hover {{ border: 1px solid rgba(13,221,150,0.18); }}
 QFrame#inner {{ background: rgba(255,255,255,0.02); border: 1px solid {BORDER}; border-radius: 12px; }}
-QLabel#eyebrow {{ color: {MUTED}; font-size: 10px; font-weight: 700; letter-spacing: 1.4px; }}
-QLabel#h1 {{ font-size: 22px; font-weight: 800; color: {TEXT}; }}
-QLabel#title {{ font-size: 16px; font-weight: 700; color: {TEXT}; }}
-QLabel#muted {{ color: {SUB}; font-size: 12px; }}
-QLabel#cardTitle {{ color: {MUTED}; font-size: 10px; font-weight: 700; letter-spacing: 1.2px; }}
-QLabel#cardValue {{ color: {TEXT}; font-size: 26px; font-weight: 500; font-family: {_MONO_CSS}; }}
-QLabel#cardSub {{ color: {SUB}; font-size: 11px; }}
-QLabel#up {{ color: {G}; background: {G_SOFT}; border-radius: 10px; padding: 2px 8px; font-size: 10px; font-weight: 500; font-family: {_MONO_CSS}; }}
-QLabel#down {{ color: {RED}; background: rgba(244,63,94,0.10); border-radius: 10px; padding: 2px 8px; font-size: 10px; font-weight: 500; font-family: {_MONO_CSS}; }}
+QLabel#eyebrow {{ color: {MUTED}; font-size: 11px; font-weight: 700; letter-spacing: 1.4px; }}
+QLabel#h1 {{ font-size: 26px; font-weight: 800; color: {TEXT}; }}
+QLabel#title {{ font-size: 17px; font-weight: 700; color: {TEXT}; }}
+QLabel#muted {{ color: {SUB}; font-size: 13px; }}
+QLabel#cardTitle {{ color: {MUTED}; font-size: 11px; font-weight: 700; letter-spacing: 1.2px; }}
+QLabel#cardValue {{ color: {TEXT}; font-size: 27px; font-weight: 500; font-family: {_MONO_CSS}; }}
+QLabel#cardSub {{ color: {SUB}; font-size: 12px; }}
+QLabel#up {{ color: {G}; background: {G_SOFT}; border-radius: 10px; padding: 3px 9px; font-size: 11px; font-weight: 500; font-family: {_MONO_CSS}; }}
+QLabel#down {{ color: {RED}; background: rgba(244,63,94,0.10); border-radius: 10px; padding: 3px 9px; font-size: 11px; font-weight: 500; font-family: {_MONO_CSS}; }}
 QLabel#mono {{ font-family: {_MONO_CSS}; color: {MUTED}; font-size: 10px; }}
 QLabel#livepill {{ color: {G}; background: rgba(13,221,150,0.05); border: 1px solid rgba(13,221,150,0.16);
-    border-radius: 14px; padding: 5px 12px; font-size: 10px; font-weight: 700; }}
-QLabel#datepill {{ font-family: {_MONO_CSS}; color: {MUTED}; font-size: 10px; background: rgba(255,255,255,0.03);
+    border-radius: 14px; padding: 5px 14px; font-size: 11px; font-weight: 700; }}
+QLabel#datepill {{ font-family: {_MONO_CSS}; color: {SUB}; font-size: 11px; background: rgba(255,255,255,0.03);
     border: 1px solid {BORDER}; border-radius: 8px; padding: 5px 11px; }}
-QLabel#crumb {{ color: {MUTED}; font-size: 11px; }}
-QLabel#crumbnow {{ color: {TEXT}; font-size: 13px; font-weight: 700; }}
-QLabel#section {{ color: {DIM}; font-size: 9px; font-weight: 700; letter-spacing: 1.6px; padding: 12px 12px 6px 12px; }}
+QLabel#crumb {{ color: {MUTED}; font-size: 12px; }}
+QLabel#crumbnow {{ color: {TEXT}; font-size: 14px; font-weight: 700; }}
+QLabel#section {{ color: {DIM}; font-size: 10px; font-weight: 700; letter-spacing: 1.6px; padding: 12px 12px 6px 12px; }}
 QPushButton#toggle {{ background: rgba(255,255,255,0.03); color: {TEXT}; border: 1px solid {BORDER}; border-radius: 12px;
-    text-align: left; padding: 12px 16px; font-size: 12px; }}
+    text-align: left; padding: 12px 16px; font-size: 13px; }}
 QPushButton#toggle:hover {{ border: 1px solid rgba(13,221,150,0.25); }}
 QPushButton#toggle:checked {{ background: {G_SOFT}; border: 1px solid rgba(13,221,150,0.35); font-weight: 700; color: {G}; }}
-QTableWidget {{ background: transparent; color: {TEXT}; border: none; outline: 0; font-size: 12px; }}
+QTableWidget {{ background: transparent; color: {TEXT}; border: none; outline: 0; font-size: 13px; }}
 QTableWidget::item {{ color: {TEXT}; border-bottom: 1px solid {BORDER}; padding: 4px 8px; }}
 QTableWidget::item:hover {{ background: rgba(255,255,255,0.025); }}
 QTableWidget::item:selected {{ background: {G_SOFT}; color: {TEXT}; }}
 QHeaderView {{ background: transparent; }}
 QTableCornerButton::section {{ background: transparent; border: none; }}
 QHeaderView::section {{ background: rgba(255,255,255,0.02); border: none; border-bottom: 1px solid {BORDER}; color: {MUTED};
-    padding: 10px 8px; font-size: 9px; font-weight: 700; letter-spacing: 1.2px; }}
+    padding: 12px 8px; font-size: 10px; font-weight: 700; letter-spacing: 1.2px; }}
 QScrollBar:vertical {{ background: transparent; width: 8px; margin: 2px; }}
 QScrollBar::handle:vertical {{ background: rgba(13,221,150,0.18); border-radius: 3px; min-height: 30px; }}
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
 QDialog {{ background: {BG}; }}
 QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {{ background: rgba(255,255,255,0.04); color: {TEXT}; border: 1px solid {BORDER};
-    border-radius: 10px; padding: 8px 12px; font-size: 12px; selection-background-color: rgba(13,221,150,0.35); }}
+    border-radius: 10px; padding: 9px 12px; font-size: 13px; selection-background-color: rgba(13,221,150,0.35); }}
 QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus {{ border: 1px solid rgba(13,221,150,0.55); }}
 QComboBox::drop-down {{ border: none; width: 22px; }}
 QComboBox QAbstractItemView {{ background: {SURFACE}; color: {TEXT}; border: 1px solid {BORDER}; selection-background-color: {G_SOFT}; outline: 0; }}
@@ -126,8 +126,8 @@ QPushButton#bldg {{ background: rgba(255,255,255,0.03); border: 1px solid {BORDE
     padding: 0; }}
 QPushButton#bldg:hover {{ border: 1px solid rgba(13,221,150,0.18); }}
 QPushButton#bldg::menu-indicator {{ image: none; }}
-QLabel#field {{ color: {SUB}; font-size: 11px; font-weight: 600; }}
-QLabel#error {{ color: {RED}; font-size: 11px; }}
+QLabel#field {{ color: {SUB}; font-size: 12px; font-weight: 600; }}
+QLabel#error {{ color: {RED}; font-size: 12px; }}
 QMenu {{ background: {SURFACE}; color: {TEXT}; border: 1px solid {BORDER}; border-radius: 10px; padding: 6px; }}
 QMenu::item {{ padding: 8px 18px; border-radius: 8px; }}
 QMenu::item:selected {{ background: {G_SOFT}; color: {G}; }}
@@ -205,7 +205,7 @@ class _Animated(QWidget):
         self._score, self._frac = score, 0.0
         self._anim = QPropertyAnimation(self, b"frac", self)
         self._anim.setDuration(ms)
-        self._anim.setEasingCurve(QEasingCurve.OutCubic)
+        self._anim.setEasingCurve(QEasingCurve.OutQuart)
 
     def _get(self) -> float:
         return self._frac
@@ -233,7 +233,7 @@ class Card(QFrame):
                  hero: bool = False, trend: str = "", up: bool = True):
         super().__init__()
         self.setObjectName("card")
-        self.setMinimumHeight(112)
+        self.setMinimumHeight(118)
         self._accent = accent
         lay = QVBoxLayout(self)
         lay.setContentsMargins(20, 18, 20, 16)
@@ -242,6 +242,7 @@ class Card(QFrame):
         self._t.setObjectName("cardTitle")
         self._v.setObjectName("cardValue")
         self._s.setObjectName("cardSub")
+        self._s.setWordWrap(True)
         self._trend = QLabel(trend)
         self._trend.setVisible(bool(trend))
         self._trend.setObjectName("up" if up else "down")
@@ -294,8 +295,8 @@ class Card(QFrame):
         self._anim = QVariantAnimation(self)
         self._anim.setStartValue(float(start))
         self._anim.setEndValue(float(target))
-        self._anim.setDuration(900)
-        self._anim.setEasingCurve(QEasingCurve.OutCubic)
+        self._anim.setDuration(1100)
+        self._anim.setEasingCurve(QEasingCurve.OutQuart)
 
         def step(v):
             self._shown = v
@@ -392,30 +393,40 @@ class ScoreBar(_Animated):
         col.setAlphaF(0.9)
         p.setBrush(col)
         p.drawRoundedRect(QRectF(0, y, max(h, w * self._frac), h), 2, 2)
-        p.setFont(qfont(12, QFont.Medium, mono=True))
+        p.setFont(qfont(13, QFont.Medium, mono=True))
         p.setPen(QColor(score_color(self._score)))
         p.drawText(QRectF(w + 6, 0, 30, self.height()), Qt.AlignVCenter | Qt.AlignRight,
                    f"{self._frac * 100:.0f}")
 
 
 class FadeStack(QStackedWidget):
-    """Sayfa geçişlerinde yumuşak fade-in."""
+    """Sayfa geçişlerinde yumuşak fade-in + hafif aşağıdan yukarı kayma."""
 
     def setCurrentIndex(self, index: int):
         super().setCurrentIndex(index)
         w = self.currentWidget()
         if w is None:
             return
+        group = QParallelAnimationGroup(w)
         eff = QGraphicsOpacityEffect(w)
         w.setGraphicsEffect(eff)
-        anim = QPropertyAnimation(eff, b"opacity", w)
-        anim.setDuration(320)
-        anim.setStartValue(0.0)
-        anim.setEndValue(1.0)
-        anim.setEasingCurve(QEasingCurve.OutCubic)
-        anim.finished.connect(lambda: w.setGraphicsEffect(None))
-        anim.start()
-        self._anim = anim
+        fade = QPropertyAnimation(eff, b"opacity", w)
+        fade.setDuration(520)
+        fade.setStartValue(0.0)
+        fade.setEndValue(1.0)
+        fade.setEasingCurve(QEasingCurve.OutQuart)
+        group.addAnimation(fade)
+        if w.width() > 0:
+            slide = QPropertyAnimation(w, b"pos", w)
+            slide.setDuration(520)
+            end = w.pos()
+            slide.setStartValue(QPointF(end.x(), end.y() + 18).toPoint())
+            slide.setEndValue(end)
+            slide.setEasingCurve(QEasingCurve.OutQuart)
+            group.addAnimation(slide)
+        group.finished.connect(lambda: (w.setGraphicsEffect(None), w.move(0, 0)))
+        group.start()
+        self._anim = group
 
 
 # ---- Navigasyon -----------------------------------------------------------
@@ -468,7 +479,7 @@ class NavBar(QWidget):
         self.indicator.lower()
         lay = QVBoxLayout(self)
         lay.setContentsMargins(10, 0, 10, 0)
-        lay.setSpacing(2)
+        lay.setSpacing(4)
         self.buttons: list[NavButton] = []
         for text, kind in items:
             b = NavButton(text, kind)
@@ -476,10 +487,8 @@ class NavBar(QWidget):
             self.buttons.append(b)
         self._current = 0
         self._anim = QPropertyAnimation(self.indicator, b"geometry", self)
-        self._anim.setDuration(480)
-        curve = QEasingCurve(QEasingCurve.OutBack)
-        curve.setOvershoot(0.8)
-        self._anim.setEasingCurve(curve)
+        self._anim.setDuration(520)
+        self._anim.setEasingCurve(QEasingCurve.OutQuart)
 
     def _target(self, i: int):
         return self.buttons[i].geometry()

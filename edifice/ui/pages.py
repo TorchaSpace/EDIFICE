@@ -58,9 +58,9 @@ def _set_row(t, r, values, left_cols=1, colors=None, mono_from=2):
         it = QTableWidgetItem(v)
         it.setTextAlignment((Qt.AlignLeft if c < left_cols else Qt.AlignRight) | Qt.AlignVCenter)
         if c >= mono_from:
-            it.setFont(qfont(12, mono=True))
+            it.setFont(qfont(13, mono=True))
         if c == 0:
-            f = qfont(12, 700)
+            f = qfont(13, 700)
             it.setFont(f)
         if colors and c in colors:
             it.setForeground(QColor(colors[c]))
@@ -71,7 +71,9 @@ def _set_row(t, r, values, left_cols=1, colors=None, mono_from=2):
 
 
 def _fit_height(t: QTableWidget, rows: int):
-    t.setFixedHeight(42 + 46 * rows)
+    t.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+    t.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+    t.setFixedHeight(48 + 46 * rows)
 
 
 def _trend_text(pct: float) -> tuple[str, bool]:
@@ -88,8 +90,8 @@ class OverviewPage:
                              f"{b.address} · {b.use_type} · {fmt(b.floor_area_m2)} m² · {b.floors} kat · "
                              f"{b.year_built} · {b.occupants} kişi · Baz yıl {project.year}"))
 
-        row = QHBoxLayout()
-        row.setSpacing(14)
+        row = QGridLayout()
+        row.setSpacing(16)
         specs = [
             ("Toplam enerji", k.total_energy_kwh / 1000, lambda v: f"{fmt(v)} MWh", f"EUI {fmt(k.eui_kwh_m2, 1)}", "energy", G),
             ("Karbon", k.carbon_kg / 1000, lambda v: f"{fmt(v, 1)} tCO₂", f"{fmt(k.carbon_kg_m2, 1)} kg/m²", "carbon", G),
@@ -98,13 +100,13 @@ class OverviewPage:
             ("Su", k.water_m3, lambda v: f"{fmt(v)} m³", f"{fmt(k.water_m3_m2, 2)} m³/m²", "water", INDIGO),
             ("Yıllık maliyet", k.total_cost / 1e6, lambda v: f"{fmt(v, 2)} M ₺", "enerji + su", "cost", AMBER),
         ]
-        for title, val, f, sub, key, accent in specs:
+        for idx, (title, val, f, sub, key, accent) in enumerate(specs):
             c = Card(title, sub=sub, accent=accent)
             c.set_number(val, f, sub)
             if key in yoy:
                 txt, good = _trend_text(yoy[key])
                 c.set_trend(txt, good)
-            row.addWidget(c)
+            row.addWidget(c, idx // 3, idx % 3)
         lay.addLayout(row)
 
         mid = QHBoxLayout()
@@ -117,8 +119,8 @@ class OverviewPage:
             r = QVBoxLayout()
             r.setSpacing(2)
             top = QHBoxLayout()
-            nm = QLabel(f"{name} <span style='color:{MUTED}; font-size:10px'>%{weight * 100:.0f}</span>")
-            nm.setStyleSheet("font-size: 12px; font-weight: 600;")
+            nm = QLabel(f"{name} <span style='color:{MUTED}; font-size:11px'>%{weight * 100:.0f}</span>")
+            nm.setStyleSheet("font-size: 13px; font-weight: 600;")
             top.addWidget(nm)
             r.addLayout(top)
             r.addWidget(ScoreBar(pts))
@@ -152,13 +154,15 @@ class OverviewPage:
             top.addWidget(badge("Hızlı kazanç" if pb <= 5 else "Orta vade" if pb <= 15 else "Uzun vade", col))
             top.addStretch()
             sv = QLabel(f"{fmt(r.annual_saving / 1000)} bin ₺/yıl")
-            sv.setStyleSheet(f"color: {G}; font-family: 'DM Mono','SF Mono',Menlo; font-size: 12px; background: transparent;")
+            sv.setStyleSheet(f"color: {G}; font-family: 'DM Mono','SF Mono',Menlo; font-size: 13px; background: transparent;")
             top.addWidget(sv)
             cl.addLayout(top)
             t = QLabel(r.opportunity.name)
-            t.setStyleSheet("font-size: 12px; font-weight: 700; background: transparent;")
+            t.setWordWrap(True)
+            t.setStyleSheet("font-size: 13px; font-weight: 700; background: transparent;")
             d = QLabel(f"CAPEX {fmt(r.capex / 1e6, 2)} M ₺ · geri ödeme {fmt_years(pb)}")
-            d.setStyleSheet(f"color: {SUB}; font-size: 11px; background: transparent;")
+            d.setWordWrap(True)
+            d.setStyleSheet(f"color: {SUB}; font-size: 12px; background: transparent;")
             cl.addWidget(t)
             cl.addWidget(d)
             recs.lay.addWidget(card)
@@ -205,7 +209,7 @@ class OpportunitiesPage:
         res = project.opportunity_results()
         quick = [r for r in res if r.payback_years <= 5]
         grid = QHBoxLayout()
-        grid.setSpacing(14)
+        grid.setSpacing(16)
         c1 = Card("Öneri sayısı", accent=G)
         c1.set_number(len(res), lambda v: f"{v:.0f}", f"{len(quick)} tanesi 5 yıl altında geri ödüyor")
         c2 = Card("Hızlı kazanç · yıllık tasarruf", accent=G)
@@ -224,7 +228,7 @@ class OpportunitiesPage:
             _set_row(t, i, [r.opportunity.name, r.opportunity.category, fmt(r.saved_kwh), fmt(r.saved_carbon_kg),
                             fmt(r.annual_saving), fmt(r.capex), fmt_years(pb)], left_cols=2, colors={6: col})
             t.item(i, 1).setForeground(QColor(SUB))
-            t.item(i, 1).setFont(qfont(12))
+            t.item(i, 1).setFont(qfont(13))
         t.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         _fit_height(t, len(res))
         panel = Panel()
@@ -288,8 +292,10 @@ class ScenarioPage:
         lay.addLayout(body)
 
         self.chart_panel = Panel(eyebrow="Karşılaştırma", title="Mevcut vs Hedef", subtitle="mevcut durum = 100")
-        self.chart_box = QVBoxLayout()
-        self.chart_panel.lay.addLayout(self.chart_box, 1)
+        self.chart = BarChart(["Elektrik", "Doğalgaz", "Enerji", "Karbon", "Maliyet"],
+                              {"Mevcut": [100] * 5, "Hedef": [100] * 5}, min_h=230,
+                              colors=["slate", "green"], unit="%", fixed_max=100)
+        self.chart_panel.lay.addWidget(self.chart, 1)
         lay.addWidget(self.chart_panel, 1)
         self.refresh()
 
@@ -312,17 +318,11 @@ class ScenarioPage:
             _set_row(self.table, i, [name, fmt(cur, d), fmt(tgt, d), f"{pct:+.1f}%".replace(".", ",")],
                      colors={3: G if pct < -0.05 else MUTED}, mono_from=1)
 
-        while self.chart_box.count():
-            old = self.chart_box.takeAt(0).widget()
-            old.setParent(None)
-            old.deleteLater()
-        self.chart_box.addWidget(bar_chart(
-            ["Elektrik", "Doğalgaz", "Enerji", "Karbon", "Maliyet"],
+        self.chart.update_data(
             {"Mevcut": [100] * 5,
              "Hedef": [100 * t.electricity_kwh / c.electricity_kwh, 100 * t.gas_kwh / c.gas_kwh,
                        100 * t.total_energy_kwh / c.total_energy_kwh, 100 * t.carbon_kg / c.carbon_kg,
-                       100 * t.total_cost / c.total_cost]},
-            min_h=220, colors=["slate", "green"], unit="%"))
+                       100 * t.total_cost / c.total_cost]})
 
         self.c_capex.set_number(s.capex / 1e6, lambda v: f"{fmt(v, 2)} M ₺", "toplam yatırım", live=True)
         self.c_save.set_number(s.annual_saving / 1e6, lambda v: f"{fmt(v, 2)} M ₺", "her yıl", live=True)
