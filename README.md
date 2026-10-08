@@ -9,6 +9,9 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python -m pytest
 ```
 
+## Kullanım
+Sağ üstteki **+ Bina Ekle** ile bina bilgisi, 12 aylık tüketim (Excel'den yapıştırılabilir) ve ekipmanlar girilir. Veriler `~/.edifice/edifice.db` (SQLite) içinde saklanır; sol alttaki bina kartından binalar arasında geçilir. İlk açılışta bir demo bina gelir.
+
 ## Yapı
 - `edifice/models.py`: ham veri, varsayım, hesaplanan veri ve senaryo yapıları
 - `edifice/engine/`: UI'dan bağımsız hesaplar (KPI, Health Score, öneriler/senaryo)

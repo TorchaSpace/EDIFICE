@@ -18,6 +18,7 @@ class Project:
     equipment: list[Equipment]
     opportunities: list[Opportunity]
     assumptions: Assumptions
+    building_id: int | None = None
 
     @classmethod
     def mock(cls) -> "Project":

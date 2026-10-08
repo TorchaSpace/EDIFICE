@@ -104,6 +104,34 @@ QHeaderView::section {{ background: rgba(255,255,255,0.02); border: none; border
 QScrollBar:vertical {{ background: transparent; width: 8px; margin: 2px; }}
 QScrollBar::handle:vertical {{ background: rgba(13,221,150,0.18); border-radius: 3px; min-height: 30px; }}
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
+QDialog {{ background: {BG}; }}
+QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {{ background: rgba(255,255,255,0.04); color: {TEXT}; border: 1px solid {BORDER};
+    border-radius: 10px; padding: 8px 12px; font-size: 12px; selection-background-color: rgba(13,221,150,0.35); }}
+QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus {{ border: 1px solid rgba(13,221,150,0.55); }}
+QComboBox::drop-down {{ border: none; width: 22px; }}
+QComboBox QAbstractItemView {{ background: {SURFACE}; color: {TEXT}; border: 1px solid {BORDER}; selection-background-color: {G_SOFT}; outline: 0; }}
+QSpinBox::up-button, QSpinBox::down-button, QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {{ width: 0; border: none; }}
+QTabWidget::pane {{ border: none; }}
+QTabBar::tab {{ background: transparent; color: {MUTED}; padding: 9px 18px; margin-right: 6px; border-radius: 10px;
+    border: 1px solid transparent; font-size: 12px; font-weight: 600; }}
+QTabBar::tab:selected {{ color: {G}; background: {G_SOFT}; border: 1px solid rgba(13,221,150,0.18); }}
+QTabBar::tab:hover:!selected {{ color: {TEXT}; }}
+QPushButton#primary {{ background: {G}; color: #04130D; border: none; border-radius: 10px; padding: 10px 22px;
+    font-size: 12px; font-weight: 800; }}
+QPushButton#primary:hover {{ background: #3AF0B2; }}
+QPushButton#secondary {{ background: transparent; color: {SUB}; border: 1px solid {BORDER}; border-radius: 10px;
+    padding: 10px 18px; font-size: 12px; font-weight: 600; }}
+QPushButton#secondary:hover {{ color: {TEXT}; border: 1px solid rgba(255,255,255,0.18); }}
+QPushButton#bldg {{ background: rgba(255,255,255,0.03); border: 1px solid {BORDER}; border-radius: 12px; text-align: left;
+    padding: 0; }}
+QPushButton#bldg:hover {{ border: 1px solid rgba(13,221,150,0.18); }}
+QPushButton#bldg::menu-indicator {{ image: none; }}
+QLabel#field {{ color: {SUB}; font-size: 11px; font-weight: 600; }}
+QLabel#error {{ color: {RED}; font-size: 11px; }}
+QMenu {{ background: {SURFACE}; color: {TEXT}; border: 1px solid {BORDER}; border-radius: 10px; padding: 6px; }}
+QMenu::item {{ padding: 8px 18px; border-radius: 8px; }}
+QMenu::item:selected {{ background: {G_SOFT}; color: {G}; }}
+QMenu::separator {{ height: 1px; background: {BORDER}; margin: 6px 4px; }}
 QToolTip {{ background: {SIDEBAR_BG}; color: {TEXT}; border: 1px solid {BORDER}; padding: 6px; }}
 """
 

@@ -3,7 +3,7 @@ import sys
 from PySide6.QtGui import QColor, QFont, QPalette
 from PySide6.QtWidgets import QApplication
 
-from edifice.service import Project
+from edifice.db import Store
 from edifice.ui.main_window import MainWindow
 
 
@@ -21,7 +21,10 @@ def main():
                         (QPalette.ToolTipText, "#E8F2FF")):
         pal.setColor(role, QColor(color))
     app.setPalette(pal)
-    win = MainWindow(Project.mock())
+    store = Store()
+    if store.count() == 0:
+        store.seed_demo()
+    win = MainWindow(store.load_project(store.latest_id()), store)
     win.show()
     sys.exit(app.exec())
 
