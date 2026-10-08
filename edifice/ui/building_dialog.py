@@ -5,12 +5,12 @@ from datetime import date
 
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt
 from PySide6.QtGui import QColor, QGuiApplication, QKeySequence
-from PySide6.QtWidgets import (QAbstractItemView, QDialog, QDoubleSpinBox,
+from PySide6.QtWidgets import (QAbstractItemView, QCompleter, QDialog, QDoubleSpinBox,
                                QGraphicsOpacityEffect, QGridLayout, QHBoxLayout, QHeaderView, QLabel,
                                QLineEdit, QPushButton, QScrollArea, QSpinBox, QTabBar, QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
-from ..validation import (COLUMNS, EQUIPMENT_CATEGORIES, MONTH_NAMES, USE_TYPES, ValidationError,
+from ..validation import (COLUMNS, EQUIPMENT_CATEGORIES, EQUIPMENT_NAMES, MONTH_NAMES, USE_TYPES, ValidationError,
                           build_from_inputs)
 from .dropdown import PremiumCombo
 from .forms import field, scroll, tune_spin
@@ -308,7 +308,12 @@ class BuildingDialog(QDialog):
             cat.setCurrentText(data["category"])
             name.setText(data["name"])
         name.setObjectName("cellInput")
-        name.setPlaceholderText("Örn. Su soğutmalı chiller")
+        name.setPlaceholderText("Yazın ya da listeden seçin · örn. Su soğutmalı chiller")
+        comp = QCompleter(EQUIPMENT_NAMES, name)
+        comp.setCaseSensitivity(Qt.CaseInsensitive)
+        comp.setFilterMode(Qt.MatchContains)
+        comp.setCompletionMode(QCompleter.PopupCompletion)
+        name.setCompleter(comp)
         yr = _tune_spin(QSpinBox())
         yr.setRange(1900, date.today().year)
         yr.setValue(2010)

@@ -9,7 +9,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.worksheet.datavalidation import DataValidation
 
 from .models import UtilityType
-from .validation import (EQUIPMENT_CATEGORIES, MONTH_NAMES, USE_TYPES, ValidationError, build_from_inputs,
+from .validation import (EQUIPMENT_CATALOG, EQUIPMENT_CATEGORIES, MONTH_NAMES, USE_TYPES, ValidationError, build_from_inputs,
                          parse_number)
 
 LOGO = Path(__file__).resolve().parent / "assets" / "logo_crop.png"
@@ -174,7 +174,7 @@ def _usage_sheet(ws, base_year: int | None, base_rows, prev_rows):
 
 def _eq_sheet(ws, rows: list | None):
     ws.sheet_view.showGridLines = False
-    for col, w in zip("ABCDE", (18, 38, 16, 18, 42)):
+    for col, w in zip("ABCDEFGHI", (18, 38, 16, 18, 42, 4, 16, 28, 34)):
         ws.column_dimensions[col].width = w
     ws["A1"] = "Ekipman envanteri (isteğe bağlı)"
     ws["A1"].font = F_TITLE
@@ -195,6 +195,35 @@ def _eq_sheet(ws, rows: list | None):
         dv.error, dv.errorTitle = "Geçerli bir değer girin.", "Geçersiz değer"
         ws.add_data_validation(dv)
         dv.add(f"{col}{EQ_FIRST_ROW}:{col}{EQ_LAST_ROW}")
+    # ---- referans tablo: uygulamada tanımlı ekipman türleri
+    ws["G1"] = "Uygulamada tanımlı ekipman türleri"
+    ws["G1"].font = Font(name="Arial", bold=True, size=12, color=NAVY)
+    ws["G2"] = "Ekipman adı sütununda bu adları açılır listeden seçebilir ya da kendi adınızı yazabilirsiniz."
+    ws["G2"].font = F_HINT
+    for c, h in enumerate(["Kategori", "Ekipman türü", "İlgili dönüşüm önerisi"], start=7):
+        ws.cell(row=3, column=c, value=h)
+    for c in range(7, 10):
+        cell = ws.cell(row=3, column=c)
+        cell.fill, cell.font, cell.border = HEAD, F_HEAD, BORDER
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+    for i, (cat, name, opp) in enumerate(EQUIPMENT_CATALOG):
+        r = EQ_FIRST_ROW + i
+        for c, v in zip(range(7, 10), (cat, name, opp)):
+            cell = ws.cell(row=r, column=c, value=v)
+            cell.font, cell.border = F_BODY, BORDER
+            cell.fill = OPT
+        ws.cell(row=r, column=9).font = Font(name="Arial", size=9, color="6B7A75")
+    last = EQ_FIRST_ROW + len(EQUIPMENT_CATALOG) - 1
+    note = ws.cell(row=last + 2, column=7,
+                   value="İpucu: Kendi ekipman adınız için adın içinde chiller, kazan, fan, pompa, santral, klima gibi "
+                         "sözcükler geçerse öneriler binaya göre önceliklenir.")
+    note.font = F_HINT
+    ndv = DataValidation(type="list", formula1=f"=$H${EQ_FIRST_ROW}:$H${last}", allow_blank=True)
+    ndv.showErrorMessage = False   # listede olmayan ad da yazılabilsin
+    ndv.promptTitle, ndv.prompt = "Ekipman adı", "Listeden seçin ya da kendi adınızı yazın."
+    ndv.showInputMessage = True
+    ws.add_data_validation(ndv)
+    ndv.add(f"B{EQ_FIRST_ROW}:B{EQ_LAST_ROW}")
     ws.freeze_panes = "A4"
 
 
@@ -219,7 +248,12 @@ def build_template(path: str, example: bool = False) -> str:
                 rows.append(row)
             return rows
         base_rows, prev_rows = block(2025), block(2024)
-        eq_rows = [(e.category, e.name, e.year_installed, e.condition, e.notes) for e in mock_data.equipment()]
+        eq_rows = [("HVAC", "Su soğutmalı chiller", 2005, 2, "2 adet, düşük COP"),
+                   ("HVAC", "Doğalgazlı kazan", 2008, 3, ""),
+                   ("HVAC", "Klima santrali (AHU)", 2010, 3, ""),
+                   ("Aydınlatma", "Floresan armatürler", 2000, 2, "LED'e dönüşüme uygun"),
+                   ("Bina Kabuğu", "Çift cam doğrama", 1998, 2, "Yalıtım zayıf"),
+                   ("Bina Kabuğu", "Çatı yalıtımı", 1998, 1, "")]
     wb = Workbook()
     ws = wb.active
     ws.title = SHEET_HELP

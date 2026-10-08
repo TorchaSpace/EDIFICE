@@ -16,6 +16,27 @@ DEFAULT_TARIFF = {UtilityType.ELECTRICITY: mock_data.ELEC_TARIFF, UtilityType.GA
                   UtilityType.WATER: mock_data.WATER_TARIFF}
 USE_TYPES = ["Ofis", "Konut", "Ticari / AVM", "Otel", "Hastane", "Okul", "Sanayi", "Karma"]
 EQUIPMENT_CATEGORIES = ["HVAC", "Aydınlatma", "Bina Kabuğu"]
+# Uygulamada tanımlı ekipman türleri: (kategori, tür, ilgili dönüşüm önerisi).
+# Adlar, engine/relevance.py'deki anahtar sözcüklerle eşleşecek şekilde seçildi.
+EQUIPMENT_CATALOG = [
+    ("HVAC", "Su soğutmalı chiller", "Yüksek verimli chiller"),
+    ("HVAC", "Hava soğutmalı chiller", "Yüksek verimli chiller"),
+    ("HVAC", "Doğalgazlı kazan", "Yoğuşmalı kazan"),
+    ("HVAC", "Yoğuşmalı kazan", "Zaten verimli (öneri çıkmaz)"),
+    ("HVAC", "Klima santrali (AHU)", "Fan/pompa hız kontrolü (VFD)"),
+    ("HVAC", "Fan coil ünitesi", "Fan/pompa hız kontrolü (VFD)"),
+    ("HVAC", "Sirkülasyon pompası", "Fan/pompa hız kontrolü (VFD)"),
+    ("HVAC", "Split klima / VRF", "Fan/pompa hız kontrolü (VFD)"),
+    ("Aydınlatma", "Floresan armatürler", "LED aydınlatma dönüşümü"),
+    ("Aydınlatma", "Halojen spotlar", "LED aydınlatma dönüşümü"),
+    ("Aydınlatma", "LED armatürler", "Zaten verimli (öneri çıkmaz)"),
+    ("Bina Kabuğu", "Çatı yalıtımı", "Çatı ve cephe yalıtımı"),
+    ("Bina Kabuğu", "Cephe yalıtımı", "Çatı ve cephe yalıtımı"),
+    ("Bina Kabuğu", "Tek cam doğrama", "Çatı ve cephe yalıtımı"),
+    ("Bina Kabuğu", "Çift cam doğrama", "Çatı ve cephe yalıtımı"),
+]
+EQUIPMENT_NAMES = [name for _, name, _ in EQUIPMENT_CATALOG]
+
 MONTH_NAMES = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül",
                "Ekim", "Kasım", "Aralık"]
 

@@ -50,3 +50,23 @@ def test_bad_cell_and_wrong_file(tmp_path):
     with pytest.raises(ValidationError) as e2:
         read_workbook(str(junk))
     assert "okunamadı" in e2.value.errors[0]
+
+
+def test_catalog_names_match_relevance_keywords():
+    from edifice.engine.relevance import assess
+    from edifice.models import Equipment
+    from edifice.validation import EQUIPMENT_CATALOG
+    expect = {"Yüksek verimli chiller": "CHILLER", "Yoğuşmalı kazan": "BOILER", "Fan/pompa hız kontrolü (VFD)": "VFD",
+              "LED aydınlatma dönüşümü": "LED", "Çatı ve cephe yalıtımı": "ENVELOPE"}
+    for cat, name, opp in EQUIPMENT_CATALOG:
+        if opp in expect and not name.lower().startswith(("yoğuşmalı", "led")):
+            fit, _ = assess(expect[opp], [Equipment(cat, name, 1995, 1)], today=2026)
+            assert fit == "high", (name, fit)
+
+
+def test_example_sheet_has_reference_table(tmp_path):
+    f = tmp_path / "e.xlsx"
+    build_template(str(f), example=True)
+    ws = load_workbook(f)["Ekipman"]
+    assert ws["G1"].value.startswith("Uygulamada tanımlı") and ws["H4"].value == "Su soğutmalı chiller"
+    assert ws["B4"].value == "Su soğutmalı chiller"
