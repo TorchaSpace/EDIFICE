@@ -77,6 +77,14 @@ def _fit_height(t: QTableWidget, rows: int):
     t.setFixedHeight(48 + 46 * rows)
 
 
+def _years(project, now: list, prev: list) -> dict:
+    """Önceki yıl verisi yoksa tek seri döndürür (sıfır çizgisi göstermez)."""
+    groups = {str(project.year): now}
+    if project.previous_year() is not None:
+        groups[str(project.year - 1)] = prev
+    return groups
+
+
 FIT_COLORS = {"high": G, "medium": GRADE_COLORS["B"], "low": AMBER, "none": RED, "unknown": SUB}
 
 
@@ -131,10 +139,11 @@ class OverviewPage:
             score.lay.addLayout(r)
         mid.addWidget(score)
 
+        prev = project.previous_year()
         cost_now, cost_prev = project.monthly_cost(project.year), project.monthly_cost(project.year - 1)
         chart_panel = Panel(eyebrow="Aylık maliyet", title=f"Enerji maliyeti · {project.year}",
                             subtitle=f"{fmt(sum(cost_now) / 1e6, 2)} M ₺ yıllık · bin ₺ cinsinden aylık")
-        chart_panel.lay.addWidget(area_chart(MONTHS, {str(project.year): cost_now, str(project.year - 1): cost_prev},
+        chart_panel.lay.addWidget(area_chart(MONTHS, _years(project, cost_now, cost_prev),
                                              scale=1000, unit="bin ₺", min_h=300), 1)
         mid.addWidget(chart_panel, 1)
         lay.addLayout(mid)
@@ -176,12 +185,12 @@ class OverviewPage:
         en = Panel(eyebrow="Tüketim", title="Enerji tüketimi", subtitle="MWh · elektrik + doğalgaz")
         e_now = [a + b for a, b in zip(project.monthly(project.year, UtilityType.ELECTRICITY), project.monthly(project.year, UtilityType.GAS))]
         e_prev = [a + b for a, b in zip(project.monthly(project.year - 1, UtilityType.ELECTRICITY), project.monthly(project.year - 1, UtilityType.GAS))]
-        en.lay.addWidget(area_chart(MONTHS, {str(project.year): e_now, str(project.year - 1): e_prev}, scale=1000, unit="MWh", min_h=210), 1)
+        en.lay.addWidget(area_chart(MONTHS, _years(project, e_now, e_prev), scale=1000, unit="MWh", min_h=210), 1)
         bottom.addWidget(en, 1)
 
         co = Panel(eyebrow="Karbon", title="Karbon salımı", subtitle="tCO₂ · aylık")
         c_now, c_prev = project.monthly_carbon(project.year), project.monthly_carbon(project.year - 1)
-        co.lay.addWidget(area_chart(MONTHS, {str(project.year): c_now, str(project.year - 1): c_prev}, scale=1000,
+        co.lay.addWidget(area_chart(MONTHS, _years(project, c_now, c_prev), scale=1000,
                                     decimals=0, colors=["green", "indigo"], unit="tCO₂", min_h=210), 1)
         bottom.addWidget(co, 1)
         lay.addLayout(bottom)
@@ -198,7 +207,7 @@ class ConsumptionPage:
             now, prev = project.monthly(project.year, u), project.monthly(project.year - 1, u)
             panel = Panel(eyebrow=UTILITY_NAMES[u], title=f"{fmt(sum(now) / sc, 0)} {unit}",
                           subtitle=f"{project.year} yıllık toplam · aylık dağılım")
-            panel.lay.addWidget(area_chart(MONTHS, {str(project.year): now, str(project.year - 1): prev},
+            panel.lay.addWidget(area_chart(MONTHS, _years(project, now, prev),
                                            scale=sc, unit=unit, min_h=170,
                                            colors=["green", "indigo"] if u != UtilityType.WATER else ["indigo", "amber"]), 1)
             lay.addWidget(panel, 1)

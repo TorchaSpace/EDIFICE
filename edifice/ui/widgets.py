@@ -543,35 +543,33 @@ class NavBar(QWidget):
 
 
 class Logo(QWidget):
-    """Gradyanlı "E" rozeti + EDIFI'CE + GREEN PROPTECH."""
+    """Kenar menü başlığı: EDIFI'CE logosu (beyaz sürüm) ve GREEN PROPTECH etiketi."""
 
     def __init__(self):
         super().__init__()
         self.setObjectName("sidehead")
-        self.setFixedHeight(70)
+        self.setFixedHeight(76)
+        from pathlib import Path
+        from PySide6.QtGui import QImage
+        self._img = QImage(str(Path(__file__).resolve().parent.parent / "assets" / "logo_white.png"))
 
     def paintEvent(self, e):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        badge_r = QRectF(18, 19, 32, 32)
-        glow = QPainterPath()
-        glow.addRoundedRect(badge_r.adjusted(-3, -3, 3, 3), 12, 12)
-        p.fillPath(glow, rgba(G, 0.10))
-        path = QPainterPath()
-        path.addRoundedRect(badge_r, 9, 9)
-        g = QLinearGradient(badge_r.topLeft(), badge_r.bottomRight())
-        g.setColorAt(0, QColor(G))
-        g.setColorAt(1, QColor(INDIGO))
-        p.fillPath(path, QBrush(g))
-        p.setPen(QColor("#050A0E"))
-        p.setFont(qfont(15, QFont.Black))
-        p.drawText(badge_r, Qt.AlignCenter, "E")
-        p.setPen(QColor(TEXT))
-        p.setFont(qfont(14, QFont.ExtraBold, spacing=-0.3))
-        p.drawText(QPointF(60, 33), "EDIFI'CE")
+        p.setRenderHint(QPainter.SmoothPixmapTransform)
+        if not self._img.isNull():
+            w = 156.0
+            h = w * self._img.height() / self._img.width()
+            p.drawImage(QRectF(20, 18, w, h), self._img)
+            ty = 18 + h + 14
+        else:
+            p.setPen(QColor(TEXT))
+            p.setFont(qfont(15, QFont.ExtraBold, spacing=-0.3))
+            p.drawText(QPointF(20, 38), "EDIFI'CE")
+            ty = 52
         p.setPen(QColor(G))
         p.setFont(qfont(8, QFont.Bold, spacing=1.3))
-        p.drawText(QPointF(60, 46), "GREEN PROPTECH")
+        p.drawText(QPointF(22, ty), "GREEN PROPTECH")
 
 
 def get_style() -> str:

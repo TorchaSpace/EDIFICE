@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QTimer, QUrl, Qt
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtGui import QDesktopServices, QFontMetrics
 from PySide6.QtWidgets import (QFileDialog, QHBoxLayout, QLabel, QMainWindow, QMenu, QMessageBox,
                                QPushButton, QVBoxLayout, QWidget)
 
@@ -157,9 +157,11 @@ class MainWindow(QMainWindow):
                       (self.nav_specs[4][0], SettingsPage(project, self.store, self._settings_saved))]
         for _, page in self.pages:
             self.stack.addWidget(page.widget)
-        self.n1.setText(project.building.name)
-        self.av.setText(project.building.name[:1].upper() or "B")
-        self.live.setText(f"●  {project.building.name}")
+        name = project.building.name
+        self.n1.setText(QFontMetrics(self.n1.font()).elidedText(name, Qt.ElideRight, 120))
+        self.n1.setToolTip(name)
+        self.av.setText(name[:1].upper() or "B")
+        self.live.setText(f"●  {self._short(name)}")
         self.nav.select(select, animate=False)
         self.stack.setCurrentIndex(select)
         self.crumb.setText(self.pages[select][0])
@@ -203,10 +205,14 @@ class MainWindow(QMainWindow):
         self.store.delete_building(self.project.building_id)
         self.set_project(self.store.load_project(self.store.latest_id()))
 
+    @staticmethod
+    def _short(name: str, n: int = 28) -> str:
+        return name if len(name) <= n else name[: n - 1] + "…"
+
     def _toggle_dot(self):
         self._dot_on = not self._dot_on
         dot = "●" if self._dot_on else "○"
-        self.live.setText(f"{dot}  {self.project.building.name}")
+        self.live.setText(f"{dot}  {self._short(self.project.building.name)}")
 
     def select(self, index: int):
         self.nav.select(index)
