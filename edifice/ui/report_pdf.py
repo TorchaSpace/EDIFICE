@@ -4,13 +4,17 @@ from __future__ import annotations
 from datetime import datetime
 
 from PySide6.QtCore import QMarginsF, QPointF, QRectF, Qt
-from PySide6.QtGui import (QBrush, QColor, QFont, QLinearGradient, QPageSize, QPainter, QPainterPath,
+from pathlib import Path
+
+from PySide6.QtGui import (QBrush, QColor, QFont, QImage, QLinearGradient, QPageSize, QPainter, QPainterPath,
                            QPdfWriter, QPen)
 
 from ..engine.relevance import LABELS as FIT_LABELS
 from ..service import Project
 from .widgets import MONO, SANS, fmt, fmt_years, grade_for
 
+LOGO_PATH = Path(__file__).resolve().parent.parent / "assets" / "logo_crop.png"
+NAVY = "#0B2A80"
 INK, MUTED, LINE, SOFT = "#0E2A24", "#5B6B66", "#E3EAE7", "#F4F7F6"
 GREEN, AMBER, RED, INDIGO = "#08A878", "#D98A06", "#D8354F", "#5B5BD6"
 GRADE = {"A": "#08A878", "B": "#4DBF8F", "C": "#D98A06", "D": "#E0721D", "E": "#D8354F"}
@@ -65,27 +69,22 @@ def build_pdf(project: Project, codes: list[str], path: str) -> str:
     c = _Canvas(p)
     cw = PAGE_W - 2 * MARGIN
 
-    # ---- üst bant
-    p.fillRect(QRectF(0, 0, PAGE_W, 88), QColor("#070C12"))
-    badge = QRectF(MARGIN, 24, 38, 38)
-    path_b = QPainterPath()
-    path_b.addRoundedRect(badge, 10, 10)
-    g = QLinearGradient(badge.topLeft(), badge.bottomRight())
-    g.setColorAt(0, QColor("#0DDD96"))
-    g.setColorAt(1, QColor("#6366F1"))
-    p.setPen(Qt.NoPen)
-    p.setBrush(QColor("#0DDD96"))  # düz renk: gradyan bazı PDF görüntüleyicilerde çizilmiyor
-    p.drawPath(path_b)
-    p.setBrush(Qt.NoBrush)
-    c.text(badge.x(), badge.y(), badge.width(), badge.height(), "E", 16, "#050A0E", QFont.Black, Qt.AlignHCenter)
-    c.text(MARGIN + 50, 22, 240, 24, "EDIFI'CE", 17, "#E8F2FF", QFont.ExtraBold)
-    c.text(MARGIN + 50, 44, 280, 16, "ENERJİ VE DÖNÜŞÜM RAPORU", 7.5, "#0DDD96", QFont.Bold, spacing=1.4)
+    # ---- üst bant: beyaz zemin, EDIFI'CE logosu (ince lacivert/yeşil çizgi)
+    logo = QImage(str(LOGO_PATH))
+    if not logo.isNull():
+        lh = 34.0
+        lw = lh * logo.width() / logo.height()
+        p.drawImage(QRectF(MARGIN, 24, lw, lh), logo)
+    else:
+        c.text(MARGIN, 24, 200, 34, "EDIFI'CE", 20, NAVY, QFont.ExtraBold)
+    c.text(PAGE_W - MARGIN - 260, 24, 260, 16, "ENERJİ VE DÖNÜŞÜM RAPORU", 8, NAVY, QFont.Bold, Qt.AlignRight, spacing=1.4)
     now = datetime.now()
-    c.text(PAGE_W - MARGIN - 200, 28, 200, 16, f"{now:%d.%m.%Y}", 9, "#8FA6BC", align=Qt.AlignRight, mono=True)
-    c.text(PAGE_W - MARGIN - 200, 46, 200, 16, f"Baz yıl {project.year}", 9, "#8FA6BC", align=Qt.AlignRight, mono=True)
+    c.text(PAGE_W - MARGIN - 260, 42, 260, 14, f"{now:%d.%m.%Y}  ·  Baz yıl {project.year}", 8.5, MUTED, align=Qt.AlignRight, mono=True)
+    p.fillRect(QRectF(0, 76, PAGE_W, 3), QColor(NAVY))
+    p.fillRect(QRectF(0, 76, 120, 3), QColor("#0DDD96"))
 
     # ---- bina
-    y = 108
+    y = 100
     c.text(MARGIN, y, cw - 120, 30, b.name, 20, INK, QFont.ExtraBold)
     sub = " · ".join(x for x in (b.address, b.use_type, f"{fmt(b.floor_area_m2)} m²", f"{b.floors} kat",
                                   f"{b.year_built} yapım", f"{b.occupants} kişi" if b.occupants else "") if x)
@@ -191,6 +190,6 @@ def build_pdf(project: Project, codes: list[str], path: str) -> str:
     p.drawLine(QPointF(MARGIN, 806), QPointF(PAGE_W - MARGIN, 806))
     c.text(MARGIN, 810, cw - 120, 20, "Bu rapor girilen verilere ve ayarlardaki varsayımlara dayanır; yatırım kararı öncesinde saha etüdüyle doğrulanmalıdır.",
            6.8, MUTED)
-    c.text(PAGE_W - MARGIN - 110, 810, 110, 20, "EDIFI'CE · Green PropTech", 6.8, MUTED, QFont.DemiBold, Qt.AlignRight)
+    c.text(PAGE_W - MARGIN - 110, 810, 110, 20, "EDIFI'CE", 6.8, MUTED, QFont.DemiBold, Qt.AlignRight)
     p.end()
     return path
