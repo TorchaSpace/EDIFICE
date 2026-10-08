@@ -7,7 +7,7 @@ from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt
 from PySide6.QtGui import QColor, QGuiApplication, QKeySequence
 from PySide6.QtWidgets import (QAbstractItemView, QDialog, QDoubleSpinBox,
                                QGraphicsOpacityEffect, QGridLayout, QHBoxLayout, QHeaderView, QLabel,
-                               QLineEdit, QPushButton, QSpinBox, QTabBar, QTableWidget,
+                               QLineEdit, QPushButton, QScrollArea, QSpinBox, QTabBar, QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
 from ..validation import (COLUMNS, EQUIPMENT_CATEGORIES, MONTH_NAMES, USE_TYPES, ValidationError,
@@ -46,7 +46,7 @@ class PasteTable(QTableWidget):
         super().keyPressEvent(e)
 
 
-def _field(label: str, widget: QWidget) -> QWidget:
+def _field(label: str, widget: QWidget, hint: str = "") -> QWidget:
     w = QWidget()
     lay = QVBoxLayout(w)
     lay.setContentsMargins(0, 0, 0, 0)
@@ -55,7 +55,24 @@ def _field(label: str, widget: QWidget) -> QWidget:
     lb.setObjectName("field")
     lay.addWidget(lb)
     lay.addWidget(widget)
+    if hint:
+        h = QLabel(hint)
+        h.setObjectName("hint")
+        h.setWordWrap(True)
+        lay.addWidget(h)
     return w
+
+
+def _scroll(inner: QWidget) -> QScrollArea:
+    """İçerik doğal boyutunda kalır; sığmazsa yumuşakça kayar (alanlar asla birbirine girmez)."""
+    area = QScrollArea()
+    area.setWidgetResizable(True)
+    area.setFrameShape(QScrollArea.NoFrame)
+    area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+    area.setWidget(inner)
+    area.viewport().setAutoFillBackground(False)
+    inner.setAutoFillBackground(False)
+    return area
 
 
 def _tune_spin(sp):
@@ -81,20 +98,20 @@ class BuildingDialog(QDialog):
         lay.setContentsMargins(36, 30, 36, 26)
         lay.setSpacing(16)
         lay.addWidget(header("Yeni bina", "Bina Ekle",
-                             "Bina bilgilerini, 12 aylık tüketimi ve ekipmanları girin. Fatura tutarı boş "
-                             "bırakılırsa varsayılan tarife kullanılır."))
+                             "Üç kısa adımda binayı tanımlayın: bina bilgisi, son yılın aylık tüketimi ve (isteğe bağlı) ekipmanlar. "
+                             "* işaretli alanlar zorunludur."))
 
         self.tabbar = QTabBar()
         self.tabbar.setDrawBase(False)
         self.tabbar.setExpanding(False)
         self.tabbar.setCursor(Qt.PointingHandCursor)
-        for name in ("1 · Bina bilgisi", "2 · Tüketim", "3 · Ekipman"):
+        for name in ("1   Bina bilgisi", "2   Tüketim", "3   Ekipman"):
             self.tabbar.addTab(name)
         lay.addWidget(self.tabbar)
         self.pages = FadeStack()
-        self.pages.addWidget(self._info_tab())
-        self.pages.addWidget(self._usage_tab())
-        self.pages.addWidget(self._equipment_tab())
+        self.pages.addWidget(_scroll(self._info_tab()))
+        self.pages.addWidget(_scroll(self._usage_tab()))
+        self.pages.addWidget(_scroll(self._equipment_tab()))
         self.tabbar.currentChanged.connect(self.pages.setCurrentIndex)
         lay.addWidget(self.pages, 1)
 
@@ -163,9 +180,9 @@ class BuildingDialog(QDialog):
         g = QGridLayout()
         g.setHorizontalSpacing(18)
         g.setVerticalSpacing(14)
-        g.addWidget(_field("Bina adı *", self.name), 0, 0, 1, 2)
-        g.addWidget(_field("Kullanım tipi", self.use_type), 0, 2)
-        g.addWidget(_field("Adres", self.address), 1, 0, 1, 3)
+        g.addWidget(_field("Bina adı *", self.name, "Raporlarda ve bina listesinde görünecek ad"), 0, 0, 1, 2)
+        g.addWidget(_field("Kullanım tipi", self.use_type, "Binanın ana işlevi"), 0, 2)
+        g.addWidget(_field("Adres", self.address, "İsteğe bağlı: il, ilçe ve açık adres"), 1, 0, 1, 3)
         for c in range(3):
             g.setColumnStretch(c, 1)
         general.lay.addSpacing(6)
@@ -175,10 +192,10 @@ class BuildingDialog(QDialog):
         g2 = QGridLayout()
         g2.setHorizontalSpacing(18)
         g2.setVerticalSpacing(14)
-        g2.addWidget(_field("Brüt kullanım alanı *", self.area), 0, 0)
-        g2.addWidget(_field("Yapım yılı", self.year_built), 0, 1)
-        g2.addWidget(_field("Kat sayısı", self.floors), 0, 2)
-        g2.addWidget(_field("Kullanıcı / çalışan sayısı", self.occupants), 1, 0)
+        g2.addWidget(_field("Brüt kullanım alanı *", self.area, "Tüm katların toplam alanı (m²)"), 0, 0)
+        g2.addWidget(_field("Yapım yılı", self.year_built, "İnşaatın tamamlandığı yıl"), 0, 1)
+        g2.addWidget(_field("Kat sayısı", self.floors, "Zemin ve bodrum dahil"), 0, 2)
+        g2.addWidget(_field("Kullanıcı / çalışan sayısı", self.occupants, "Günlük ortalama kişi sayısı"), 1, 0)
         for c in range(3):
             g2.setColumnStretch(c, 1)
         phys.lay.addSpacing(6)
@@ -190,16 +207,25 @@ class BuildingDialog(QDialog):
 
     # ---- sekme 2
     def _usage_tab(self) -> QWidget:
-        panel = Panel("Aylık tüketim", "Doğrudan yazın ya da Excel'den kopyalayıp bir hücreye yapıştırın (Cmd+V). "
-                                       "Önceki yıl isteğe bağlıdır; girilirse trend karşılaştırması çıkar.")
-        panel.lay.addSpacing(8)
+        panel = Panel("Aylık tüketim", "Faturalardaki aylık değerleri yazın ya da Excel'den kopyalayıp bir hücreye yapıştırın (Cmd+V).")
+        chips = QHBoxLayout()
+        chips.setSpacing(8)
+        req = QLabel("Zorunlu: kWh ve m³ sütunları")
+        req.setObjectName("chipReq")
+        opt = QLabel("İsteğe bağlı: ₺ tutar sütunları (boşsa varsayılan tarife)")
+        opt.setObjectName("chipOpt")
+        chips.addWidget(req)
+        chips.addWidget(opt)
+        chips.addStretch()
+        panel.lay.addLayout(chips)
+        panel.lay.addSpacing(6)
         top = QHBoxLayout()
         self.year = _tune_spin(QSpinBox())
         self.year.setRange(1990, date.today().year)
         self.year.setValue(self.base_year)
         self.year.valueChanged.connect(self._year_changed)
         self.year.setFixedWidth(130)
-        top.addWidget(_field("Baz yıl", self.year))
+        top.addWidget(_field("Baz yıl", self.year, "Son tam 12 ay"))
         top.addSpacing(24)
         self.sub_bar = QTabBar()
         self.sub_bar.setDrawBase(False)
@@ -215,13 +241,15 @@ class BuildingDialog(QDialog):
         self.grid_stack = FadeStack()
         for key in ("base", "prev"):
             t = PasteTable(12, 6)
-            heads = [h for _, a, b in COLUMNS for h in (a, b)]
-            t.setHorizontalHeaderLabels([h.upper() for h in heads])
-            t.setVerticalHeaderLabels([m.upper() for m in MONTH_NAMES])
+            heads = ["Elektrik (kWh)", "Elektrik tutarı (₺)", "Doğalgaz (kWh)", "Doğalgaz tutarı (₺)",
+                     "Su (m³)", "Su tutarı (₺)"]
+            t.setHorizontalHeaderLabels(heads)
+            t.setVerticalHeaderLabels(MONTH_NAMES)
+            t.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
             t.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
             t.verticalHeader().setDefaultSectionSize(31)
             t.horizontalHeader().setFixedHeight(40)
-            t.verticalHeader().setFixedWidth(84)
+            t.verticalHeader().setFixedWidth(92)
             t.setEditTriggers(QAbstractItemView.AllEditTriggers)
             t.setSelectionMode(QAbstractItemView.ExtendedSelection)
             t.setShowGrid(False)
@@ -232,6 +260,7 @@ class BuildingDialog(QDialog):
             self.grids[key] = t
             self.grid_stack.addWidget(t)
         self.sub_bar.currentChanged.connect(self.grid_stack.setCurrentIndex)
+        self.grid_stack.setMinimumHeight(12 * 31 + 48)
         panel.lay.addWidget(self.grid_stack, 1)
         self._year_changed()
         return panel
@@ -239,26 +268,28 @@ class BuildingDialog(QDialog):
     def _year_changed(self, *_):
         y = self.year.value()
         self.sub_bar.setTabText(0, f"Baz yıl {y}")
-        self.sub_bar.setTabText(1, f"Önceki yıl {y - 1} · isteğe bağlı")
+        self.sub_bar.setTabText(1, f"Önceki yıl {y - 1}  (isteğe bağlı, trend için)")
 
     # ---- sekme 3
     def _equipment_tab(self) -> QWidget:
-        panel = Panel("Ekipman envanteri", "Saha etüdünden HVAC, aydınlatma ve bina kabuğu ekipmanlarını ekleyin. "
-                                           "Durum: 1 çok kötü, 5 çok iyi. Ekipman girilmezse skor ekipmanı nötr sayar.")
+        panel = Panel("Ekipman envanteri", "Saha etüdünden HVAC, aydınlatma ve bina kabuğu ekipmanlarını ekleyin. Bu adım isteğe bağlıdır.")
         self.eq = QTableWidget(0, 5)
-        self.eq.setHorizontalHeaderLabels(["KATEGORİ", "EKİPMAN", "KURULUM YILI", "DURUM (1-5)", "NOT"])
+        self.eq.setHorizontalHeaderLabels(["Kategori", "Ekipman adı", "Kurulum yılı", "Durum (1 kötü – 5 iyi)", "Not"])
         hh = self.eq.horizontalHeader()
         hh.setSectionResizeMode(QHeaderView.Stretch)
-        for col, width in ((0, 180), (2, 140), (3, 130)):
+        for col, width in ((0, 180), (2, 140), (3, 190)):
             hh.setSectionResizeMode(col, QHeaderView.Fixed)
             self.eq.setColumnWidth(col, width)
         self.eq.verticalHeader().setVisible(False)
         self.eq.verticalHeader().setDefaultSectionSize(56)
         self.eq.setShowGrid(False)
+        self.eq.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
         self.eq.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.empty = QLabel("Henüz ekipman eklenmedi.\n«+ Ekipman ekle» ile başlayın.")
+        self.empty = QLabel("Henüz ekipman eklenmedi.\nBaşlamak için aşağıdaki «+ Ekipman ekle» düğmesine basın.")
         self.empty.setAlignment(Qt.AlignCenter)
         self.empty.setObjectName("muted")
+        self.eq.setMinimumHeight(260)
+        self.empty.setMinimumHeight(260)
         panel.lay.addWidget(self.eq, 1)
         panel.lay.addWidget(self.empty, 1)
         row = QHBoxLayout()
@@ -354,7 +385,7 @@ class BuildingDialog(QDialog):
         except ValidationError as e:
             shown = e.errors[:6]
             more = f"  (+{len(e.errors) - 6} hata daha)" if len(e.errors) > 6 else ""
-            self._show_error("•  " + "\n•  ".join(shown) + more)
+            self._show_error("Kaydetmeden önce şunları düzeltin:\n•  " + "\n•  ".join(shown) + more)
             first = e.errors[0]
             target = 1 if first.startswith(("Baz yıl", "Önceki yıl")) else 2 if first.startswith("Ekipman") else 0
             if self.tabbar.currentIndex() != target:

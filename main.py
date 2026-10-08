@@ -10,7 +10,8 @@ from edifice.ui.main_window import MainWindow
 def main():
     app = QApplication(sys.argv)
     font = QFont("Manrope", 12)
-    font.setStyleStrategy(QFont.PreferAntialias)
+    font.setStyleStrategy(QFont.PreferAntialias | QFont.PreferQuality)
+    font.setHintingPreference(QFont.PreferNoHinting)
     app.setFont(font)
     # Figma tasarımının koyu teması (sistem temasından bağımsız)
     pal = QPalette()
@@ -20,6 +21,7 @@ def main():
                         (QPalette.Button, "#0B1624"), (QPalette.ToolTipBase, "#05080E"),
                         (QPalette.ToolTipText, "#E8F2FF"), (QPalette.HighlightedText, "#E8F2FF")):
         pal.setColor(role, QColor(color))
+    pal.setColor(QPalette.PlaceholderText, QColor("#6E849B"))
     pal.setColor(QPalette.Highlight, QColor(13, 221, 150, 40))
     app.setPalette(pal)
     store = Store()

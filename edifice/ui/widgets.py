@@ -101,7 +101,8 @@ QTableWidget::item:selected {{ background: {G_SOFT}; color: {TEXT}; }}
 QHeaderView {{ background: transparent; }}
 QTableCornerButton::section {{ background: transparent; border: none; }}
 QHeaderView::section {{ background: rgba(255,255,255,0.02); border: none; border-bottom: 1px solid {BORDER}; color: {MUTED};
-    padding: 12px 8px; font-size: 10px; font-weight: 700; letter-spacing: 1.2px; }}
+    padding: 12px 8px; font-size: 12px; font-weight: 600; }}
+QHeaderView::section:vertical {{ padding: 0 12px; font-size: 12px; font-weight: 600; letter-spacing: 0; }}
 QScrollBar:vertical {{ background: transparent; width: 12px; margin: 4px 2px 4px 2px; }}
 QScrollBar::handle:vertical {{ background: rgba(255,255,255,0.14); border-radius: 4px; min-height: 40px; margin: 0 2px; }}
 QScrollBar::handle:vertical:hover {{ background: rgba(13,221,150,0.5); }}
@@ -113,7 +114,7 @@ QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
 QAbstractScrollArea::corner {{ background: transparent; }}
 QDialog {{ background: {BG}; }}
 QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {{ background: rgba(255,255,255,0.04); color: {TEXT}; border: 1px solid {BORDER};
-    border-radius: 10px; padding: 9px 12px; font-size: 13px; selection-background-color: rgba(13,221,150,0.35); }}
+    border-radius: 10px; padding: 9px 12px; font-size: 14px; selection-background-color: rgba(13,221,150,0.35); }}
 QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus {{ border: 1px solid rgba(13,221,150,0.55); }}
 QComboBox::drop-down {{ border: none; width: 30px; subcontrol-origin: padding; subcontrol-position: center right; }}
 QComboBox::down-arrow {{ image: url(__ARROW__); width: 12px; height: 12px; }}
@@ -124,22 +125,25 @@ QTableWidget QLineEdit {{ background: #0F1D30; color: {TEXT}; border: 1px solid 
 QComboBox QAbstractItemView {{ background: {SURFACE}; color: {TEXT}; border: 1px solid {BORDER}; selection-background-color: {G_SOFT}; outline: 0; }}
 QSpinBox::up-button, QSpinBox::down-button, QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {{ width: 0; border: none; }}
 QTabWidget::pane {{ border: none; }}
-QTabBar::tab {{ background: transparent; color: {MUTED}; padding: 9px 18px; margin-right: 6px; border-radius: 10px;
-    border: 1px solid transparent; font-size: 12px; font-weight: 600; }}
+QTabBar::tab {{ background: transparent; color: {SUB}; padding: 10px 20px; margin-right: 6px; border-radius: 12px;
+    border: 1px solid transparent; font-size: 13px; font-weight: 600; }}
 QTabBar::tab:selected {{ color: {G}; background: {G_SOFT}; border: 1px solid rgba(13,221,150,0.18); }}
-QTabBar::tab:hover:!selected {{ color: {TEXT}; }}
-QPushButton#primary {{ background: {G}; color: #04130D; border: none; border-radius: 10px; padding: 10px 22px;
-    font-size: 12px; font-weight: 800; }}
+QTabBar::tab:hover:!selected {{ color: {TEXT}; background: rgba(255,255,255,0.04); }}
+QPushButton#primary {{ background: {G}; color: #04130D; border: none; border-radius: 12px; padding: 11px 24px;
+    font-size: 13px; font-weight: 800; }}
 QPushButton#primary:hover {{ background: #3AF0B2; }}
-QPushButton#secondary {{ background: transparent; color: {SUB}; border: 1px solid {BORDER}; border-radius: 10px;
-    padding: 10px 18px; font-size: 12px; font-weight: 600; }}
+QPushButton#secondary {{ background: transparent; color: {SUB}; border: 1px solid {BORDER}; border-radius: 12px;
+    padding: 11px 20px; font-size: 13px; font-weight: 600; }}
 QPushButton#secondary:hover {{ color: {TEXT}; border: 1px solid rgba(255,255,255,0.18); }}
 QPushButton#bldg {{ background: rgba(255,255,255,0.03); border: 1px solid {BORDER}; border-radius: 12px; text-align: left;
     padding: 0; }}
 QPushButton#bldg:hover {{ border: 1px solid rgba(13,221,150,0.18); }}
 QPushButton#bldg::menu-indicator {{ image: none; }}
-QLabel#field {{ color: {SUB}; font-size: 12px; font-weight: 600; }}
-QLabel#error {{ color: {RED}; font-size: 12px; }}
+QLabel#field {{ color: {TEXT}; font-size: 13px; font-weight: 600; }}
+QLabel#hint {{ color: {MUTED}; font-size: 12px; }}
+QLabel#chipReq {{ color: {G}; background: rgba(13,221,150,0.10); border-radius: 9px; padding: 3px 10px; font-size: 12px; font-weight: 600; }}
+QLabel#chipOpt {{ color: {SUB}; background: rgba(255,255,255,0.06); border-radius: 9px; padding: 3px 10px; font-size: 12px; font-weight: 600; }}
+QLabel#error {{ color: #FF6B86; font-size: 13px; font-weight: 500; }}
 QMenu {{ background: {SURFACE}; color: {TEXT}; border: 1px solid {BORDER}; border-radius: 10px; padding: 6px; }}
 QMenu::item {{ padding: 8px 18px; border-radius: 8px; }}
 QMenu::item:selected {{ background: {G_SOFT}; color: {G}; }}

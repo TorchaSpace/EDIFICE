@@ -52,10 +52,10 @@ def _year_rows(year: int, rows: list[list[str]], label: str, errors: list[str]):
             try:
                 v = parse_number(text)
             except ValueError as e:
-                errors.append(f"{label} · {MONTH_NAMES[m - 1]} · {COLUMNS[c // 2][1 + c % 2]}: {e}")
+                errors.append(f"{label} · {MONTH_NAMES[m - 1]} · {COLUMNS[c // 2][1 + c % 2]}: “{text}” geçerli bir sayı değil")
                 v = None
             if v is not None and v < 0:
-                errors.append(f"{label} · {MONTH_NAMES[m - 1]}: negatif değer olamaz")
+                errors.append(f"{label} · {MONTH_NAMES[m - 1]}: değer negatif olamaz")
             vals.append(v)
             any_value = any_value or v is not None
         parsed.append(vals)
@@ -66,7 +66,7 @@ def _year_rows(year: int, rows: list[list[str]], label: str, errors: list[str]):
         for i, (utility, cons_name, _) in enumerate(COLUMNS):
             cons, cost = vals[i * 2], vals[i * 2 + 1]
             if cons is None or cons <= 0:
-                errors.append(f"{label} · {MONTH_NAMES[m - 1]} · {cons_name} eksik veya 0")
+                errors.append(f"{label} · {MONTH_NAMES[m - 1]} · {cons_name}: değer girilmeli (0'dan büyük)")
                 continue
             if cost is None:
                 cost = cons * DEFAULT_TARIFF[utility]  # fatura tutarı boşsa varsayılan tarife
@@ -83,7 +83,7 @@ def build_from_inputs(info: dict, grids: dict[int, list[list[str]]], equipment_r
         errors.append("Bina adı boş olamaz")
     area = info.get("floor_area_m2") or 0
     if area <= 0:
-        errors.append("Brüt kullanım alanı 0'dan büyük olmalı")
+        errors.append("Brüt kullanım alanı (m²) 0'dan büyük olmalı")
     yb = int(info.get("year_built") or 0)
     if not 1800 <= yb <= date.today().year:
         errors.append(f"Yapım yılı 1800-{date.today().year} arasında olmalı")
