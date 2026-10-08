@@ -28,13 +28,26 @@ def _ratio_score(value: float, benchmark: float) -> float:
     return pts[-1][1]
 
 
+# Ekipman türüne göre tipik hizmet ömrü (yıl): ASHRAE çizelgelerinin ikincil aktarımlarının orta değerleri (evidence.ASHRAE_LIFE)
+SERVICE_LIFE = [(("chiller", "soğutma grubu", "soğutucu"), 20), (("kazan", "boiler"), 25), (("santral", "ahu"), 20),
+                (("pompa",), 15), (("soğutma kulesi",), 20)]
+
+
+def service_life(name: str, default: int) -> int:
+    n = name.lower()
+    for words, years in SERVICE_LIFE:
+        if any(w in n for w in words):
+            return years
+    return default
+
+
 def _equipment_score(equipment: list[Equipment], life: int, today: int | None = None) -> float:
     if not equipment:
         return 50.0
     today = today or date.today().year
     scores = []
     for e in equipment:
-        age_score = max(0.0, 1 - (today - e.year_installed) / life)
+        age_score = max(0.0, 1 - (today - e.year_installed) / service_life(e.name, life))
         cond_score = (e.condition - 1) / 4
         scores.append(100 * (0.4 * age_score + 0.6 * cond_score))
     return sum(scores) / len(scores)
@@ -48,10 +61,10 @@ def grade(score: float) -> str:
 
 
 def compute_health(kpis: KPIs, equipment: list[Equipment], a: Assumptions,
-                   today: int | None = None) -> HealthScore:
+                   today: int | None = None, use_type: str = "Ofis") -> HealthScore:
     comps = {
-        "Enerji yoğunluğu": _ratio_score(kpis.eui_kwh_m2, a.benchmark_eui_kwh_m2),
-        "Karbon yoğunluğu": _ratio_score(kpis.carbon_kg_m2, a.benchmark_carbon_kg_m2),
+        "Enerji yoğunluğu": _ratio_score(kpis.eui_kwh_m2, a.benchmark_for(use_type)),
+        "Karbon yoğunluğu": _ratio_score(kpis.carbon_kg_m2, a.carbon_benchmark_for(use_type)),
         "Su yoğunluğu": _ratio_score(kpis.water_m3_m2, a.benchmark_water_m3_m2),
         "Ekipman durumu": _equipment_score(equipment, a.equipment_life_years, today),
     }
@@ -60,3 +73,21 @@ def compute_health(kpis: KPIs, equipment: list[Equipment], a: Assumptions,
     return HealthScore(total=round(total, 1),
                        components={k: (round(v, 1), w[k]) for k, v in comps.items()},
                        grade=grade(total))
+
+
+def score_range(kpis: KPIs, equipment: list[Equipment], a: Assumptions, use_type: str = "Ofis",
+                today: int | None = None, draws: int = 400) -> tuple[float, float, float]:
+    """Ağırlık duyarlılığı (OECD/JRC bileşik gösterge önerisi): her ağırlığı ±%50 değiştirerek
+    skorun (%5, %95) aralığını ve eşit ağırlıklı skoru döndürür. -> (alt, üst, eşit_ağırlık)."""
+    import random
+    base = compute_health(kpis, equipment, a, today, use_type)
+    comps = {k: v[0] for k, v in base.components.items()}
+    rng = random.Random(7)
+    scores = []
+    for _ in range(draws):
+        w = {k: a.health_weights[k] * (1 + rng.uniform(-0.5, 0.5)) for k in comps}
+        tot = sum(w.values())
+        scores.append(sum(comps[k] * w[k] / tot for k in comps))
+    scores.sort()
+    equal = sum(comps.values()) / len(comps)
+    return round(scores[int(0.05 * draws)], 1), round(scores[int(0.95 * draws) - 1], 1), round(equal, 1)

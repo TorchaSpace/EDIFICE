@@ -46,6 +46,7 @@ def assumptions_to_json(a: Assumptions) -> str:
     return json.dumps({
         "emission": {k.value: v for k, v in a.emission_factor_kg_per_kwh.items()},
         "benchmark_eui": a.benchmark_eui_kwh_m2, "benchmark_carbon": a.benchmark_carbon_kg_m2,
+        "eui_by_use": a.benchmark_eui_by_use,
         "benchmark_water": a.benchmark_water_m3_m2, "target_eui": a.target_eui_kwh_m2,
         "equipment_life": a.equipment_life_years, "weights": a.health_weights,
         "tariffs": {k.value: v for k, v in a.default_tariffs.items()},
@@ -56,7 +57,9 @@ def assumptions_to_json(a: Assumptions) -> str:
 def assumptions_from_json(text: str) -> Assumptions:
     d, a = json.loads(text), Assumptions()
     a.emission_factor_kg_per_kwh = {UtilityType(k): v for k, v in d["emission"].items()}
-    a.benchmark_eui_kwh_m2, a.benchmark_carbon_kg_m2 = d["benchmark_eui"], d["benchmark_carbon"]
+    a.benchmark_eui_kwh_m2, a.benchmark_carbon_kg_m2 = d["benchmark_eui"], d.get("benchmark_carbon")
+    if d.get("eui_by_use"):
+        a.benchmark_eui_by_use = d["eui_by_use"]
     a.benchmark_water_m3_m2, a.target_eui_kwh_m2 = d["benchmark_water"], d["target_eui"]
     a.equipment_life_years, a.health_weights = d["equipment_life"], d["weights"]
     a.default_tariffs = {UtilityType(k): v for k, v in d["tariffs"].items()}
@@ -72,6 +75,19 @@ class Store:
         self.conn = sqlite3.connect(path or default_path())
         self.conn.execute("PRAGMA foreign_keys = ON")
         self.conn.executescript(SCHEMA)
+        self._migrate_evidence_defaults()
+
+    EVIDENCE_VERSION = "2"
+
+    def _migrate_evidence_defaults(self):
+        """Kanıta dayalı varsayılanlara geçiş: eski (kaynaksız) kayıtlı varsayımlar ve katalog bir kez sıfırlanır."""
+        row = self.conn.execute("SELECT value FROM settings WHERE key='evidence_version'").fetchone()
+        if row and row[0] == self.EVIDENCE_VERSION:
+            return
+        with self.conn:
+            self.conn.execute("DELETE FROM settings WHERE key='assumptions'")
+            self.conn.execute("DELETE FROM opportunities")
+            self.conn.execute("INSERT OR REPLACE INTO settings VALUES ('evidence_version', ?)", (self.EVIDENCE_VERSION,))
 
     # ---- varsayımlar ve öneri kataloğu
     def load_assumptions(self) -> Assumptions:
@@ -90,9 +106,18 @@ class Store:
     def load_opportunities(self) -> list[Opportunity]:
         rows = self.conn.execute(
             "SELECT code,name,category,affects,saving_pct,capex_per_m2,description FROM opportunities ORDER BY position").fetchall()
+        defaults = {o.code: o for o in mock_data.opportunities()}
         if not rows:
-            return mock_data.opportunities()
-        return [Opportunity(c, n, cat, UtilityType(aff), sp, cx, desc) for c, n, cat, aff, sp, cx, desc in rows]
+            return list(defaults.values())
+        out = []
+        for c, n, cat, aff, sp, cx, desc in rows:
+            d = defaults.get(c)
+            changed = d is not None and abs(sp - d.saving_pct) > 1e-9
+            out.append(Opportunity(c, n, cat, UtilityType(aff), sp, cx, desc,
+                                   d.saving_low if d else None, d.saving_high if d else None,
+                                   d.evidence if d else (), d.evidence_level if d else "varsayım",
+                                   (d.basis if not changed else "Kullanıcı değeri (Ayarlar); literatür aralığı için varsayılana bakın.") if d else ""))
+        return out
 
     def save_opportunities(self, opps: list[Opportunity]):
         with self.conn:

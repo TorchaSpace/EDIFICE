@@ -87,6 +87,8 @@ def _years(project, now: list, prev: list) -> dict:
     return groups
 
 
+EVIDENCE_LABEL = {"birincil": "Kaynak okundu", "özet": "Özet okundu", "ikincil": "İkincil", "varsayım": "Varsayım"}
+EVIDENCE_COLOR = {"birincil": G, "özet": "#5BE3B4", "ikincil": AMBER, "varsayım": RED}
 FIT_COLORS = {"high": G, "medium": GRADE_COLORS["B"], "low": AMBER, "none": RED, "unknown": SUB}
 
 
@@ -128,6 +130,12 @@ class OverviewPage:
         score = Panel(eyebrow="Building Health", title="Bina skoru")
         score.setFixedWidth(340)
         score.lay.addWidget(Gauge(h.total, h.grade))
+        lo, hi, eqw = project.health_range()
+        rng = QLabel(f"Ağırlık duyarlılığı: {lo:.0f}–{hi:.0f}  ·  eşit ağırlıkla {eqw:.0f}")
+        rng.setAlignment(Qt.AlignCenter)
+        rng.setToolTip("Bileşen ağırlıkları ±%50 oynatıldığında skorun %5-%95 aralığı (OECD/JRC bileşik gösterge önerisi).")
+        rng.setStyleSheet(f"color: {SUB}; font-size: 12px; background: transparent;")
+        score.lay.addWidget(rng)
         score.lay.addSpacing(6)
         for name, (pts, weight) in h.components.items():
             r = QVBoxLayout()
@@ -154,7 +162,7 @@ class OverviewPage:
         after_codes = project.applicable_codes()
         after = project.rating_after(after_codes) if after_codes else None
         rp = Panel(eyebrow="Enerji performansı", title="Enerji sınıfı ve benzer binalarla kıyas",
-                   subtitle="Tahmini sınıf: enerji yoğunluğu (EUI) ayarlardaki kıyas değerine oranlanır. Resmi enerji kimlik belgesi değildir.")
+                   subtitle="Tahmini sınıf: EUI, kullanım tipinin kıyas değerine oranlanır (varsayılan: ENERGY STAR ABD medyanı, 2024). Resmi enerji kimlik belgesi değildir.")
         rrow = QHBoxLayout()
         rrow.setSpacing(28)
         left = QVBoxLayout()
@@ -253,8 +261,8 @@ class OpportunitiesPage:
     def __init__(self, project: Project):
         self.widget, lay = _page()
         lay.addWidget(header("Dönüşüm önerileri", "Fırsatlar",
-                             "Geri ödeme süresine göre sıralı. Tasarruf oranları ve birim maliyetler varsayımdır, "
-                             "pilot bina etüdüyle güncellenecek."))
+                             "Geri ödeme süresine göre sıralı. Tasarruf oranları yayımlanmış çalışmalardan türetilmiş aralıklardır (Kaynaklar ve Yöntem'e bakın); "
+                             "yatırım maliyetleri varsayımdır, teklif ya da keşifle değiştirin."))
         res = project.opportunity_results()
         quick = [r for r in res if r.payback_years <= 5]
         grid = QHBoxLayout()
@@ -269,19 +277,22 @@ class OpportunitiesPage:
             grid.addWidget(c)
         lay.addLayout(grid)
 
-        t = _table(["Öneri", "Kategori", "Uygunluk", "Enerji kWh/yıl", "Karbon kg/yıl", "Tasarruf ₺/yıl", "CAPEX ₺", "Geri ödeme"], left_cols=3)
+        t = _table(["Öneri", "Uygunluk", "Enerji kWh/yıl", "Tasarruf ₺/yıl", "Aralık (₺/yıl)", "CAPEX ₺", "Geri ödeme", "Kanıt"], left_cols=2)
         t.setRowCount(len(res))
+        ranges = project.opportunity_ranges()
         for i, r in enumerate(res):
             pb = r.payback_years
             col = G if pb <= 5 else AMBER if pb <= 15 else RED
-            _set_row(t, i, [r.opportunity.name, r.opportunity.category, FIT_LABELS[r.fit], fmt(r.saved_kwh),
-                            fmt(r.saved_carbon_kg), fmt(r.annual_saving), fmt(r.capex), fmt_years(pb)],
-                     left_cols=3, colors={2: FIT_COLORS[r.fit], 7: col}, mono_from=3)
-            t.item(i, 1).setForeground(QColor(SUB))
-            t.item(i, 1).setFont(qfont(13))
-            t.item(i, 2).setFont(qfont(13, 700))
+            lo, hi = ranges[r.opportunity.code]
+            lvl = r.opportunity.evidence_level
+            _set_row(t, i, [r.opportunity.name, FIT_LABELS[r.fit], fmt(r.saved_kwh), fmt(r.annual_saving),
+                            f"{fmt(lo / 1000)}–{fmt(hi / 1000)} bin", fmt(r.capex), fmt_years(pb), EVIDENCE_LABEL[lvl]],
+                     left_cols=2, colors={1: FIT_COLORS[r.fit], 6: col, 7: EVIDENCE_COLOR[lvl]}, mono_from=2)
+            t.item(i, 1).setFont(qfont(13, 700))
+            t.item(i, 7).setFont(qfont(12, 700))
+            t.item(i, 7).setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             for c in range(8):
-                t.item(i, c).setToolTip(r.reason or "")
+                t.item(i, c).setToolTip((r.reason + "\n\n" if r.reason else "") + (r.opportunity.basis or ""))
         t.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         _fit_height(t, len(res))
         panel = Panel()
@@ -387,6 +398,16 @@ class ScenarioPage:
         self.fin_panel.lay.addLayout(frow)
         self.cash_chart = CashFlowChart(list(range(a.horizon_years + 1)), [0.0] * (a.horizon_years + 1), None, min_h=250)
         self.fin_panel.lay.addWidget(self.cash_chart, 1)
+        legend = QLabel(f"<span style='color:{G}'>━ Beklenen</span> &nbsp;&nbsp; <span style='color:{AMBER}'>┅ Düşük tasarruf (literatür alt sınırı)</span> "
+                        f"&nbsp;&nbsp; <span style='color:#5BE3B4'>┅ Yüksek tasarruf (üst sınır)</span>")
+        legend.setStyleSheet(f"color: {SUB}; font-size: 12px; background: transparent;")
+        self.fin_panel.lay.addWidget(legend)
+        self.fin_panel.lay.addSpacing(8)
+        self.fin_panel.lay.addWidget(section("Duyarlılık analizi"))
+        self.fin_panel.lay.addWidget(muted("Varsayımlar değişirse sonuç nasıl etkilenir? (AB 244/2012 metodolojisi duyarlılık analizi ister.)"))
+        self.sens_table = _table(["Senaryo", "NPV (M ₺)", "IRR", "Geri ödeme"])
+        _fit_height(self.sens_table, 6)
+        self.fin_panel.lay.addWidget(self.sens_table)
         lay.addWidget(self.fin_panel)
 
         self.chart_panel = Panel(eyebrow="Karşılaştırma", title="Mevcut vs Hedef", subtitle="mevcut durum = 100")
@@ -448,10 +469,18 @@ class ScenarioPage:
                        100 * t.total_energy_kwh / c.total_energy_kwh, 100 * t.carbon_kg / c.carbon_kg,
                        100 * t.total_cost / c.total_cost]})
 
-        fin = self.project.finance(self.selected_codes())
+        codes = self.selected_codes()
+        fin = self.project.finance(codes)
         pb = fin.simple_payback if fin.simple_payback != float("inf") else None
-        self.cash_chart.update_data(fin.cumulative, pb)
-        self.f_npv.set_number(fin.npv / 1e6, lambda v: f"{fmt(v, 2)} M ₺", "bugünkü değerle", live=True,
+        f_low, f_high = self.project.finance(codes, "low"), self.project.finance(codes, "high")
+        self.cash_chart.update_data(fin.cumulative, pb, [(f_low.cumulative, AMBER), (f_high.cumulative, "#5BE3B4")] if codes else [])
+        sens = self.project.sensitivity(codes) if codes else []
+        self.sens_table.setRowCount(len(sens))
+        for i, (label, f) in enumerate(sens):
+            _set_row(self.sens_table, i, [label, fmt(f.npv / 1e6, 2), f"%{fmt(f.irr * 100, 1)}" if f.irr is not None else "-",
+                                          fmt_years(f.simple_payback)],
+                     colors={1: G if f.npv >= 0 else RED}, mono_from=1)
+        self.f_npv.set_number(fin.npv / 1e6, lambda v: f"{fmt(v, 2)} M ₺", f"aralık: {fmt(f_low.npv / 1e6, 2)} – {fmt(f_high.npv / 1e6, 2)} M ₺" if codes else "bugünkü değerle", live=True,
                               color=None if fin.npv >= 0 else RED)
         if fin.irr is None:
             self.f_irr.set("-", "tanımsız")

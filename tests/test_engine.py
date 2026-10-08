@@ -28,7 +28,8 @@ def test_empty_scenario_changes_nothing():
 def test_scenario_combines_multiplicatively():
     p = Project.mock()
     s = p.scenario(["LED", "CHILLER"])
-    expected = p.kpis().electricity_kwh * (1 - 0.12) * (1 - 0.15)
+    by = {o.code: o for o in p.opportunities}
+    expected = p.kpis().electricity_kwh * (1 - by['LED'].saving_pct) * (1 - by['CHILLER'].saving_pct)
     assert math.isclose(s.target.electricity_kwh, expected)
     assert s.annual_saving > 0 and s.payback_years > 0
 

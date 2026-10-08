@@ -51,15 +51,21 @@ class Equipment:
 
 # ---- Varsayımlar (hesap girdileri) -----------------------------------------
 
+# ENERGY STAR (Ağustos 2024) ulusal medyan site EUI, kBtu/ft² -> kWh/m² (x3,15459). Sanayi için veri yok.
+_ES = {"Ofis": 52.9, "Konut": 59.6, "Ticari / AVM": 51.4, "Otel": 63.0, "Hastane": 234.3, "Okul": 48.5, "Karma": 40.1}
+DEFAULT_EUI_BY_USE = {k: round(v * 3.15459, 1) for k, v in _ES.items()}
+
+
 @dataclass
 class Assumptions:
     emission_factor_kg_per_kwh: dict = field(default_factory=lambda: {
-        UtilityType.ELECTRICITY: 0.43,
-        UtilityType.GAS: 0.20,
+        UtilityType.ELECTRICITY: 0.437,   # Şahin & Esen 2022 (2020, üretim bazlı)
+        UtilityType.GAS: 0.202,           # IPCC 2006: 56,1 kg/GJ (NCV)
     })
     # Bina kullanım tipine göre kıyas değerleri (placeholder, doğrulanmalı)
-    benchmark_eui_kwh_m2: float = 150.0        # elektrik + gaz
-    benchmark_carbon_kg_m2: float = 45.0
+    benchmark_eui_kwh_m2: float = 150.0        # kullanım tipi için kıyas yoksa yedek (elektrik + gaz)
+    benchmark_eui_by_use: dict = field(default_factory=lambda: dict(DEFAULT_EUI_BY_USE))
+    benchmark_carbon_kg_m2: float | None = None  # None -> kıyas EUI'den türetilir
     benchmark_water_m3_m2: float = 0.9
     target_eui_kwh_m2: float = 100.0
     health_weights: dict = field(default_factory=lambda: {
@@ -71,6 +77,16 @@ class Assumptions:
     energy_escalation: float = 0.03            # reel enerji fiyat artışı (yıllık)
     horizon_years: int = 15                    # finansal analiz süresi
     savings_degradation: float = 0.005         # tasarrufun yıllık azalması
+
+
+    def benchmark_for(self, use_type: str) -> float:
+        return self.benchmark_eui_by_use.get(use_type) or self.benchmark_eui_kwh_m2
+
+    def carbon_benchmark_for(self, use_type: str) -> float:
+        if self.benchmark_carbon_kg_m2:
+            return self.benchmark_carbon_kg_m2
+        ef = self.emission_factor_kg_per_kwh
+        return self.benchmark_for(use_type) * 0.5 * (ef[UtilityType.ELECTRICITY] + ef[UtilityType.GAS])
 
 
 # ---- Hesaplanan veri ------------------------------------------------------
@@ -106,6 +122,18 @@ class Opportunity:
     saving_pct: float        # etkilenen kalemde yıllık tasarruf oranı (0-1)
     capex_per_m2: float      # TRY / m²
     description: str = ""
+    saving_low: float | None = None    # literatür alt sınırı (etkilenen kalemde)
+    saving_high: float | None = None   # literatür üst sınırı
+    evidence: tuple = ()               # evidence.SOURCES anahtarları
+    evidence_level: str = "varsayım"   # birincil | özet | ikincil | varsayım
+    basis: str = ""                    # türetme açıklaması
+
+    def saving_for(self, mode: str = "typ") -> float:
+        if mode == "low":
+            return self.saving_low if self.saving_low is not None else self.saving_pct * 0.5
+        if mode == "high":
+            return min(0.9, self.saving_high if self.saving_high is not None else self.saving_pct * 1.5)
+        return self.saving_pct
 
 
 @dataclass

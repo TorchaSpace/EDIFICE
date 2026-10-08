@@ -17,6 +17,7 @@ from .pages import ConsumptionPage, OpportunitiesPage, OverviewPage, ScenarioPag
 from .add_choice import AddChoiceDialog
 from .building_dialog import BuildingDialog
 from .report_pdf import build_pdf
+from .method_page import MethodPage
 from .settings_page import SettingsPage
 from .widgets import get_style, FadeStack, Logo, NavBar, section
 
@@ -35,7 +36,7 @@ class MainWindow(QMainWindow):
 
         self.nav_specs = [("Genel Bakış", "overview"), ("Tüketim", "consumption"),
                           ("Öneriler", "opportunities"), ("Mevcut vs Hedef", "scenario"),
-                          ("Ayarlar", "settings")]
+                          ("Ayarlar", "settings"), ("Kaynaklar ve Yöntem", "method")]
         self.pages = []
         self.stack = FadeStack()
 
@@ -158,7 +159,8 @@ class MainWindow(QMainWindow):
             w.deleteLater()
         self.pages = [(self.nav_specs[0][0], OverviewPage(project)), (self.nav_specs[1][0], ConsumptionPage(project)),
                       (self.nav_specs[2][0], OpportunitiesPage(project)), (self.nav_specs[3][0], ScenarioPage(project, self.store)),
-                      (self.nav_specs[4][0], SettingsPage(project, self.store, self._settings_saved))]
+                      (self.nav_specs[4][0], SettingsPage(project, self.store, self._settings_saved)),
+                      (self.nav_specs[5][0], MethodPage(project))]
         for _, page in self.pages:
             self.stack.addWidget(page.widget)
         name = project.building.name

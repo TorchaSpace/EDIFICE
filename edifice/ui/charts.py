@@ -470,8 +470,9 @@ class PercentileBar(_Progress):
 class CashFlowChart(QWidget):
     """Kümülatif nakit akışı (yıl 0..N): sıfırın altı kırmızı, üstü yeşil; geri ödeme noktası işaretli."""
 
-    def __init__(self, years: list[int], cumulative: list[float], payback: float | None, min_h: int = 240):
+    def __init__(self, years: list[int], cumulative: list[float], payback: float | None, min_h: int = 240, alt=None):
         super().__init__()
+        self.alt = alt or []   # [(değerler, renk)] kesikli çizgiler: düşük/yüksek senaryo
         self.years = years
         self._from = [0.0] * len(cumulative)
         self.values = list(cumulative)
@@ -514,9 +515,10 @@ class CashFlowChart(QWidget):
         self._anim.setEndValue(1.0)
         self._anim.start()
 
-    def update_data(self, cumulative: list[float], payback: float | None):
+    def update_data(self, cumulative: list[float], payback: float | None, alt=None):
         self._from = self._shown()
         self.values, self.payback = list(cumulative), payback
+        self.alt = alt or []
         self._morph.stop()
         self._morph.setStartValue(0.0)
         self._morph.setEndValue(1.0)
@@ -547,6 +549,8 @@ class CashFlowChart(QWidget):
         plot, n = self._plot(), len(self.years)
         vals_m = [v / 1e6 for v in self._shown()]
         allv = [v / 1e6 for v in self.values] + [v / 1e6 for v in self._from] + [0.0]
+        for vals, _c in self.alt:
+            allv += [v / 1e6 for v in vals]
         lo, hi = min(allv), max(allv)
         step = nice_step((hi - lo) / 5 or 1)
         lo, hi = math.floor(lo / step) * step, math.ceil(hi / step) * step
@@ -599,6 +603,18 @@ class CashFlowChart(QWidget):
             p.setBrush(Qt.NoBrush)
             p.drawPath(line)
             p.restore()
+        for vals, colr in self.alt:
+            ap = [QPointF(x_of(i), y_of(v / 1e6 * t)) for i, v in enumerate(vals)]
+            ap_path = QPainterPath(ap[0])
+            for i in range(len(ap) - 1):
+                q0, q1, q2, q3 = ap[max(i - 1, 0)], ap[i], ap[i + 1], ap[min(i + 2, len(ap) - 1)]
+                ap_path.cubicTo(QPointF(q1.x() + (q2.x() - q0.x()) / 6, q1.y() + (q2.y() - q0.y()) / 6),
+                                QPointF(q2.x() - (q3.x() - q1.x()) / 6, q2.y() - (q3.y() - q1.y()) / 6), q2)
+            pen = QPen(QColor(colr), 1.6, Qt.DashLine)
+            pen.setDashPattern([5, 5])
+            p.setPen(pen)
+            p.setBrush(Qt.NoBrush)
+            p.drawPath(ap_path)
         # geri ödeme noktası
         if self.payback is not None and self.payback != float("inf") and t > 0.6:
             px = x_of(self.payback)

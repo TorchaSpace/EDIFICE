@@ -196,15 +196,17 @@ def build_pdf(project: Project, codes: list[str], path: str) -> str:
         fin = project.finance(codes)
         irr = f"%{fmt(fin.irr * 100, 1)}" if fin.irr is not None else "-"
         a = project.assumptions
+        lo_f, hi_f = project.finance(codes, "low"), project.finance(codes, "high")
         c.text(MARGIN, by + 74, cw, 16,
-               f"NPV {fmt(fin.npv / 1e6, 2)} M ₺   ·   IRR {irr}   ·   {a.horizon_years} yıl net kazanç {fmt(fin.total_net / 1e6, 2)} M ₺"
-               f"   (reel, iskonto %{fmt(a.discount_rate * 100, 0)})", 8.2, INK, QFont.DemiBold)
+               f"NPV {fmt(fin.npv / 1e6, 2)} M ₺ (aralık {fmt(lo_f.npv / 1e6, 2)}–{fmt(hi_f.npv / 1e6, 2)})   ·   IRR {irr}   ·   "
+               f"{a.horizon_years} yıl net kazanç {fmt(fin.total_net / 1e6, 2)} M ₺   (reel, iskonto %{fmt(a.discount_rate * 100, 0)})",
+               8.2, INK, QFont.DemiBold)
 
     # ---- alt bilgi
     p.setPen(QPen(QColor(LINE), 0.8))
     p.drawLine(QPointF(MARGIN, 806), QPointF(PAGE_W - MARGIN, 806))
-    c.text(MARGIN, 810, cw - 120, 20, "Bu rapor girilen verilere ve ayarlardaki varsayımlara dayanır; yatırım kararı öncesinde saha etüdüyle doğrulanmalıdır.",
-           6.8, MUTED)
+    c.text(MARGIN, 808, cw - 120, 14, "Tasarruf aralıkları yayımlanmış çalışmalara dayanır (kaynaklar: uygulamada Kaynaklar ve Yöntem ekranı).", 6.8, MUTED)
+    c.text(MARGIN, 818, cw - 120, 14, "Tahmin-ölçüm farkı ortalama +%34 gözlenmiştir (van Dronkelaar 2016); yatırım kararı öncesi saha etüdüyle doğrulayın.", 6.8, MUTED)
     c.text(PAGE_W - MARGIN - 110, 810, 110, 20, "EDIFI'CE", 6.8, MUTED, QFont.DemiBold, Qt.AlignRight)
     p.end()
     return path

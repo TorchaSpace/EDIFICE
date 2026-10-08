@@ -13,9 +13,9 @@ from ..models import (Assumptions, Building, KPIs, Opportunity, OpportunityResul
 
 
 def evaluate_opportunity(opp: Opportunity, building: Building, kpis: KPIs,
-                         prices: dict, a: Assumptions) -> OpportunityResult:
+                         prices: dict, a: Assumptions, mode: str = "typ") -> OpportunityResult:
     base = kpis.electricity_kwh if opp.affects == UtilityType.ELECTRICITY else kpis.gas_kwh
-    saved_kwh = base * opp.saving_pct
+    saved_kwh = base * opp.saving_for(mode)
     saved_carbon = saved_kwh * a.emission_factor_kg_per_kwh[opp.affects]
     saving = saved_kwh * prices[opp.affects]
     capex = opp.capex_per_m2 * building.floor_area_m2
@@ -50,11 +50,12 @@ def evaluate_all(opps, building, kpis, prices, a, equipment=()) -> list[Opportun
 
 
 def run_scenario(selected: list[Opportunity], building: Building, current: KPIs,
-                 prices: dict, a: Assumptions) -> ScenarioResult:
+                 prices: dict, a: Assumptions, mode: str = "typ") -> ScenarioResult:
+    """mode: typ (tipik) | low (literatür alt sınırı) | high (üst sınır)."""
     remaining = {UtilityType.ELECTRICITY: 1.0, UtilityType.GAS: 1.0}
     capex = 0.0
     for o in selected:
-        remaining[o.affects] *= (1 - o.saving_pct)
+        remaining[o.affects] *= (1 - o.saving_for(mode))
         capex += o.capex_per_m2 * building.floor_area_m2
 
     elec = current.electricity_kwh * remaining[UtilityType.ELECTRICITY]

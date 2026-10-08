@@ -481,6 +481,11 @@ def nav_icon(kind: str) -> QIcon:
         elif kind == "opportunities":
             p.drawPolyline([QPointF(2.5, 15), QPointF(8, 9), QPointF(11.5, 12.5), QPointF(17, 4.5)])
             p.drawPolyline([QPointF(12.5, 4.5), QPointF(17, 4.5), QPointF(17, 9)])
+        elif kind == "method":
+            p.drawRoundedRect(QRectF(3.5, 2.5, 13, 15), 2, 2)
+            p.drawLine(QPointF(7, 7), QPointF(13, 7))
+            p.drawLine(QPointF(7, 10.5), QPointF(13, 10.5))
+            p.drawLine(QPointF(7, 14), QPointF(10.5, 14))
         elif kind == "settings":
             for y, x in ((5, 6), (10, 13), (15, 8)):
                 p.drawLine(QPointF(2.5, y), QPointF(17.5, y))

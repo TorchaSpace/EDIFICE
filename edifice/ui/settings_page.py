@@ -42,8 +42,8 @@ class SettingsPage:
         self.ef_g = _spin(a.emission_factor_kg_per_kwh[UtilityType.GAS], 0, 5, 3, " kgCO₂/kWh")
         g = QGridLayout()
         g.setHorizontalSpacing(16)
-        g.addWidget(field("Elektrik", self.ef_e, "Şebeke ortalaması"), 0, 0)
-        g.addWidget(field("Doğalgaz", self.ef_g, "Yanma emisyonu"), 0, 1)
+        g.addWidget(field("Elektrik", self.ef_e, "Türkiye 2020 üretim bazlı: 0,437 (Şahin & Esen 2022)"), 0, 0)
+        g.addWidget(field("Doğalgaz", self.ef_g, "IPCC 2006, net ısıl değer. Fatura kWh'si üst ısıl değere göreyse ≈0,182"), 0, 1)
         em.lay.addSpacing(6)
         em.lay.addLayout(g)
         row1.addWidget(em, 1)
@@ -64,21 +64,30 @@ class SettingsPage:
 
         row2 = QHBoxLayout()
         row2.setSpacing(18)
-        bm = Panel("Kıyas değerleri", "Binanın ne kadar iyi/kötü olduğu bu referanslarla ölçülür")
-        self.b_eui = _spin(a.benchmark_eui_kwh_m2, 1, 2000, 0, " kWh/m²·yıl")
-        self.b_co2 = _spin(a.benchmark_carbon_kg_m2, 1, 1000, 0, " kgCO₂/m²·yıl")
-        self.b_w = _spin(a.benchmark_water_m3_m2, 0.01, 50, 2, " m³/m²·yıl")
-        self.life = _spin(a.equipment_life_years, 1, 60, 0, " yıl")
+        bm = Panel("Kıyas değerleri", "Binanın ne kadar iyi/kötü olduğu bu referanslarla ölçülür. Varsayılanlar ENERGY STAR (ABD ulusal medyan site EUI, "
+                              "Ağustos 2024) değerleridir; Türkiye iklimi ve uygulaması farklıdır, BEP-TR referans değerlerinizi girerek değiştirin.")
+        self.b_use = {}
         g = QGridLayout()
         g.setHorizontalSpacing(16)
         g.setVerticalSpacing(14)
-        g.addWidget(field("Enerji yoğunluğu (EUI)", self.b_eui, "Elektrik + gaz"), 0, 0)
-        g.addWidget(field("Karbon yoğunluğu", self.b_co2), 0, 1)
-        g.addWidget(field("Su yoğunluğu", self.b_w), 1, 0)
-        g.addWidget(field("Ekipman ömrü", self.life, "Yaş skorunda kullanılır"), 1, 1)
+        for i, (use, val) in enumerate(a.benchmark_eui_by_use.items()):
+            sp = _spin(val, 1, 3000, 1, " kWh/m²·yıl")
+            self.b_use[use] = sp
+            g.addWidget(field(use, sp), i // 2, i % 2)
+        self.b_eui = _spin(a.benchmark_eui_kwh_m2, 1, 3000, 0, " kWh/m²·yıl")
+        n = len(a.benchmark_eui_by_use)
+        g.addWidget(field("Diğer / Sanayi (yedek)", self.b_eui, "Kaynakta sanayi için veri yok"), n // 2, n % 2)
+        self.b_w = _spin(a.benchmark_water_m3_m2, 0.01, 50, 2, " m³/m²·yıl")
+        self.life = _spin(a.equipment_life_years, 1, 60, 0, " yıl")
+        g.addWidget(field("Su yoğunluğu", self.b_w, "Kaynak bulunamadı (varsayım)"), (n + 1) // 2, (n + 1) % 2)
+        g.addWidget(field("Ekipman ömrü (yedek)", self.life, "Soğutucu/kazan/santral/pompa için tür bazlı ömür kullanılır"), (n + 2) // 2, (n + 2) % 2)
         bm.lay.addSpacing(6)
         bm.lay.addLayout(g)
-        row2.addWidget(bm, 1)
+        note = QLabel("Karbon yoğunluğu kıyası: kıyas EUI × ağırlıklı emisyon faktörü olarak türetilir (kaynak yok).")
+        note.setWordWrap(True)
+        note.setStyleSheet(f"color: {SUB}; font-size: 12px; background: transparent;")
+        bm.lay.addWidget(note)
+        row2.addWidget(bm, 3)
 
         hw = Panel("Health Score ağırlıkları", "Dört bileşenin skora katkısı; toplam %100 olmalı")
         self.w_spins = {}
@@ -94,7 +103,7 @@ class SettingsPage:
         hw.lay.addSpacing(6)
         hw.lay.addLayout(g)
         hw.lay.addWidget(self.w_total)
-        row2.addWidget(hw, 1)
+        row2.addWidget(hw, 2)
         lay.addLayout(row2)
 
         fp = Panel("Finansal varsayımlar", "NPV, IRR ve nakit akışı reel (enflasyondan arındırılmış) değerlerle hesaplanır")
@@ -113,11 +122,11 @@ class SettingsPage:
         lay.addWidget(fp)
 
         cat = Panel("Dönüşüm önerileri kataloğu", "Her öneri için beklenen tasarruf oranı ve birim yatırım maliyeti")
-        self.table = QTableWidget(len(project.opportunities), 5)
-        self.table.setHorizontalHeaderLabels(["Öneri", "Kategori", "Etkilediği kalem", "Tasarruf oranı", "Yatırım (₺/m²)"])
+        self.table = QTableWidget(len(project.opportunities), 6)
+        self.table.setHorizontalHeaderLabels(["Öneri", "Kategori", "Etkilediği kalem", "Tasarruf oranı", "Literatür aralığı", "Yatırım (₺/m²)"])
         hh = self.table.horizontalHeader()
         hh.setSectionResizeMode(QHeaderView.Stretch)
-        for col, width in ((3, 170), (4, 190)):
+        for col, width in ((3, 150), (4, 200), (5, 170)):
             hh.setSectionResizeMode(col, QHeaderView.Fixed)
             self.table.setColumnWidth(col, width)
         self.table.verticalHeader().setVisible(False)
@@ -134,10 +143,12 @@ class SettingsPage:
             name.setObjectName("cellInput")
             pct = _spin(o.saving_pct * 100, 0, 90, 1, " %")
             capex = _spin(o.capex_per_m2, 0, 100000, 0, " ₺/m²")
-            for col, w in ((0, name), (3, pct), (4, capex)):
+            for col, w in ((0, name), (3, pct), (5, capex)):
                 w.setMinimumHeight(38)
                 self.table.setCellWidget(r, col, self._cell(w))
-            for col, text in ((1, o.category), (2, names.get(o.affects.value, o.affects.value))):
+            lo, hi = o.saving_for("low") * 100, o.saving_for("high") * 100
+            rng = f"%{lo:.0f}-{hi:.1f}".replace(".", ",") + f" · {o.evidence_level}"
+            for col, text in ((1, o.category), (2, names.get(o.affects.value, o.affects.value)), (4, rng)):
                 lbl = QLabel(text)
                 lbl.setStyleSheet(f"color: {SUB}; font-size: 13px; padding-left: 14px; background: transparent;")
                 self.table.setCellWidget(r, col, lbl)
@@ -206,7 +217,8 @@ class SettingsPage:
         a.emission_factor_kg_per_kwh = {UtilityType.ELECTRICITY: self.ef_e.value(), UtilityType.GAS: self.ef_g.value()}
         a.default_tariffs = {UtilityType.ELECTRICITY: self.t_e.value(), UtilityType.GAS: self.t_g.value(),
                              UtilityType.WATER: self.t_w.value()}
-        a.benchmark_eui_kwh_m2, a.benchmark_carbon_kg_m2 = self.b_eui.value(), self.b_co2.value()
+        a.benchmark_eui_kwh_m2, a.benchmark_carbon_kg_m2 = self.b_eui.value(), None
+        a.benchmark_eui_by_use = {use: sp.value() for use, sp in self.b_use.items()}
         a.benchmark_water_m3_m2, a.equipment_life_years = self.b_w.value(), int(self.life.value())
         a.health_weights = {n: sp.value() / 100 for n, sp in self.w_spins.items()}
         a.discount_rate, a.energy_escalation = self.f_disc.value() / 100, self.f_esc.value() / 100
