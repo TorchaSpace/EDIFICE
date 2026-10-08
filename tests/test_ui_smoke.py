@@ -2,7 +2,7 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication, QTableWidgetItem
+from PySide6.QtWidgets import QApplication, QDialog, QTableWidgetItem
 
 from edifice.ui.building_dialog import make_item
 
@@ -93,3 +93,34 @@ def test_pdf_report_generated(tmp_path):
     build_pdf(p, ["LED", "CHILLER"], str(out))
     data = out.read_bytes()
     assert data.startswith(b"%PDF") and len(data) > 5000
+
+
+def test_excel_import_flow(tmp_path, monkeypatch):
+    _app()
+    from edifice.excel_io import build_template
+    from edifice.ui import main_window as mw
+    f = tmp_path / "bina.xlsx"
+    build_template(str(f), example=True)
+    store = Store(":memory:")
+    bid = store.seed_demo()
+    w = MainWindow(store.load_project(bid), store)
+
+    class FakeChoice:
+        Accepted = mw.AddChoiceDialog.Accepted
+        choice, path = "excel", str(f)
+        def __init__(self, parent=None): pass
+        def exec(self): return self.Accepted
+
+    seen = {}
+
+    class FakeDialog(mw.BuildingDialog):
+        def exec(self):
+            seen["review"] = self.review and self.name.text()
+            self.save()
+            return QDialog.Accepted
+
+    monkeypatch.setattr(mw, "AddChoiceDialog", FakeChoice)
+    monkeypatch.setattr(mw, "BuildingDialog", FakeDialog)
+    w.add_building()
+    assert seen["review"] == "Örnek Ofis Binası"
+    assert w.project.building.name == "Örnek Ofis Binası" and store.count() == 2

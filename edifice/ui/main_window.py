@@ -9,8 +9,12 @@ from PySide6.QtWidgets import (QFileDialog, QHBoxLayout, QLabel, QMainWindow, QM
                                QPushButton, QVBoxLayout, QWidget)
 
 from ..db import Store
+from ..excel_io import read_workbook
+from ..models import Assumptions
 from ..service import Project
+from ..validation import ValidationError
 from .pages import ConsumptionPage, OpportunitiesPage, OverviewPage, ScenarioPage
+from .add_choice import AddChoiceDialog
 from .building_dialog import BuildingDialog
 from .report_pdf import build_pdf
 from .settings_page import SettingsPage
@@ -182,11 +186,34 @@ class MainWindow(QMainWindow):
         menu.exec(self.bldg_btn.mapToGlobal(self.bldg_btn.rect().topLeft() - self.bldg_btn.rect().bottomLeft()))
 
     def add_building(self):
-        dlg = BuildingDialog(self, tariffs=self.project.assumptions.default_tariffs)
+        choice = AddChoiceDialog(self)
+        if choice.exec() != AddChoiceDialog.Accepted:
+            return
+        tariffs = self.project.assumptions.default_tariffs
+        if choice.choice == "form":
+            dlg = BuildingDialog(self, tariffs=tariffs)
+        else:
+            try:
+                building, readings, equipment, _ = read_workbook(choice.path, tariffs)
+            except ValidationError as e:
+                self._show_excel_errors(e.errors)
+                return
+            imported = Project(building, readings, equipment, [], Assumptions())
+            dlg = BuildingDialog(self, project=imported, tariffs=tariffs, review=True)
         if dlg.exec() == BuildingDialog.Accepted and dlg.result_data:
             building, readings, equipment = dlg.result_data
             bid = self.store.save_building(building, readings, equipment)
             self.set_project(self.store.load_project(bid))
+
+    def _show_excel_errors(self, errors: list[str]):
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Warning)
+        box.setWindowTitle("Excel dosyası yüklenemedi")
+        box.setText("Excel dosyasında düzeltilmesi gerekenler var")
+        shown = errors[:12]
+        more = f"\n… ve {len(errors) - 12} hata daha" if len(errors) > 12 else ""
+        box.setInformativeText("•  " + "\n•  ".join(shown) + more + "\n\nDosyayı düzeltip tekrar yükleyin.")
+        box.exec()
 
     def edit_building(self):
         dlg = BuildingDialog(self, project=self.project, tariffs=self.project.assumptions.default_tariffs)

@@ -111,7 +111,7 @@ def build_from_inputs(info: dict, grids: dict[int, list[list[str]]], equipment_r
         except ValueError:
             yi = 0
         if not 1900 <= yi <= date.today().year:
-            errors.append(f"Ekipman {i}: kurulum yılı geçersiz")
+            errors.append(f"Ekipman {i} ({r['name'].strip()}): kurulum yılı geçersiz")
             continue
         equipment.append(Equipment(r.get("category") or EQUIPMENT_CATEGORIES[0], r["name"].strip(), yi,
                                    int(r.get("condition") or 3), (r.get("notes") or "").strip()))

@@ -60,3 +60,6 @@ Hesap varsayımları (emisyon faktörü, tarifeler, kıyas değerleri, Health Sc
 
 ## Rapor, uygunluk, senaryo (eklendi)
 PDF rapor: `edifice/ui/report_pdf.py` (QPdfWriter, tek sayfa A4; "Rapor" butonu PDF üretir). Ekipmana göre öneri uygunluğu: `edifice/engine/relevance.py` (yüksek/orta/düşük öncelik, uygun değil, veri yok). Senaryo seçimi bina başına SQLite'ta (`scenarios`). Kalan: Manrope/DM Mono fontlarını gömmek (kullanıcı izniyle indirilecek), gerçek pilot bina verisiyle deneme.
+
+## Excel ile bina ekleme (eklendi)
+"+ Bina Ekle" önce yöntem seçtirir (`ui/add_choice.py`): formu doldur ya da Excel şablonu. `edifice/excel_io.py`: `build_template(path, example)` talimatlı/doğrulamalı .xlsx üretir (boş ya da örnek dolu), `read_workbook(path, tariffs)` okur ve `validation.build_from_inputs` ile doğrular; hatalar hücre/sayfa adıyla listelenir. Başarılıysa veri Bina Ekle penceresinde "Gözden Geçir" modunda açılır, kullanıcı kontrol edip kaydeder. Şablon yerleşimi sabittir (sayfa adları Bina/Tüketim/Ekipman, hücre konumları excel_io.py üstünde).

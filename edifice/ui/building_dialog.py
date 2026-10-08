@@ -51,11 +51,12 @@ _field, _tune_spin, _scroll = field, tune_spin, scroll
 
 
 class BuildingDialog(QDialog):
-    def __init__(self, parent=None, project=None, tariffs: dict | None = None):
+    def __init__(self, parent=None, project=None, tariffs: dict | None = None, review: bool = False):
         super().__init__(parent)
-        self.editing = project
+        self.editing = project if not review else None
+        self.review = review
         self.tariffs = tariffs
-        self.setWindowTitle("Binayı Düzenle" if project else "Bina Ekle")
+        self.setWindowTitle("Binayı Gözden Geçir" if review else "Binayı Düzenle" if project else "Bina Ekle")
         screen = QGuiApplication.primaryScreen()
         avail = screen.availableGeometry().height() if screen else 900
         self.resize(1100, max(640, min(880, avail - 60)))
@@ -66,9 +67,11 @@ class BuildingDialog(QDialog):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(36, 30, 36, 26)
         lay.setSpacing(16)
-        lay.addWidget(header("Düzenle" if project else "Yeni bina", "Binayı Düzenle" if project else "Bina Ekle",
-                             "Üç kısa adımda binayı tanımlayın: bina bilgisi, son yılın aylık tüketimi ve (isteğe bağlı) ekipmanlar. "
-                             "* işaretli alanlar zorunludur."))
+        lay.addWidget(header("Excel'den okundu" if review else "Düzenle" if project else "Yeni bina",
+                             "Binayı Gözden Geçir" if review else "Binayı Düzenle" if project else "Bina Ekle",
+                             ("Excel dosyasındaki veriler aşağıya aktarıldı. Kontrol edin, gerekirse düzeltin ve kaydedin."
+                              if review else "Üç kısa adımda binayı tanımlayın: bina bilgisi, son yılın aylık tüketimi ve "
+                              "(isteğe bağlı) ekipmanlar. * işaretli alanlar zorunludur.")))
 
         self.tabbar = QTabBar()
         self.tabbar.setDrawBase(False)
@@ -100,7 +103,7 @@ class BuildingDialog(QDialog):
         cancel.setObjectName("secondary")
         cancel.setCursor(Qt.PointingHandCursor)
         cancel.clicked.connect(self.reject)
-        save = QPushButton("Değişiklikleri kaydet" if project else "Binayı kaydet")
+        save = QPushButton("Değişiklikleri kaydet" if self.editing else "Binayı kaydet")
         save.setObjectName("primary")
         save.setCursor(Qt.PointingHandCursor)
         save.clicked.connect(self.save)
