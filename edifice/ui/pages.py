@@ -8,7 +8,6 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QGridLayout, QHBoxL
                                QHeaderView, QLabel, QProgressBar, QPushButton, QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
-from ..engine.kpi import monthly_series
 from ..models import UTILITY_UNITS, UtilityType
 from ..service import Project
 from .widgets import ACCENT, GRADE_COLORS, Card, fmt, fmt_years, h1, muted
@@ -24,6 +23,41 @@ def _page() -> tuple[QWidget, QVBoxLayout]:
     lay.setContentsMargins(28, 24, 28, 24)
     lay.setSpacing(14)
     return w, lay
+
+
+MONTHS = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"]
+PALETTE = ["#9ec9b8", ACCENT, "#e0a030"]
+
+
+def clustered_chart(title: str, categories: list[str], groups: dict[str, list[float]],
+                    label_format: str = "%.0f", min_h: int = 160) -> QChartView:
+    """Kategori başına yan yana çubuklar (ör. aylar x yıllar, mevcut x hedef)."""
+    series = QBarSeries()
+    for i, (name, values) in enumerate(groups.items()):
+        bs = QBarSet(name)
+        bs.setColor(QColor(PALETTE[i % len(PALETTE)]))
+        for v in values:
+            bs.append(v)
+        series.append(bs)
+    chart = QChart()
+    chart.addSeries(series)
+    chart.setTitle(title)
+    chart.setMargins(chart.margins())
+    chart.legend().setVisible(len(groups) > 1)
+    chart.legend().setAlignment(Qt.AlignBottom)
+    ax = QBarCategoryAxis()
+    ax.append(categories)
+    ay = QValueAxis()
+    ay.setLabelFormat(label_format)
+    ay.setMin(0)
+    chart.addAxis(ax, Qt.AlignBottom)
+    chart.addAxis(ay, Qt.AlignLeft)
+    series.attachAxis(ax)
+    series.attachAxis(ay)
+    view = QChartView(chart)
+    view.setRenderHint(QPainter.Antialiasing)
+    view.setMinimumHeight(min_h)
+    return view
 
 
 def _table(headers: list[str]) -> QTableWidget:
@@ -82,46 +116,33 @@ class OverviewPage:
             bar.setRange(0, 100)
             bar.setValue(int(pts))
             bar.setFormat(f"{pts:.0f}")
-            bar.setStyleSheet(f"QProgressBar {{ border: 1px solid #dde3e0; border-radius: 4px; background: white; text-align: center; }} QProgressBar::chunk {{ background: {ACCENT}; }}")
+            col = GRADE_COLORS["A" if pts >= 80 else "B" if pts >= 65 else "C" if pts >= 50 else "D" if pts >= 35 else "E"]
+            bar.setStyleSheet(f"QProgressBar {{ border: 1px solid #dde3e0; border-radius: 4px; background: white; text-align: center; color: #17352b; }} QProgressBar::chunk {{ background: {col}; border-radius: 3px; }}")
             row.addWidget(lbl)
             row.addWidget(bar)
             lay.addLayout(row)
-        lay.addStretch()
+        cost: dict[str, list[float]] = {}
+        for r in sorted(project.readings, key=lambda r: (r.year, r.month)):
+            if r.utility != UtilityType.WATER:
+                cost.setdefault(str(r.year), [0.0] * 12)[r.month - 1] += r.cost
+        lay.addWidget(clustered_chart("Aylık enerji maliyeti (₺)", MONTHS, cost, min_h=200), 1)
 
 
 class ConsumptionPage:
     def __init__(self, project: Project):
         self.widget, lay = _page()
         lay.addWidget(h1("Tüketim takibi"))
-        lay.addWidget(muted("Aylık elektrik, doğalgaz ve su tüketimi (fatura verisi)."))
+        lay.addWidget(muted("Aylık tüketim, yıllar yan yana (fatura verisi)."))
         for u in UtilityType:
             lay.addWidget(self._chart(project, u), 1)
 
     def _chart(self, project: Project, utility: UtilityType) -> QChartView:
-        data = monthly_series(project.readings, utility)
-        bars = QBarSet(f"{UTILITY_NAMES[utility]} ({UTILITY_UNITS[utility]})")
-        bars.setColor(QColor(ACCENT))
-        for _, v in data:
-            bars.append(v)
-        series = QBarSeries()
-        series.append(bars)
-        chart = QChart()
-        chart.addSeries(series)
-        chart.setTitle(UTILITY_NAMES[utility])
-        chart.legend().hide()
-        ax = QBarCategoryAxis()
-        ax.append([m for m, _ in data])
-        ax.setLabelsAngle(-60)
-        ay = QValueAxis()
-        ay.setLabelFormat("%.0f")
-        chart.addAxis(ax, Qt.AlignBottom)
-        chart.addAxis(ay, Qt.AlignLeft)
-        series.attachAxis(ax)
-        series.attachAxis(ay)
-        view = QChartView(chart)
-        view.setRenderHint(QPainter.Antialiasing)
-        view.setMinimumHeight(150)
-        return view
+        groups: dict[str, list[float]] = {}
+        for r in sorted(project.readings, key=lambda r: (r.year, r.month)):
+            if r.utility == utility:
+                groups.setdefault(str(r.year), []).append(r.consumption)
+        return clustered_chart(f"{UTILITY_NAMES[utility]} ({UTILITY_UNITS[utility]})",
+                               MONTHS, groups)
 
 
 class OpportunitiesPage:
@@ -131,6 +152,15 @@ class OpportunitiesPage:
         lay.addWidget(muted("Geri ödeme süresine göre sıralı. Tasarruf oranları ve birim "
                             "maliyetler varsayımdır, pilot bina etüdüyle güncellenecek."))
         res = project.opportunity_results()
+        quick = [r for r in res if r.payback_years <= 5]
+        grid = QGridLayout()
+        c1 = Card("Öneri sayısı", str(len(res)), f"{len(quick)} tanesi 5 yıl altında geri ödeyen")
+        c2 = Card("Hızlı kazanç tasarrufu", f"{fmt(sum(r.annual_saving for r in quick) / 1e6, 2)} M ₺",
+                  "geri ödemesi ≤ 5 yıl olanlar, yıllık")
+        c3 = Card("Hızlı kazanç CAPEX", f"{fmt(sum(r.capex for r in quick) / 1e6, 2)} M ₺", "")
+        for i, c in enumerate((c1, c2, c3)):
+            grid.addWidget(c, 0, i)
+        lay.addLayout(grid)
         t = _table(["Öneri", "Kategori", "Tasarruf (kWh/yıl)", "Karbon (kgCO₂/yıl)",
                     "Yıllık tasarruf (₺)", "CAPEX (₺)", "Geri ödeme"])
         t.setRowCount(len(res))
@@ -138,7 +168,13 @@ class OpportunitiesPage:
             _set_row(t, i, [r.opportunity.name, r.opportunity.category, fmt(r.saved_kwh),
                             fmt(r.saved_carbon_kg), fmt(r.annual_saving), fmt(r.capex),
                             fmt_years(r.payback_years)])
+        t.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        t.setMaximumHeight(34 + 30 * len(res))
         lay.addWidget(t)
+        lay.addWidget(clustered_chart(
+            "Yıllık tasarruf (₺) ve CAPEX (₺)", [r.opportunity.code for r in res],
+            {"Yıllık tasarruf": [r.annual_saving for r in res], "CAPEX": [r.capex for r in res]},
+            min_h=220), 1)
 
 
 class ScenarioPage:
@@ -158,8 +194,11 @@ class ScenarioPage:
         left.addStretch()
         top.addLayout(left, 1)
         self.table = _table(["Gösterge", "Mevcut", "Hedef", "Değişim"])
+        self.table.setMaximumHeight(34 + 30 * 5)
         top.addWidget(self.table, 2)
         lay.addLayout(top)
+        self.chart_box = QVBoxLayout()
+        lay.addLayout(self.chart_box, 1)
         grid = QGridLayout()
         self.c_capex = Card("Toplam CAPEX", "-")
         self.c_save = Card("Yıllık tasarruf", "-")
@@ -188,6 +227,16 @@ class ScenarioPage:
             pct = (tgt / cur - 1) * 100 if cur else 0
             _set_row(self.table, i, [name, fmt(cur, d), fmt(tgt, d), f"{pct:+.1f}%".replace(".", ",")],
                      right_from=1)
+        while self.chart_box.count():
+            self.chart_box.takeAt(0).widget().deleteLater()
+        self.chart_box.addWidget(clustered_chart(
+            "Mevcut vs Hedef (normalize edilmiş: mevcut = 100)",
+            ["Elektrik", "Doğalgaz", "Enerji", "Karbon", "Maliyet"],
+            {"Mevcut": [100] * 5,
+             "Hedef": [100 * t.electricity_kwh / c.electricity_kwh, 100 * t.gas_kwh / c.gas_kwh,
+                       100 * t.total_energy_kwh / c.total_energy_kwh,
+                       100 * t.carbon_kg / c.carbon_kg, 100 * t.total_cost / c.total_cost]},
+            min_h=200))
         self.c_capex.set(f"{fmt(s.capex / 1e6, 2)} M ₺")
         self.c_save.set(f"{fmt(s.annual_saving / 1e6, 2)} M ₺", "her yıl")
         self.c_pay.set(fmt_years(s.payback_years))
