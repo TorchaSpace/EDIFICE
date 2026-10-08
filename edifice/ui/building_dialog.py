@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QCompleter, QDialog, QDoubleSp
 from ..validation import (COLUMNS, EQUIPMENT_CATEGORIES, EQUIPMENT_NAMES, MONTH_NAMES, USE_TYPES, ValidationError,
                           build_from_inputs)
 from .dropdown import PremiumCombo
-from .forms import PillTable, field, scroll, tune_spin
+from .forms import PillTable, SmoothSelectTable, field, scroll, tune_spin
 from .widgets import FadeStack, Panel, header, muted, qfont
 
 
@@ -27,7 +27,7 @@ def make_item(text: str, col: int) -> QTableWidgetItem:
     return it
 
 
-class PasteTable(QTableWidget):
+class PasteTable(SmoothSelectTable):
     """Excel'den kopyalanan (sekme/satır ayrımlı) veriyi seçili hücreden itibaren yapıştırır."""
 
     def keyPressEvent(self, e):
@@ -361,9 +361,13 @@ class BuildingDialog(QDialog):
 
     def remove_equipment_row(self):
         r = self.eq.selected_row()
-        if r >= 0:
-            self.eq.removeRow(r)
-            self.eq.select_row(min(r, self.eq.rowCount() - 1), animate=False)
+        if r < 0:
+            return
+        self.eq.removed.connect(self._sync_empty_once)
+        self.eq.remove_row_animated(r)
+
+    def _sync_empty_once(self):
+        self.eq.removed.disconnect(self._sync_empty_once)
         self._sync_empty()
 
     # ---- toplama / kaydetme

@@ -10,6 +10,7 @@ from ..engine.relevance import LABELS as FIT_LABELS
 from ..models import UTILITY_UNITS, UtilityType
 from ..service import Project
 from .charts import AreaChart, BarChart
+from .forms import SmoothSelectTable
 from .widgets import (AMBER, G, GRADE_COLORS, INDIGO, MUTED, RED, SUB, TEXT, Card, Gauge, Panel, ScoreBar, badge,
                       fmt, fmt_years, header, muted, qfont, section)
 
@@ -39,7 +40,7 @@ def bar_chart(categories, groups, scale=1.0, decimals=0, colors=None, unit="", m
 
 
 def _table(headers: list[str], left_cols: int = 1) -> QTableWidget:
-    t = QTableWidget(0, len(headers))
+    t = SmoothSelectTable(0, len(headers))
     t.setHorizontalHeaderLabels([h.upper() for h in headers])
     t.setEditTriggers(QAbstractItemView.NoEditTriggers)
     t.setSelectionBehavior(QAbstractItemView.SelectRows)

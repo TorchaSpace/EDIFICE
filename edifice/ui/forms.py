@@ -43,17 +43,24 @@ def scroll(inner: QWidget) -> QScrollArea:
     return area
 
 
-from PySide6.QtCore import QEasingCurve, QEvent, QPoint, QPropertyAnimation, QRect  # noqa: E402
-from PySide6.QtWidgets import QAbstractItemView, QFrame, QTableWidget  # noqa: E402
+from PySide6.QtCore import (QEasingCurve, QEvent, QParallelAnimationGroup, QPoint, QPropertyAnimation,  # noqa: E402
+                            QRect, QTimer)
+from PySide6.QtWidgets import QAbstractItemView, QFrame, QGraphicsOpacityEffect, QTableWidget  # noqa: E402
+
+
+from PySide6.QtCore import Signal  # noqa: E402
 
 
 class PillTable(QTableWidget):
     """Seçili satırı sistem vurgusu yerine yuvarlak, yeşil bir 'hap' ile gösterir.
     Satır değişince hap, eski satırdan yenisine yumuşakça kayar. Hücre widget'larına odaklanmak satırı seçer."""
 
+    removed = Signal()
+
     def __init__(self, rows: int, cols: int):
         super().__init__(rows, cols)
         self.setSelectionMode(QAbstractItemView.NoSelection)
+        self._busy = False
         self._row = -1
         self._pill = QFrame(self.viewport())
         self._pill.setObjectName("rowPill")
@@ -82,6 +89,72 @@ class PillTable(QTableWidget):
         if self._row >= self.rowCount():
             self._row = self.rowCount() - 1
         self._sync(False)
+
+    def remove_row_animated(self, r: int):
+        """Satır önce solar, sonra alttaki satırlar (ve hap) yumuşakça yukarı kayar."""
+        if getattr(self, "_busy", False) or not 0 <= r < self.rowCount():
+            return
+        self._busy = True
+        fade = QParallelAnimationGroup(self)
+        for c in range(self.columnCount()):
+            w = self.cellWidget(r, c)
+            eff = QGraphicsOpacityEffect(w)
+            w.setGraphicsEffect(eff)
+            a = QPropertyAnimation(eff, b"opacity", w)
+            a.setDuration(220)
+            a.setStartValue(1.0)
+            a.setEndValue(0.0)
+            a.setEasingCurve(QEasingCurve.OutQuad)
+            fade.addAnimation(a)
+        fade.finished.connect(lambda: self._finish_remove(r))
+        fade.start()
+        self._fade_group = fade
+        self._pill.hide() if self.rowCount() == 1 else None
+
+    def _finish_remove(self, r: int):
+        n, cols = self.rowCount(), self.columnCount()
+        moving = []   # (widget, başlangıç noktası)
+        for j in range(r + 1, n):
+            for c in range(cols):
+                w = self.cellWidget(j, c)
+                moving.append((j - 1, c, w.pos()))
+        pill_start = self._target(r + 1) if r + 1 < n else self._pill.geometry()
+        self.removeRow(r)
+        self.doItemsLayout()
+        group = QParallelAnimationGroup(self)
+        for j, c, start in moving:
+            w = self.cellWidget(j, c)
+            if w is None:
+                continue
+            end = w.pos()
+            w.move(start)
+            a = QPropertyAnimation(w, b"pos", w)
+            a.setDuration(380)
+            a.setStartValue(start)
+            a.setEndValue(end)
+            a.setEasingCurve(QEasingCurve.OutQuart)
+            group.addAnimation(a)
+        self._row = r if r < self.rowCount() else self.rowCount() - 1
+        if self._row >= 0:
+            self._pill.setGeometry(pill_start)
+            self._pill.show()
+            self._pill.lower()
+            pa = QPropertyAnimation(self._pill, b"geometry", self)
+            pa.setDuration(380)
+            pa.setStartValue(pill_start)
+            pa.setEndValue(self._target(self._row))
+            pa.setEasingCurve(QEasingCurve.OutQuart)
+            group.addAnimation(pa)
+        else:
+            self._pill.hide()
+        group.finished.connect(self._remove_done)
+        group.start()
+        self._slide_group = group
+
+    def _remove_done(self):
+        self._busy = False
+        self._sync(False)
+        self.removed.emit()
 
     # ---- iç
     def _target(self, r: int) -> QRect:
@@ -127,3 +200,75 @@ class PillTable(QTableWidget):
     def showEvent(self, e):
         super().showEvent(e)
         self._sync(False)
+
+
+
+class SmoothSelectTable(QTableWidget):
+    """Seçili hücre/satır bölgesini sistem vurgusu yerine yuvarlak köşeli, yumuşakça beliren,
+    seçim değişince şekil/konum değiştiren bir panelle gösterir."""
+
+    def __init__(self, *args):
+        super().__init__(*args)
+        self.setObjectName("smoothSel")
+        self._pills: list[QFrame] = []
+        self.itemSelectionChanged.connect(lambda: self._sync(True))
+        self.verticalScrollBar().valueChanged.connect(lambda _: self._sync(False))
+        self.viewport().installEventFilter(self)
+
+    def _rects(self) -> list[QRect]:
+        out = []
+        for r in self.selectedRanges():
+            tl = self.visualRect(self.model().index(r.topRow(), r.leftColumn()))
+            br = self.visualRect(self.model().index(r.bottomRow(), r.rightColumn()))
+            out.append(tl.united(br).adjusted(2, 2, -2, -2))
+        return out
+
+    def _new_pill(self) -> QFrame:
+        p = QFrame(self.viewport())
+        p.setObjectName("selPill")
+        p.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        p._fx = QGraphicsOpacityEffect(p)
+        p._fx.setOpacity(0.0)
+        p.setGraphicsEffect(p._fx)
+        p._fade = QPropertyAnimation(p._fx, b"opacity", p)
+        p._fade.setEasingCurve(QEasingCurve.OutQuart)
+        p._fade.finished.connect(lambda p=p: p.hide() if p._fx.opacity() < 0.01 else None)
+        p._geo = QPropertyAnimation(p, b"geometry", p)
+        p._geo.setEasingCurve(QEasingCurve.OutQuart)
+        p.hide()
+        return p
+
+    def _fade_to(self, p: QFrame, end: float, ms: int):
+        p._fade.stop()
+        p._fade.setDuration(ms)
+        p._fade.setStartValue(p._fx.opacity())
+        p._fade.setEndValue(end)
+        p._fade.start()
+
+    def _sync(self, animate: bool):
+        rects = self._rects()
+        while len(self._pills) < len(rects):
+            self._pills.append(self._new_pill())
+        for i, p in enumerate(self._pills):
+            if i < len(rects):
+                rect = rects[i]
+                p._geo.stop()
+                if not p.isVisible() or p._fx.opacity() < 0.05:
+                    p.setGeometry(rect)
+                    p.show()
+                    self._fade_to(p, 1.0, 260)
+                elif animate:
+                    p._geo.setDuration(180)
+                    p._geo.setStartValue(p.geometry())
+                    p._geo.setEndValue(rect)
+                    p._geo.start()
+                    self._fade_to(p, 1.0, 120)
+                else:
+                    p.setGeometry(rect)
+            elif p.isVisible():
+                self._fade_to(p, 0.0, 200)
+
+    def eventFilter(self, obj, ev):
+        if obj is self.viewport() and ev.type() == QEvent.Resize:
+            self._sync(False)
+        return super().eventFilter(obj, ev)
