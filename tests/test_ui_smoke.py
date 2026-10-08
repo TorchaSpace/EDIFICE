@@ -4,6 +4,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication, QTableWidgetItem
 
+from edifice.ui.building_dialog import make_item
+
 from edifice.db import Store
 from edifice.service import Project
 from edifice.ui.building_dialog import BuildingDialog
@@ -37,7 +39,7 @@ def test_add_building_dialog_flow():
     d.area.setValue(2500)
     for r in range(12):
         for c, v in enumerate(["40000", "", "15000", "", "90", ""]):
-            d.grids["base"].setItem(r, c, QTableWidgetItem(v))
+            d.grids["base"].setItem(r, c, make_item(v, c))
     d.add_equipment_row()
     d.eq.item(0, 1).setText("Chiller")
     d.save()

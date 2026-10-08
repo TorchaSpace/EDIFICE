@@ -12,7 +12,7 @@ from ..service import Project
 from .pages import ConsumptionPage, OpportunitiesPage, OverviewPage, ScenarioPage
 from .building_dialog import BuildingDialog
 from .report import build_report
-from .widgets import STYLE, FadeStack, Logo, NavBar, section
+from .widgets import get_style, FadeStack, Logo, NavBar, section
 
 TR_MONTHS = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"]
 
@@ -25,7 +25,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("EDIFI'CE")
         self.resize(1440, 900)
         self.setMinimumSize(1180, 720)
-        self.setStyleSheet(STYLE)
+        self.setStyleSheet(get_style())
 
         self.nav_specs = [("Genel Bakış", "overview"), ("Tüketim", "consumption"),
                           ("Öneriler", "opportunities"), ("Mevcut vs Hedef", "scenario")]

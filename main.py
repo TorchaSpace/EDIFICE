@@ -18,8 +18,9 @@ def main():
                         (QPalette.AlternateBase, "#070C12"), (QPalette.Text, "#E8F2FF"),
                         (QPalette.WindowText, "#E8F2FF"), (QPalette.ButtonText, "#E8F2FF"),
                         (QPalette.Button, "#0B1624"), (QPalette.ToolTipBase, "#05080E"),
-                        (QPalette.ToolTipText, "#E8F2FF")):
+                        (QPalette.ToolTipText, "#E8F2FF"), (QPalette.HighlightedText, "#E8F2FF")):
         pal.setColor(role, QColor(color))
+    pal.setColor(QPalette.Highlight, QColor(13, 221, 150, 40))
     app.setPalette(pal)
     store = Store()
     if store.count() == 0:

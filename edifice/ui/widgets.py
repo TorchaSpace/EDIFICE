@@ -52,7 +52,7 @@ def rgba(hex_color: str, a: float) -> QColor:
 _SANS_CSS = ", ".join(f'"{n}"' for n in SANS) + ", sans-serif"
 _MONO_CSS = ", ".join(f'"{n}"' for n in MONO) + ", monospace"
 
-STYLE = f"""
+STYLE_TEMPLATE = f"""
 * {{ font-family: {_SANS_CSS}; }}
 QMainWindow, QScrollArea, QWidget#page, QWidget#root {{ background: {BG}; }}
 QScrollArea {{ border: none; }}
@@ -93,7 +93,8 @@ QPushButton#toggle {{ background: rgba(255,255,255,0.03); color: {TEXT}; border:
     text-align: left; padding: 12px 16px; font-size: 13px; }}
 QPushButton#toggle:hover {{ border: 1px solid rgba(13,221,150,0.25); }}
 QPushButton#toggle:checked {{ background: {G_SOFT}; border: 1px solid rgba(13,221,150,0.35); font-weight: 700; color: {G}; }}
-QTableWidget {{ background: transparent; color: {TEXT}; border: none; outline: 0; font-size: 13px; }}
+QTableWidget {{ background: transparent; color: {TEXT}; border: none; outline: 0; font-size: 13px;
+    selection-background-color: rgba(13,221,150,0.10); selection-color: {TEXT}; }}
 QTableWidget::item {{ color: {TEXT}; border-bottom: 1px solid {BORDER}; padding: 4px 8px; }}
 QTableWidget::item:hover {{ background: rgba(255,255,255,0.025); }}
 QTableWidget::item:selected {{ background: {G_SOFT}; color: {TEXT}; }}
@@ -101,14 +102,23 @@ QHeaderView {{ background: transparent; }}
 QTableCornerButton::section {{ background: transparent; border: none; }}
 QHeaderView::section {{ background: rgba(255,255,255,0.02); border: none; border-bottom: 1px solid {BORDER}; color: {MUTED};
     padding: 12px 8px; font-size: 10px; font-weight: 700; letter-spacing: 1.2px; }}
-QScrollBar:vertical {{ background: transparent; width: 8px; margin: 2px; }}
-QScrollBar::handle:vertical {{ background: rgba(13,221,150,0.18); border-radius: 3px; min-height: 30px; }}
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
+QScrollBar:vertical {{ background: transparent; width: 12px; margin: 4px 2px 4px 2px; }}
+QScrollBar::handle:vertical {{ background: rgba(255,255,255,0.14); border-radius: 4px; min-height: 40px; margin: 0 2px; }}
+QScrollBar::handle:vertical:hover {{ background: rgba(13,221,150,0.5); }}
+QScrollBar:horizontal {{ background: transparent; height: 12px; margin: 2px 4px 2px 4px; }}
+QScrollBar::handle:horizontal {{ background: rgba(255,255,255,0.14); border-radius: 4px; min-width: 40px; margin: 2px 0; }}
+QScrollBar::handle:horizontal:hover {{ background: rgba(13,221,150,0.5); }}
+QScrollBar::add-line, QScrollBar::sub-line {{ width: 0; height: 0; }}
+QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
+QAbstractScrollArea::corner {{ background: transparent; }}
 QDialog {{ background: {BG}; }}
 QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {{ background: rgba(255,255,255,0.04); color: {TEXT}; border: 1px solid {BORDER};
     border-radius: 10px; padding: 9px 12px; font-size: 13px; selection-background-color: rgba(13,221,150,0.35); }}
 QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus {{ border: 1px solid rgba(13,221,150,0.55); }}
-QComboBox::drop-down {{ border: none; width: 22px; }}
+QComboBox::drop-down {{ border: none; width: 30px; subcontrol-origin: padding; subcontrol-position: center right; }}
+QComboBox::down-arrow {{ image: url(__ARROW__); width: 12px; height: 12px; }}
+QTableWidget QLineEdit {{ background: #0F1D30; color: {TEXT}; border: 1px solid rgba(13,221,150,0.6); border-radius: 6px;
+    padding: 0 8px; font-size: 13px; }}
 QComboBox QAbstractItemView {{ background: {SURFACE}; color: {TEXT}; border: 1px solid {BORDER}; selection-background-color: {G_SOFT}; outline: 0; }}
 QSpinBox::up-button, QSpinBox::down-button, QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {{ width: 0; border: none; }}
 QTabWidget::pane {{ border: none; }}
@@ -544,3 +554,22 @@ class Logo(QWidget):
         p.setPen(QColor(G))
         p.setFont(qfont(8, QFont.Bold, spacing=1.3))
         p.drawText(QPointF(60, 46), "GREEN PROPTECH")
+
+
+def get_style() -> str:
+    """Stil sayfası; açılır kutu oku için geçici bir ok ikonu üretir (QApplication gerekir)."""
+    import tempfile
+    from pathlib import Path
+    path = Path(tempfile.gettempdir()) / "edifice_chevron.png"
+    pm = QPixmap(24, 24)
+    pm.fill(Qt.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.Antialiasing)
+    p.setPen(QPen(QColor(SUB), 2.2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+    p.drawPolyline([QPointF(6, 9), QPointF(12, 15), QPointF(18, 9)])
+    p.end()
+    pm.save(str(path))
+    return STYLE_TEMPLATE.replace("__ARROW__", str(path).replace("\\", "/"))
+
+
+STYLE = STYLE_TEMPLATE
