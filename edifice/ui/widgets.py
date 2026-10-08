@@ -29,15 +29,21 @@ STYLE = f"""
 * {{ font-family: "SF Pro Display", "Helvetica Neue", "Inter", "Segoe UI", sans-serif; }}
 QMainWindow, QScrollArea, QWidget#page {{ background: {BG}; }}
 QScrollArea {{ border: none; }}
-QWidget#side {{ background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 {SIDEBAR_TOP}, stop:1 {SIDEBAR_BOTTOM}); }}
-QPushButton#nav {{ background: transparent; color: #9DB7AD; border: none; border-left: 3px solid transparent;
-    text-align: left; padding: 13px 20px 13px 22px; font-size: 14px; font-weight: 500; }}
-QPushButton#nav:hover {{ color: white; background: rgba(255,255,255,0.05); }}
-QPushButton#nav:checked {{ color: white; background: rgba(15,157,117,0.20); border-left: 3px solid #2FD3A0; font-weight: 600; }}
+QWidget#side {{ background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 {SIDEBAR_TOP}, stop:1 {SIDEBAR_BOTTOM}); border-radius: 26px; }}
+QPushButton#nav {{ background: transparent; color: #9DB7AD; border: none; border-radius: 16px;
+    text-align: left; padding: 13px 18px; font-size: 14px; font-weight: 500; }}
+QPushButton#nav:hover {{ color: white; background: rgba(255,255,255,0.06); }}
+QPushButton#nav:checked {{ color: white; background: transparent; font-weight: 600; }}
 QPushButton#ghost {{ background: transparent; color: #CFE5DC; border: 1px solid rgba(255,255,255,0.25);
-    border-radius: 10px; padding: 11px 16px; font-size: 13px; font-weight: 600; margin: 0 18px; }}
+    border-radius: 16px; padding: 12px 16px; font-size: 13px; font-weight: 600; margin: 0 16px; }}
 QPushButton#ghost:hover {{ background: rgba(255,255,255,0.10); color: white; }}
-QFrame#card {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 16px; }}
+QFrame#card {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 22px; }}
+QFrame#hero {{ background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #17C497, stop:0.55 #0C8F6C, stop:1 #07503F); border: none; border-radius: 22px; }}
+QFrame#hero QLabel#cardTitle {{ color: rgba(255,255,255,0.78); }}
+QFrame#hero QLabel#cardValue {{ color: white; }}
+QFrame#hero QLabel#cardSub {{ color: rgba(255,255,255,0.78); }}
+QFrame#navIndicator {{ background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 rgba(47,211,160,0.38), stop:1 rgba(15,157,117,0.14));
+    border: 1px solid rgba(47,211,160,0.35); border-radius: 16px; }}
 QLabel {{ background: transparent; color: {INK}; }}
 QLabel#eyebrow {{ color: {ACCENT}; font-size: 11px; font-weight: 700; letter-spacing: 2px; }}
 QLabel#h1 {{ font-size: 30px; font-weight: 700; color: {INK}; }}
@@ -46,8 +52,8 @@ QLabel#cardTitle {{ color: {MUTED}; font-size: 11px; font-weight: 700; letter-sp
 QLabel#cardValue {{ color: {INK}; font-size: 28px; font-weight: 700; }}
 QLabel#cardSub {{ color: {MUTED}; font-size: 12px; }}
 QLabel#section {{ color: {INK}; font-size: 15px; font-weight: 700; }}
-QLabel#side {{ color: #6F8C81; font-size: 11px; }}
-QPushButton#toggle {{ background: {SURFACE}; color: {INK}; border: 1.5px solid {BORDER}; border-radius: 14px;
+QLabel#sidenote {{ color: #6F8C81; font-size: 11px; }}
+QPushButton#toggle {{ background: {SURFACE}; color: {INK}; border: 1.5px solid {BORDER}; border-radius: 18px;
     text-align: left; padding: 12px 16px; font-size: 13px; }}
 QPushButton#toggle:hover {{ border-color: #BFE3D5; }}
 QPushButton#toggle:checked {{ background: {ACCENT_SOFT}; border: 1.5px solid {ACCENT}; font-weight: 600; }}
@@ -180,9 +186,9 @@ class _Animated(QWidget):
 class Card(QFrame):
     """KPI kartı: sayaç animasyonu (0 -> değer) ve hover'da yükselen gölge."""
 
-    def __init__(self, title: str, value: str = "-", sub: str = ""):
+    def __init__(self, title: str, value: str = "-", sub: str = "", hero: bool = False):
         super().__init__()
-        self.setObjectName("card")
+        self.setObjectName("hero" if hero else "card")
         self.setMinimumHeight(108)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(20, 16, 20, 16)
@@ -198,7 +204,7 @@ class Card(QFrame):
         self._target: float | None = None
         self._fmt: Callable[[float], str] | None = None
         self._anim: QVariantAnimation | None = None
-        self._shadow = shadow(self, 28, 6, 22)
+        self._shadow = shadow(self, 30, 8, 34 if hero else 22)
         self._lift = QPropertyAnimation(self._shadow, b"blurRadius", self)
         self._lift.setDuration(180)
 
@@ -397,6 +403,53 @@ class NavButton(QPushButton):
         self.setIcon(nav_icon(kind))
         self.setIconSize(QSize(20, 20))
         self.setCursor(Qt.PointingHandCursor)
+
+
+class NavBar(QWidget):
+    """Sekmeler + seçili sekmeye kayan, esneyen cam efektli gösterge."""
+
+    def __init__(self, items: list[tuple[str, str]]):
+        super().__init__()
+        self.indicator = QFrame(self)
+        self.indicator.setObjectName("navIndicator")
+        self.indicator.lower()
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(12, 0, 12, 0)
+        lay.setSpacing(4)
+        self.buttons: list[NavButton] = []
+        for text, kind in items:
+            b = NavButton(text, kind)
+            lay.addWidget(b)
+            self.buttons.append(b)
+        self._current = 0
+        self._anim = QPropertyAnimation(self.indicator, b"geometry", self)
+        self._anim.setDuration(520)
+        curve = QEasingCurve(QEasingCurve.OutBack)
+        curve.setOvershoot(0.9)
+        self._anim.setEasingCurve(curve)
+
+    def _target(self, i: int):
+        return self.buttons[i].geometry()
+
+    def select(self, i: int, animate: bool = True):
+        self.buttons[i].setChecked(True)
+        self._current = i
+        if animate and self.buttons[i].width() > 0 and self.isVisible():
+            self._anim.stop()
+            self._anim.setStartValue(self.indicator.geometry())
+            self._anim.setEndValue(self._target(i))
+            self._anim.start()
+        else:
+            self.indicator.setGeometry(self._target(i))
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        if self._anim.state() != QPropertyAnimation.Running:
+            self.indicator.setGeometry(self._target(self._current))
+
+    def showEvent(self, e):
+        super().showEvent(e)
+        self.indicator.setGeometry(self._target(self._current))
 
 
 class Logo(QWidget):

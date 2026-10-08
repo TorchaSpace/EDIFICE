@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from PySide6.QtCharts import QBarCategoryAxis, QBarSeries, QBarSet, QChart, QChartView, QValueAxis
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QPainter
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QAbstractItemView, QGridLayout, QHBoxLayout, QHeaderView, QLabel,
                                QPushButton, QScrollArea, QTableWidget, QTableWidgetItem,
                                QVBoxLayout, QWidget)
 
 from ..models import UTILITY_UNITS, UtilityType
 from ..service import Project
+from .charts import BarChart
 from .widgets import (ACCENT, GRADE_COLORS, INK, MUTED, SERIES_COLORS, Card, Gauge, Panel,
                       ScoreBar, fmt, fmt_years, grade_for, header, muted, score_color, section,
                       style_chart)
@@ -32,48 +32,10 @@ def _page() -> tuple[QScrollArea, QVBoxLayout]:
     return area, lay
 
 
-def _nice_step(raw: float) -> float:
-    import math
-    if raw <= 0:
-        return 1.0
-    mag = 10 ** math.floor(math.log10(raw))
-    for m in (1, 2, 2.5, 5, 10):
-        if raw <= m * mag:
-            return m * mag
-    return 10 * mag
-
-
-def bar_chart(categories: list[str], groups: dict[str, list[float]], scale: float = 1.0,
-              label_format: str = "%.0f", min_h: int = 170, legend: bool | None = None) -> QChartView:
-    series = QBarSeries()
-    series.setBarWidth(0.72)
-    for i, (name, values) in enumerate(groups.items()):
-        bs = QBarSet(name)
-        bs.setColor(QColor(SERIES_COLORS[i % len(SERIES_COLORS)]))
-        bs.setBorderColor(Qt.transparent)
-        for v in values:
-            bs.append(v / scale)
-        series.append(bs)
-    chart = QChart()
-    chart.addSeries(series)
-    ax = QBarCategoryAxis()
-    ax.append(categories)
-    ay = QValueAxis()
-    ay.setLabelFormat(label_format)
-    top = max((v for vals in groups.values() for v in vals), default=1) / scale
-    step = _nice_step(top / 4)
-    ay.setRange(0, step * (int(top / step) + 1))
-    ay.setTickCount(int(ay.max() / step) + 1)
-    chart.addAxis(ax, Qt.AlignBottom)
-    chart.addAxis(ay, Qt.AlignLeft)
-    series.attachAxis(ax)
-    series.attachAxis(ay)
-    style_chart(chart, len(groups) > 1 if legend is None else legend)
-    view = QChartView(chart)
-    view.setRenderHint(QPainter.Antialiasing)
-    view.setMinimumHeight(min_h)
-    view.setStyleSheet("background: transparent; border: none;")
-    return view
+def bar_chart(categories, groups, scale=1.0, label_format="%.0f", min_h=170, colors=None, unit=""):
+    decimals = 1 if label_format == "%.1f" else 0
+    return BarChart(categories, groups, scale=scale, decimals=decimals, colors=colors, unit=unit,
+                    min_h=min_h)
 
 
 def _table(headers: list[str], left_cols: int = 1) -> QTableWidget:
@@ -147,7 +109,7 @@ class OverviewPage:
              f"enerji {fmt(k.energy_cost / 1e6, 2)} M ₺ + su"),
         ]
         for i, (title, val, f, sub) in enumerate(specs):
-            c = Card(title, sub=sub)
+            c = Card(title, sub=sub, hero=(i == 0))
             c.set_number(val, f, sub)
             grid.addWidget(c, i // 2, i % 2)
         top.addLayout(grid, 5)
@@ -158,7 +120,7 @@ class OverviewPage:
             if r.utility != UtilityType.WATER:
                 cost.setdefault(str(r.year), [0.0] * 12)[r.month - 1] += r.cost
         panel = Panel("Aylık enerji maliyeti", "Bin ₺, yıllar yan yana")
-        panel.lay.addWidget(bar_chart(MONTHS, cost, scale=1000, min_h=210), 1)
+        panel.lay.addWidget(bar_chart(MONTHS, cost, scale=1000, min_h=210, unit="bin ₺"), 1)
         lay.addWidget(panel, 1)
 
 
@@ -176,7 +138,7 @@ class ConsumptionPage:
                     groups.setdefault(str(r.year), []).append(r.consumption)
             sc, unit = scale[u]
             panel = Panel(UTILITY_NAMES[u], f"Aylık tüketim · {unit}")
-            panel.lay.addWidget(bar_chart(MONTHS, groups, scale=sc, min_h=170), 1)
+            panel.lay.addWidget(bar_chart(MONTHS, groups, scale=sc, min_h=170, unit=unit), 1)
             lay.addWidget(panel, 1)
 
 
@@ -192,7 +154,7 @@ class OpportunitiesPage:
         grid.setSpacing(16)
         c1 = Card("Öneri sayısı")
         c1.set_number(len(res), lambda v: f"{v:.0f}", f"{len(quick)} tanesi 5 yıl altında geri ödüyor")
-        c2 = Card("Hızlı kazanç · yıllık tasarruf")
+        c2 = Card("Hızlı kazanç · yıllık tasarruf", hero=True)
         c2.set_number(sum(r.annual_saving for r in quick) / 1e6, lambda v: f"{fmt(v, 2)} M ₺",
                       "geri ödemesi ≤ 5 yıl olanlar")
         c3 = Card("Hızlı kazanç · CAPEX")
@@ -220,7 +182,7 @@ class OpportunitiesPage:
         chart_panel.lay.addWidget(bar_chart(
             [r.opportunity.name for r in res],
             {"Yıllık tasarruf": [r.annual_saving for r in res], "CAPEX": [r.capex for r in res]},
-            scale=1e6, label_format="%.1f", min_h=230), 1)
+            scale=1e6, label_format="%.1f", min_h=230, colors=["emerald", "gold"], unit="M ₺"), 1)
         lay.addWidget(chart_panel, 1)
 
 
@@ -260,7 +222,7 @@ class ScenarioPage:
         grid = QGridLayout()
         grid.setSpacing(16)
         self.c_capex = Card("Toplam CAPEX")
-        self.c_save = Card("Yıllık tasarruf")
+        self.c_save = Card("Yıllık tasarruf", hero=True)
         self.c_pay = Card("Geri ödeme süresi")
         self.c_co2 = Card("Karbon azalımı")
         for i, c in enumerate((self.c_capex, self.c_save, self.c_pay, self.c_co2)):
@@ -309,7 +271,7 @@ class ScenarioPage:
              "Hedef": [100 * t.electricity_kwh / c.electricity_kwh, 100 * t.gas_kwh / c.gas_kwh,
                        100 * t.total_energy_kwh / c.total_energy_kwh,
                        100 * t.carbon_kg / c.carbon_kg, 100 * t.total_cost / c.total_cost]},
-            min_h=210))
+            min_h=210, colors=["slate", "emerald"], unit="(%)"))
 
         self.c_capex.set_number(s.capex / 1e6, lambda v: f"{fmt(v, 2)} M ₺", "toplam yatırım", live=True)
         self.c_save.set_number(s.annual_saving / 1e6, lambda v: f"{fmt(v, 2)} M ₺", "her yıl", live=True)
