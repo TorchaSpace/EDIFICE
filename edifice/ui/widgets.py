@@ -1,86 +1,114 @@
-"""EDIFI'CE tasarım sistemi: renkler, tipografi, animasyonlu bileşenler."""
+"""EDIFI'CE tasarım sistemi (Figma "Premium SaaS Dashboard" koyu teması)."""
 from __future__ import annotations
 
 from typing import Callable
 
-from PySide6.QtCharts import QChart
-from PySide6.QtCore import (Property, QEasingCurve, QMargins, QPointF, QPropertyAnimation,
-                            QRectF, QSize, Qt, QVariantAnimation)
+from PySide6.QtCore import (Property, QEasingCurve, QPointF, QPropertyAnimation, QRectF, QSize, Qt,
+                            QVariantAnimation)
 from PySide6.QtGui import (QBrush, QColor, QFont, QIcon, QLinearGradient, QPainter, QPainterPath,
                            QPen, QPixmap)
-from PySide6.QtWidgets import (QFrame, QGraphicsDropShadowEffect, QGraphicsOpacityEffect, QLabel,
-                               QPushButton, QStackedWidget, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel, QPushButton,
+                               QStackedWidget, QVBoxLayout, QWidget)
 
-# ---- Renk paleti ----------------------------------------------------------
-INK = "#0E2A24"
-MUTED = "#6B7873"
-BG = "#F5F4F0"
-SURFACE = "#FFFFFF"
-BORDER = "#ECE9E2"
-ACCENT = "#0F9D75"
-ACCENT_SOFT = "#E6F5EF"
-GOLD = "#C9A24B"
-SIDEBAR_TOP, SIDEBAR_BOTTOM = "#0A1D18", "#12382D"
-GRADE_COLORS = {"A": "#0F9D75", "B": "#6DB33F", "C": "#E3B341", "D": "#EE8A2B", "E": "#D8483F"}
-SERIES_COLORS = ["#A9D5C4", ACCENT, GOLD]
-FONT = "SF Pro Display"
+# ---- Tasarım tokenları (Figma Make: App.tsx) -------------------------------
+G = "#0DDD96"
+INDIGO = "#6366F1"
+AMBER = "#F59E0B"
+RED = "#F43F5E"
+BG = "#070C12"
+SURFACE = "#0B1624"
+SIDEBAR_BG = "#05080E"
+TEXT = "#E8F2FF"
+SUB = "#6B8299"
+MUTED = "#3A526A"
+DIM = "#2A4055"
+BORDER = "rgba(255,255,255,0.07)"
+G_SOFT = "rgba(13,221,150,0.10)"
+INK = TEXT  # geriye dönük isim
+ACCENT = G
+
+GRADE_COLORS = {"A": G, "B": "#5BE3B4", "C": AMBER, "D": "#FB923C", "E": RED}
+SANS = ["Manrope", "SF Pro Display", "Helvetica Neue", "Arial"]
+MONO = ["DM Mono", "SF Mono", "Menlo", "Courier New"]
+FONT = SANS[0]
+
+
+def qfont(px: int, weight: int = QFont.Normal, mono: bool = False, spacing: float = 0.0) -> QFont:
+    f = QFont()
+    f.setFamilies(MONO if mono else SANS)
+    f.setPixelSize(px)
+    f.setWeight(QFont.Weight(weight))
+    if spacing:
+        f.setLetterSpacing(QFont.AbsoluteSpacing, spacing)
+    return f
+
+
+def rgba(hex_color: str, a: float) -> QColor:
+    c = QColor(hex_color)
+    c.setAlphaF(a)
+    return c
+
+
+_SANS_CSS = ", ".join(f'"{n}"' for n in SANS) + ", sans-serif"
+_MONO_CSS = ", ".join(f'"{n}"' for n in MONO) + ", monospace"
 
 STYLE = f"""
-* {{ font-family: "SF Pro Display", "Helvetica Neue", "Inter", "Segoe UI", sans-serif; }}
-QMainWindow, QScrollArea, QWidget#page {{ background: {BG}; }}
+* {{ font-family: {_SANS_CSS}; }}
+QMainWindow, QScrollArea, QWidget#page, QWidget#root {{ background: {BG}; }}
 QScrollArea {{ border: none; }}
-QWidget#side {{ background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 {SIDEBAR_TOP}, stop:1 {SIDEBAR_BOTTOM}); border-radius: 26px; }}
-QPushButton#nav {{ background: transparent; color: #9DB7AD; border: none; border-radius: 16px;
-    text-align: left; padding: 13px 18px; font-size: 14px; font-weight: 500; }}
-QPushButton#nav:hover {{ color: white; background: rgba(255,255,255,0.06); }}
-QPushButton#nav:checked {{ color: white; background: transparent; font-weight: 600; }}
-QPushButton#ghost {{ background: transparent; color: #CFE5DC; border: 1px solid rgba(255,255,255,0.25);
-    border-radius: 16px; padding: 12px 16px; font-size: 13px; font-weight: 600; margin: 0 16px; }}
-QPushButton#ghost:hover {{ background: rgba(255,255,255,0.10); color: white; }}
-QFrame#card {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 22px; }}
-QFrame#hero {{ background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #17C497, stop:0.55 #0C8F6C, stop:1 #07503F); border: none; border-radius: 22px; }}
-QFrame#hero QLabel#cardTitle {{ color: rgba(255,255,255,0.78); }}
-QFrame#hero QLabel#cardValue {{ color: white; }}
-QFrame#hero QLabel#cardSub {{ color: rgba(255,255,255,0.78); }}
-QFrame#navIndicator {{ background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 rgba(47,211,160,0.38), stop:1 rgba(15,157,117,0.14));
-    border: 1px solid rgba(47,211,160,0.35); border-radius: 16px; }}
-QLabel {{ background: transparent; color: {INK}; }}
-QLabel#eyebrow {{ color: {ACCENT}; font-size: 11px; font-weight: 700; letter-spacing: 2px; }}
-QLabel#h1 {{ font-size: 30px; font-weight: 700; color: {INK}; }}
-QLabel#muted {{ color: {MUTED}; font-size: 13px; }}
-QLabel#cardTitle {{ color: {MUTED}; font-size: 11px; font-weight: 700; letter-spacing: 1px; }}
-QLabel#cardValue {{ color: {INK}; font-size: 28px; font-weight: 700; }}
-QLabel#cardSub {{ color: {MUTED}; font-size: 12px; }}
-QLabel#section {{ color: {INK}; font-size: 15px; font-weight: 700; }}
-QLabel#sidenote {{ color: #6F8C81; font-size: 11px; }}
-QPushButton#toggle {{ background: {SURFACE}; color: {INK}; border: 1.5px solid {BORDER}; border-radius: 18px;
-    text-align: left; padding: 12px 16px; font-size: 13px; }}
-QPushButton#toggle:hover {{ border-color: #BFE3D5; }}
-QPushButton#toggle:checked {{ background: {ACCENT_SOFT}; border: 1.5px solid {ACCENT}; font-weight: 600; }}
-QTableWidget {{ background: transparent; color: {INK}; border: none; outline: 0; font-size: 13px; }}
-QTableWidget::item {{ color: {INK}; border-bottom: 1px solid #F2F0EA; padding: 4px 8px; }}
-QTableWidget::item:hover {{ background: #F8F7F3; color: {INK}; }}
-QTableWidget::item:selected {{ background: {ACCENT_SOFT}; color: {INK}; }}
+QWidget#side {{ background: {SIDEBAR_BG}; border-right: 1px solid {BORDER}; }}
+QWidget#topbar {{ background: {SIDEBAR_BG}; border-bottom: 1px solid {BORDER}; }}
+QWidget#sidehead {{ border-bottom: 1px solid {BORDER}; }}
+QWidget#sidefoot {{ border-top: 1px solid {BORDER}; }}
+QLabel {{ background: transparent; color: {TEXT}; }}
+QPushButton#nav {{ background: transparent; color: {MUTED}; border: 1px solid transparent; border-radius: 10px;
+    text-align: left; padding: 9px 12px; font-size: 12px; font-weight: 500; }}
+QPushButton#nav:hover {{ color: {TEXT}; background: rgba(255,255,255,0.03); }}
+QPushButton#nav:checked {{ color: {G}; background: transparent; font-weight: 700; }}
+QFrame#navIndicator {{ background: {G_SOFT}; border: 1px solid rgba(13,221,150,0.18); border-radius: 10px; }}
+QPushButton#export {{ background: {G_SOFT}; color: {G}; border: 1px solid rgba(13,221,150,0.25); border-radius: 9px;
+    padding: 7px 16px; font-size: 12px; font-weight: 700; }}
+QPushButton#export:hover {{ background: rgba(13,221,150,0.18); }}
+QFrame#card {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 18px; }}
+QFrame#card:hover {{ border: 1px solid rgba(13,221,150,0.18); }}
+QFrame#inner {{ background: rgba(255,255,255,0.02); border: 1px solid {BORDER}; border-radius: 12px; }}
+QLabel#eyebrow {{ color: {MUTED}; font-size: 10px; font-weight: 700; letter-spacing: 1.4px; }}
+QLabel#h1 {{ font-size: 22px; font-weight: 800; color: {TEXT}; }}
+QLabel#title {{ font-size: 16px; font-weight: 700; color: {TEXT}; }}
+QLabel#muted {{ color: {SUB}; font-size: 12px; }}
+QLabel#cardTitle {{ color: {MUTED}; font-size: 10px; font-weight: 700; letter-spacing: 1.2px; }}
+QLabel#cardValue {{ color: {TEXT}; font-size: 26px; font-weight: 500; font-family: {_MONO_CSS}; }}
+QLabel#cardSub {{ color: {SUB}; font-size: 11px; }}
+QLabel#up {{ color: {G}; background: {G_SOFT}; border-radius: 10px; padding: 2px 8px; font-size: 10px; font-weight: 500; font-family: {_MONO_CSS}; }}
+QLabel#down {{ color: {RED}; background: rgba(244,63,94,0.10); border-radius: 10px; padding: 2px 8px; font-size: 10px; font-weight: 500; font-family: {_MONO_CSS}; }}
+QLabel#mono {{ font-family: {_MONO_CSS}; color: {MUTED}; font-size: 10px; }}
+QLabel#livepill {{ color: {G}; background: rgba(13,221,150,0.05); border: 1px solid rgba(13,221,150,0.16);
+    border-radius: 14px; padding: 5px 12px; font-size: 10px; font-weight: 700; }}
+QLabel#datepill {{ font-family: {_MONO_CSS}; color: {MUTED}; font-size: 10px; background: rgba(255,255,255,0.03);
+    border: 1px solid {BORDER}; border-radius: 8px; padding: 5px 11px; }}
+QLabel#crumb {{ color: {MUTED}; font-size: 11px; }}
+QLabel#crumbnow {{ color: {TEXT}; font-size: 13px; font-weight: 700; }}
+QLabel#section {{ color: {DIM}; font-size: 9px; font-weight: 700; letter-spacing: 1.6px; padding: 12px 12px 6px 12px; }}
+QPushButton#toggle {{ background: rgba(255,255,255,0.03); color: {TEXT}; border: 1px solid {BORDER}; border-radius: 12px;
+    text-align: left; padding: 12px 16px; font-size: 12px; }}
+QPushButton#toggle:hover {{ border: 1px solid rgba(13,221,150,0.25); }}
+QPushButton#toggle:checked {{ background: {G_SOFT}; border: 1px solid rgba(13,221,150,0.35); font-weight: 700; color: {G}; }}
+QTableWidget {{ background: transparent; color: {TEXT}; border: none; outline: 0; font-size: 12px; }}
+QTableWidget::item {{ color: {TEXT}; border-bottom: 1px solid {BORDER}; padding: 4px 8px; }}
+QTableWidget::item:hover {{ background: rgba(255,255,255,0.025); }}
+QTableWidget::item:selected {{ background: {G_SOFT}; color: {TEXT}; }}
 QHeaderView {{ background: transparent; }}
 QTableCornerButton::section {{ background: transparent; border: none; }}
-QHeaderView::section {{ background: transparent; border: none; border-bottom: 1px solid {BORDER}; color: {MUTED};
-    padding: 10px 8px; font-size: 11px; font-weight: 700; letter-spacing: 1px; }}
-QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px; }}
-QScrollBar::handle:vertical {{ background: #D5D2C8; border-radius: 4px; min-height: 30px; }}
+QHeaderView::section {{ background: rgba(255,255,255,0.02); border: none; border-bottom: 1px solid {BORDER}; color: {MUTED};
+    padding: 10px 8px; font-size: 9px; font-weight: 700; letter-spacing: 1.2px; }}
+QScrollBar:vertical {{ background: transparent; width: 8px; margin: 2px; }}
+QScrollBar::handle:vertical {{ background: rgba(13,221,150,0.18); border-radius: 3px; min-height: 30px; }}
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
+QToolTip {{ background: {SIDEBAR_BG}; color: {TEXT}; border: 1px solid {BORDER}; padding: 6px; }}
 """
 
 
 # ---- Yardımcılar ----------------------------------------------------------
-
-def shadow(widget: QWidget, blur: int = 28, dy: int = 6, alpha: int = 24) -> QGraphicsDropShadowEffect:
-    eff = QGraphicsDropShadowEffect(widget)
-    eff.setBlurRadius(blur)
-    eff.setOffset(0, dy)
-    eff.setColor(QColor(14, 42, 36, alpha))
-    widget.setGraphicsEffect(eff)
-    return eff
-
 
 def fmt(n: float, digits: int = 0) -> str:
     s = f"{n:,.{digits}f}"
@@ -102,8 +130,8 @@ def score_color(score: float) -> str:
 def header(eyebrow: str, title: str, subtitle: str = "") -> QWidget:
     w = QWidget()
     lay = QVBoxLayout(w)
-    lay.setContentsMargins(0, 0, 0, 4)
-    lay.setSpacing(2)
+    lay.setContentsMargins(0, 0, 0, 2)
+    lay.setSpacing(3)
     e = QLabel(eyebrow.upper())
     e.setObjectName("eyebrow")
     t = QLabel(title)
@@ -120,7 +148,7 @@ def header(eyebrow: str, title: str, subtitle: str = "") -> QWidget:
 
 def section(text: str) -> QLabel:
     lbl = QLabel(text)
-    lbl.setObjectName("section")
+    lbl.setObjectName("title")
     return lbl
 
 
@@ -131,27 +159,14 @@ def muted(text: str) -> QLabel:
     return lbl
 
 
-def style_chart(chart: QChart, legend: bool = False):
-    chart.setBackgroundVisible(False)
-    chart.setPlotAreaBackgroundVisible(False)
-    chart.setMargins(QMargins(0, 0, 0, 0))
-    chart.layout().setContentsMargins(0, 0, 0, 0)
-    chart.setAnimationOptions(QChart.SeriesAnimations)
-    chart.setAnimationDuration(900)
-    chart.setAnimationEasingCurve(QEasingCurve.OutCubic)
-    chart.legend().setVisible(legend)
-    chart.legend().setAlignment(Qt.AlignTop)
-    chart.legend().setLabelColor(QColor(MUTED))
-    f = QFont(FONT)
-    f.setPixelSize(12)
-    chart.legend().setFont(f)
-    for ax in chart.axes():
-        ax.setLabelsColor(QColor(MUTED))
-        lf = QFont(FONT)
-        lf.setPixelSize(11)
-        ax.setLabelsFont(lf)
-        ax.setGridLineColor(QColor("#EFEDE7"))
-        ax.setLinePen(QPen(Qt.NoPen))
+def badge(text: str, color: str) -> QLabel:
+    lbl = QLabel(text.upper())
+    c = QColor(color)
+    lbl.setStyleSheet(
+        f"color: {color}; background: rgba({c.red()},{c.green()},{c.blue()},0.10);"
+        f"border: 1px solid rgba({c.red()},{c.green()},{c.blue()},0.14); border-radius: 10px;"
+        "padding: 2px 9px; font-size: 9px; font-weight: 700; letter-spacing: 0.8px;")
+    return lbl
 
 
 class _Animated(QWidget):
@@ -184,29 +199,42 @@ class _Animated(QWidget):
 # ---- Bileşenler -----------------------------------------------------------
 
 class Card(QFrame):
-    """KPI kartı: sayaç animasyonu (0 -> değer) ve hover'da yükselen gölge."""
+    """KPI kartı: üstte vurgu çizgisi, mono değer, trend rozeti, sayaç animasyonu."""
 
-    def __init__(self, title: str, value: str = "-", sub: str = "", hero: bool = False):
+    def __init__(self, title: str, value: str = "-", sub: str = "", accent: str = G,
+                 hero: bool = False, trend: str = "", up: bool = True):
         super().__init__()
-        self.setObjectName("hero" if hero else "card")
-        self.setMinimumHeight(108)
+        self.setObjectName("card")
+        self.setMinimumHeight(112)
+        self._accent = accent
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(20, 16, 20, 16)
-        lay.setSpacing(4)
+        lay.setContentsMargins(20, 18, 20, 16)
+        lay.setSpacing(8)
         self._t, self._v, self._s = QLabel(title.upper()), QLabel(value), QLabel(sub)
         self._t.setObjectName("cardTitle")
         self._v.setObjectName("cardValue")
         self._s.setObjectName("cardSub")
-        for w in (self._t, self._v, self._s):
-            lay.addWidget(w)
-        lay.addStretch()
+        self._trend = QLabel(trend)
+        self._trend.setVisible(bool(trend))
+        self._trend.setObjectName("up" if up else "down")
+        lay.addWidget(self._t)
+        lay.addWidget(self._v)
+        row = QHBoxLayout()
+        row.setSpacing(6)
+        row.addWidget(self._s, 1)
+        row.addWidget(self._trend)
+        lay.addLayout(row)
         self._shown = 0.0
         self._target: float | None = None
         self._fmt: Callable[[float], str] | None = None
         self._anim: QVariantAnimation | None = None
-        self._shadow = shadow(self, 30, 8, 34 if hero else 22)
-        self._lift = QPropertyAnimation(self._shadow, b"blurRadius", self)
-        self._lift.setDuration(180)
+
+    def set_trend(self, text: str, good: bool):
+        self._trend.setText(text)
+        self._trend.setObjectName("up" if good else "down")
+        self._trend.style().unpolish(self._trend)
+        self._trend.style().polish(self._trend)
+        self._trend.setVisible(bool(text))
 
     def set(self, value: str, sub: str = "", color: str | None = None):
         self._target = None
@@ -248,35 +276,33 @@ class Card(QFrame):
         self._anim.finished.connect(lambda: (setattr(self, "_shown", target), self._v.setText(fmt_fn(target))))
         self._anim.start()
 
-    def _hover(self, blur: int, dy: int):
-        self._lift.stop()
-        self._lift.setEndValue(blur)
-        self._lift.start()
-        self._shadow.setOffset(0, dy)
-
-    def enterEvent(self, e):
-        self._hover(48, 12)
-        super().enterEvent(e)
-
-    def leaveEvent(self, e):
-        self._hover(28, 6)
-        super().leaveEvent(e)
+    def paintEvent(self, e):
+        super().paintEvent(e)
+        p = QPainter(self)
+        g = QLinearGradient(20, 0, self.width() - 20, 0)
+        g.setColorAt(0, rgba(self._accent, 0))
+        g.setColorAt(0.5, rgba(self._accent, 0.33))
+        g.setColorAt(1, rgba(self._accent, 0))
+        p.fillRect(QRectF(20, 0, self.width() - 40, 1), g)
 
 
 class Panel(QFrame):
-    """Başlıklı beyaz yüzey (grafik/tablo için)."""
+    """Başlıklı koyu yüzey (grafik/tablo için)."""
 
-    def __init__(self, title: str = "", subtitle: str = ""):
+    def __init__(self, title: str = "", subtitle: str = "", eyebrow: str = ""):
         super().__init__()
         self.setObjectName("card")
         self.lay = QVBoxLayout(self)
-        self.lay.setContentsMargins(22, 18, 22, 16)
-        self.lay.setSpacing(8)
+        self.lay.setContentsMargins(22, 20, 22, 18)
+        self.lay.setSpacing(6)
+        if eyebrow:
+            e = QLabel(eyebrow.upper())
+            e.setObjectName("eyebrow")
+            self.lay.addWidget(e)
         if title:
             self.lay.addWidget(section(title))
         if subtitle:
             self.lay.addWidget(muted(subtitle))
-        shadow(self, 24, 4, 16)
 
 
 class Gauge(_Animated):
@@ -285,64 +311,62 @@ class Gauge(_Animated):
     def __init__(self, score: float, grade: str):
         super().__init__(score, 1300)
         self._grade = grade
-        self.setMinimumSize(230, 220)
+        self.setMinimumSize(200, 190)
 
     def paintEvent(self, e):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        side = min(self.width(), self.height()) - 30
+        side = min(self.width(), self.height()) - 26
         rect = QRectF((self.width() - side) / 2, (self.height() - side) / 2, side, side)
-        w = 16
-        p.setPen(QPen(QColor("#EEECE6"), w, Qt.SolidLine, Qt.RoundCap))
+        w = 12
+        p.setPen(QPen(QColor(255, 255, 255, 16), w, Qt.SolidLine, Qt.RoundCap))
         p.drawArc(rect, 225 * 16, -270 * 16)
-        p.setPen(QPen(QColor(score_color(self._frac * 100)), w, Qt.SolidLine, Qt.RoundCap))
+        col = QColor(score_color(self._frac * 100))
+        glow = QColor(col)
+        glow.setAlpha(40)
+        p.setPen(QPen(glow, w + 8, Qt.SolidLine, Qt.RoundCap))
         p.drawArc(rect, 225 * 16, int(-270 * 16 * self._frac))
-        f = QFont(FONT)
-        f.setPixelSize(int(side * 0.30))
-        f.setWeight(QFont.Bold)
-        p.setFont(f)
-        p.setPen(QColor(INK))
-        p.drawText(rect.adjusted(0, -side * 0.10, 0, 0), Qt.AlignCenter, f"{self._frac * 100:.0f}")
-        f2 = QFont(FONT)
-        f2.setPixelSize(int(side * 0.085))
-        p.setFont(f2)
+        p.setPen(QPen(col, w, Qt.SolidLine, Qt.RoundCap))
+        p.drawArc(rect, 225 * 16, int(-270 * 16 * self._frac))
+        p.setFont(qfont(int(side * 0.28), QFont.Medium, mono=True, spacing=-2))
+        p.setPen(QColor(TEXT))
+        p.drawText(rect.adjusted(0, -side * 0.08, 0, 0), Qt.AlignCenter, f"{self._frac * 100:.0f}")
+        p.setFont(qfont(int(side * 0.075), mono=True))
         p.setPen(QColor(MUTED))
-        p.drawText(rect.adjusted(0, side * 0.34, 0, 0), Qt.AlignCenter, "/ 100")
-        badge = QRectF(rect.center().x() - 24, rect.bottom() - 26, 48, 28)
+        p.drawText(rect.adjusted(0, side * 0.26, 0, 0), Qt.AlignCenter, "/ 100")
+        pill = QRectF(rect.center().x() - 22, rect.bottom() - 24, 44, 24)
         path = QPainterPath()
-        path.addRoundedRect(badge, 14, 14)
-        p.fillPath(path, QColor(GRADE_COLORS[self._grade]))
-        f3 = QFont(FONT)
-        f3.setPixelSize(15)
-        f3.setWeight(QFont.Bold)
-        p.setFont(f3)
-        p.setPen(Qt.white)
-        p.drawText(badge, Qt.AlignCenter, self._grade)
+        path.addRoundedRect(pill, 12, 12)
+        p.fillPath(path, rgba(col.name(), 0.14))
+        p.setPen(QPen(rgba(col.name(), 0.4), 1))
+        p.drawPath(path)
+        p.setFont(qfont(13, QFont.Bold))
+        p.setPen(col)
+        p.drawText(pill, Qt.AlignCenter, self._grade)
 
 
 class ScoreBar(_Animated):
-    """İnce, animasyonlu skor çubuğu (renk puana göre)."""
+    """İnce (4px), animasyonlu skor çubuğu; sağda mono puan."""
 
     def __init__(self, score: float):
         super().__init__(score, 1000)
-        self.setFixedHeight(22)
+        self.setFixedHeight(20)
 
     def paintEvent(self, e):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        h, y = 8, (self.height() - 8) / 2
-        w = self.width() - 44
+        h, y = 4, (self.height() - 4) / 2
+        w = self.width() - 36
         p.setPen(Qt.NoPen)
-        p.setBrush(QColor("#EEECE6"))
-        p.drawRoundedRect(QRectF(0, y, w, h), 4, 4)
-        p.setBrush(QColor(score_color(self._score)))
-        p.drawRoundedRect(QRectF(0, y, max(h, w * self._frac), h), 4, 4)
-        f = QFont(FONT)
-        f.setPixelSize(13)
-        f.setWeight(QFont.DemiBold)
-        p.setFont(f)
-        p.setPen(QColor(INK))
-        p.drawText(QRectF(w + 8, 0, 36, self.height()), Qt.AlignVCenter | Qt.AlignRight,
+        p.setBrush(QColor(255, 255, 255, 14))
+        p.drawRoundedRect(QRectF(0, y, w, h), 2, 2)
+        col = QColor(score_color(self._score))
+        col.setAlphaF(0.9)
+        p.setBrush(col)
+        p.drawRoundedRect(QRectF(0, y, max(h, w * self._frac), h), 2, 2)
+        p.setFont(qfont(12, QFont.Medium, mono=True))
+        p.setPen(QColor(score_color(self._score)))
+        p.drawText(QRectF(w + 6, 0, 30, self.height()), Qt.AlignVCenter | Qt.AlignRight,
                    f"{self._frac * 100:.0f}")
 
 
@@ -370,7 +394,7 @@ class FadeStack(QStackedWidget):
 
 def nav_icon(kind: str) -> QIcon:
     icon = QIcon()
-    for color, state in (("#9DB7AD", QIcon.Off), ("#FFFFFF", QIcon.On)):
+    for color, state in ((MUTED, QIcon.Off), (G, QIcon.On)):
         pm = QPixmap(40, 40)
         pm.setDevicePixelRatio(2)
         pm.fill(Qt.transparent)
@@ -400,13 +424,14 @@ class NavButton(QPushButton):
         super().__init__("   " + text)
         self.setObjectName("nav")
         self.setCheckable(True)
+        self.setAutoExclusive(True)
         self.setIcon(nav_icon(kind))
-        self.setIconSize(QSize(20, 20))
+        self.setIconSize(QSize(18, 18))
         self.setCursor(Qt.PointingHandCursor)
 
 
 class NavBar(QWidget):
-    """Sekmeler + seçili sekmeye kayan, esneyen cam efektli gösterge."""
+    """Sekmeler + seçili sekmeye kayan yeşil gösterge."""
 
     def __init__(self, items: list[tuple[str, str]]):
         super().__init__()
@@ -414,8 +439,8 @@ class NavBar(QWidget):
         self.indicator.setObjectName("navIndicator")
         self.indicator.lower()
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(12, 0, 12, 0)
-        lay.setSpacing(4)
+        lay.setContentsMargins(10, 0, 10, 0)
+        lay.setSpacing(2)
         self.buttons: list[NavButton] = []
         for text, kind in items:
             b = NavButton(text, kind)
@@ -423,9 +448,9 @@ class NavBar(QWidget):
             self.buttons.append(b)
         self._current = 0
         self._anim = QPropertyAnimation(self.indicator, b"geometry", self)
-        self._anim.setDuration(520)
+        self._anim.setDuration(480)
         curve = QEasingCurve(QEasingCurve.OutBack)
-        curve.setOvershoot(0.9)
+        curve.setOvershoot(0.8)
         self._anim.setEasingCurve(curve)
 
     def _target(self, i: int):
@@ -453,36 +478,32 @@ class NavBar(QWidget):
 
 
 class Logo(QWidget):
-    """Sidebar logosu: bina siluetleri + EDIFI'CE yazısı."""
+    """Gradyanlı "E" rozeti + EDIFI'CE + GREEN PROPTECH."""
 
     def __init__(self):
         super().__init__()
-        self.setFixedHeight(96)
+        self.setObjectName("sidehead")
+        self.setFixedHeight(70)
 
     def paintEvent(self, e):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        badge = QRectF(22, 28, 40, 40)
+        badge_r = QRectF(18, 19, 32, 32)
+        glow = QPainterPath()
+        glow.addRoundedRect(badge_r.adjusted(-3, -3, 3, 3), 12, 12)
+        p.fillPath(glow, rgba(G, 0.10))
         path = QPainterPath()
-        path.addRoundedRect(badge, 11, 11)
-        g = QLinearGradient(badge.topLeft(), badge.bottomRight())
-        g.setColorAt(0, QColor("#2FD3A0"))
-        g.setColorAt(1, QColor("#0F9D75"))
+        path.addRoundedRect(badge_r, 9, 9)
+        g = QLinearGradient(badge_r.topLeft(), badge_r.bottomRight())
+        g.setColorAt(0, QColor(G))
+        g.setColorAt(1, QColor(INDIGO))
         p.fillPath(path, QBrush(g))
-        p.setPen(Qt.NoPen)
-        p.setBrush(QColor("#0A1D18"))
-        for x, y, w, h in ((8, 18, 7, 14), (17, 9, 8, 23), (27, 15, 6, 17)):
-            p.drawRoundedRect(QRectF(badge.x() + x, badge.y() + y, w, h), 1.5, 1.5)
-        f = QFont(FONT)
-        f.setPixelSize(19)
-        f.setWeight(QFont.Bold)
-        f.setLetterSpacing(QFont.AbsoluteSpacing, 1.2)
-        p.setFont(f)
-        p.setPen(Qt.white)
-        p.drawText(QPointF(74, 46), "EDIFI'CE")
-        f2 = QFont(FONT)
-        f2.setPixelSize(9)
-        f2.setLetterSpacing(QFont.AbsoluteSpacing, 1.0)
-        p.setFont(f2)
-        p.setPen(QColor("#6F8C81"))
-        p.drawText(QPointF(75, 62), "BUILDING INTELLIGENCE")
+        p.setPen(QColor("#050A0E"))
+        p.setFont(qfont(15, QFont.Black))
+        p.drawText(badge_r, Qt.AlignCenter, "E")
+        p.setPen(QColor(TEXT))
+        p.setFont(qfont(14, QFont.ExtraBold, spacing=-0.3))
+        p.drawText(QPointF(60, 33), "EDIFI'CE")
+        p.setPen(QColor(G))
+        p.setFont(qfont(8, QFont.Bold, spacing=1.3))
+        p.drawText(QPointF(60, 46), "GREEN PROPTECH")

@@ -31,6 +31,47 @@ class Project:
     def kpis(self) -> KPIs:
         return compute_kpis(self.building, self.readings, self.assumptions, self.year)
 
+    def kpis_for(self, year: int) -> KPIs:
+        return compute_kpis(self.building, self.readings, self.assumptions, year)
+
+    def previous_year(self) -> int | None:
+        years = sorted({r.year for r in self.readings})
+        prev = self.year - 1
+        return prev if prev in years else None
+
+    def yoy(self) -> dict:
+        """Baz yıla göre bir önceki yıla kıyasla yüzde değişim (negatif = azalma)."""
+        prev = self.previous_year()
+        if prev is None:
+            return {}
+        a, b = self.kpis(), self.kpis_for(prev)
+        def ch(x, y):
+            return (x / y - 1) * 100 if y else 0.0
+        return {"energy": ch(a.total_energy_kwh, b.total_energy_kwh), "carbon": ch(a.carbon_kg, b.carbon_kg),
+                "water": ch(a.water_m3, b.water_m3), "electricity": ch(a.electricity_kwh, b.electricity_kwh),
+                "gas": ch(a.gas_kwh, b.gas_kwh), "cost": ch(a.total_cost, b.total_cost)}
+
+    def monthly(self, year: int, utility) -> list[float]:
+        out = [0.0] * 12
+        for r in self.readings:
+            if r.year == year and r.utility == utility:
+                out[r.month - 1] += r.consumption
+        return out
+
+    def monthly_cost(self, year: int) -> list[float]:
+        from .models import UtilityType
+        out = [0.0] * 12
+        for r in self.readings:
+            if r.year == year and r.utility != UtilityType.WATER:
+                out[r.month - 1] += r.cost
+        return out
+
+    def monthly_carbon(self, year: int) -> list[float]:
+        from .models import UtilityType
+        ef = self.assumptions.emission_factor_kg_per_kwh
+        e, g = self.monthly(year, UtilityType.ELECTRICITY), self.monthly(year, UtilityType.GAS)
+        return [a * ef[UtilityType.ELECTRICITY] + b * ef[UtilityType.GAS] for a, b in zip(e, g)]
+
     def health(self) -> HealthScore:
         return compute_health(self.kpis(), self.equipment, self.assumptions)
 

@@ -8,22 +8,19 @@ from PySide6.QtWidgets import (QAbstractItemView, QGridLayout, QHBoxLayout, QHea
 
 from ..models import UTILITY_UNITS, UtilityType
 from ..service import Project
-from .charts import BarChart
-from .widgets import (ACCENT, GRADE_COLORS, INK, MUTED, SERIES_COLORS, Card, Gauge, Panel,
-                      ScoreBar, fmt, fmt_years, grade_for, header, muted, score_color, section,
-                      style_chart)
+from .charts import AreaChart, BarChart
+from .widgets import (AMBER, G, INDIGO, MUTED, RED, SUB, TEXT, Card, Gauge, Panel, ScoreBar, badge,
+                      fmt, fmt_years, header, muted, qfont, section)
 
-UTILITY_NAMES = {UtilityType.ELECTRICITY: "Elektrik", UtilityType.GAS: "Doğalgaz",
-                 UtilityType.WATER: "Su"}
+UTILITY_NAMES = {UtilityType.ELECTRICITY: "Elektrik", UtilityType.GAS: "Doğalgaz", UtilityType.WATER: "Su"}
 MONTHS = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"]
 
 
 def _page() -> tuple[QScrollArea, QVBoxLayout]:
-    """Kaydırılabilir sayfa: dışta ScrollArea, içte dikey layout."""
     inner = QWidget()
     inner.setObjectName("page")
     lay = QVBoxLayout(inner)
-    lay.setContentsMargins(36, 30, 36, 30)
+    lay.setContentsMargins(32, 26, 32, 36)
     lay.setSpacing(18)
     area = QScrollArea()
     area.setWidgetResizable(True)
@@ -32,10 +29,12 @@ def _page() -> tuple[QScrollArea, QVBoxLayout]:
     return area, lay
 
 
-def bar_chart(categories, groups, scale=1.0, label_format="%.0f", min_h=170, colors=None, unit=""):
-    decimals = 1 if label_format == "%.1f" else 0
-    return BarChart(categories, groups, scale=scale, decimals=decimals, colors=colors, unit=unit,
-                    min_h=min_h)
+def area_chart(categories, groups, scale=1.0, decimals=0, colors=None, unit="", min_h=170):
+    return AreaChart(categories, groups, scale=scale, decimals=decimals, colors=colors, unit=unit, min_h=min_h)
+
+
+def bar_chart(categories, groups, scale=1.0, decimals=0, colors=None, unit="", min_h=170):
+    return BarChart(categories, groups, scale=scale, decimals=decimals, colors=colors, unit=unit, min_h=min_h)
 
 
 def _table(headers: list[str], left_cols: int = 1) -> QTableWidget:
@@ -46,19 +45,23 @@ def _table(headers: list[str], left_cols: int = 1) -> QTableWidget:
     t.setShowGrid(False)
     t.setFocusPolicy(Qt.NoFocus)
     t.verticalHeader().setVisible(False)
-    t.verticalHeader().setDefaultSectionSize(40)
+    t.verticalHeader().setDefaultSectionSize(46)
     t.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
     t.horizontalHeader().setHighlightSections(False)
     for c in range(len(headers)):
-        t.horizontalHeaderItem(c).setTextAlignment(
-            (Qt.AlignLeft if c < left_cols else Qt.AlignRight) | Qt.AlignVCenter)
+        t.horizontalHeaderItem(c).setTextAlignment((Qt.AlignLeft if c < left_cols else Qt.AlignRight) | Qt.AlignVCenter)
     return t
 
 
-def _set_row(t: QTableWidget, r: int, values: list[str], left_cols: int = 1, colors: dict | None = None):
+def _set_row(t, r, values, left_cols=1, colors=None, mono_from=2):
     for c, v in enumerate(values):
         it = QTableWidgetItem(v)
         it.setTextAlignment((Qt.AlignLeft if c < left_cols else Qt.AlignRight) | Qt.AlignVCenter)
+        if c >= mono_from:
+            it.setFont(qfont(12, mono=True))
+        if c == 0:
+            f = qfont(12, 700)
+            it.setFont(f)
         if colors and c in colors:
             it.setForeground(QColor(colors[c]))
             f = it.font()
@@ -68,77 +71,128 @@ def _set_row(t: QTableWidget, r: int, values: list[str], left_cols: int = 1, col
 
 
 def _fit_height(t: QTableWidget, rows: int):
-    t.setFixedHeight(46 + 40 * rows)
+    t.setFixedHeight(42 + 46 * rows)
+
+
+def _trend_text(pct: float) -> tuple[str, bool]:
+    arrow = "↓" if pct < 0 else "↑"
+    return f"{arrow} {fmt(abs(pct), 1)}%", pct <= 0  # azalma = iyi
 
 
 class OverviewPage:
     def __init__(self, project: Project):
         self.widget, lay = _page()
         b, k, h = project.building, project.kpis(), project.health()
+        yoy = project.yoy()
         lay.addWidget(header("Genel bakış", b.name,
                              f"{b.address} · {b.use_type} · {fmt(b.floor_area_m2)} m² · {b.floors} kat · "
                              f"{b.year_built} · {b.occupants} kişi · Baz yıl {project.year}"))
 
-        top = QHBoxLayout()
-        top.setSpacing(18)
-        score = Panel("Building Health Score", "Bileşenlerin ağırlıklı ortalaması")
-        score.setMinimumWidth(430)
-        score.lay.addWidget(Gauge(h.total, h.grade))
-        for name, (pts, weight) in h.components.items():
-            row = QHBoxLayout()
-            lbl = QLabel(f"{name}  <span style='color:{MUTED}'>%{weight * 100:.0f}</span>")
-            lbl.setMinimumWidth(190)
-            row.addWidget(lbl)
-            row.addWidget(ScoreBar(pts), 1)
-            score.lay.addLayout(row)
-        top.addWidget(score, 4)
-
-        grid = QGridLayout()
-        grid.setSpacing(16)
+        row = QHBoxLayout()
+        row.setSpacing(14)
         specs = [
-            ("Toplam enerji", k.total_energy_kwh / 1000, lambda v: f"{fmt(v)} MWh",
-             f"EUI {fmt(k.eui_kwh_m2, 1)} kWh/m²·yıl"),
-            ("Karbon", k.carbon_kg / 1000, lambda v: f"{fmt(v, 1)} tCO₂",
-             f"{fmt(k.carbon_kg_m2, 1)} kgCO₂/m²·yıl"),
-            ("Su", k.water_m3, lambda v: f"{fmt(v)} m³", f"{fmt(k.water_m3_m2, 2)} m³/m²·yıl"),
-            ("Elektrik", k.electricity_kwh / 1000, lambda v: f"{fmt(v)} MWh",
-             f"%{fmt(100 * k.electricity_kwh / k.total_energy_kwh)} enerji payı"),
-            ("Doğalgaz", k.gas_kwh / 1000, lambda v: f"{fmt(v)} MWh",
-             f"%{fmt(100 * k.gas_kwh / k.total_energy_kwh)} enerji payı"),
-            ("Yıllık toplam maliyet", k.total_cost / 1e6, lambda v: f"{fmt(v, 2)} M ₺",
-             f"enerji {fmt(k.energy_cost / 1e6, 2)} M ₺ + su"),
+            ("Toplam enerji", k.total_energy_kwh / 1000, lambda v: f"{fmt(v)} MWh", f"EUI {fmt(k.eui_kwh_m2, 1)}", "energy", G),
+            ("Karbon", k.carbon_kg / 1000, lambda v: f"{fmt(v, 1)} tCO₂", f"{fmt(k.carbon_kg_m2, 1)} kg/m²", "carbon", G),
+            ("Elektrik", k.electricity_kwh / 1000, lambda v: f"{fmt(v)} MWh", f"%{fmt(100 * k.electricity_kwh / k.total_energy_kwh)} pay", "electricity", AMBER),
+            ("Doğalgaz", k.gas_kwh / 1000, lambda v: f"{fmt(v)} MWh", f"%{fmt(100 * k.gas_kwh / k.total_energy_kwh)} pay", "gas", INDIGO),
+            ("Su", k.water_m3, lambda v: f"{fmt(v)} m³", f"{fmt(k.water_m3_m2, 2)} m³/m²", "water", INDIGO),
+            ("Yıllık maliyet", k.total_cost / 1e6, lambda v: f"{fmt(v, 2)} M ₺", "enerji + su", "cost", AMBER),
         ]
-        for i, (title, val, f, sub) in enumerate(specs):
-            c = Card(title, sub=sub, hero=(i == 0))
+        for title, val, f, sub, key, accent in specs:
+            c = Card(title, sub=sub, accent=accent)
             c.set_number(val, f, sub)
-            grid.addWidget(c, i // 2, i % 2)
-        top.addLayout(grid, 5)
-        lay.addLayout(top)
+            if key in yoy:
+                txt, good = _trend_text(yoy[key])
+                c.set_trend(txt, good)
+            row.addWidget(c)
+        lay.addLayout(row)
 
-        cost: dict[str, list[float]] = {}
-        for r in sorted(project.readings, key=lambda r: (r.year, r.month)):
-            if r.utility != UtilityType.WATER:
-                cost.setdefault(str(r.year), [0.0] * 12)[r.month - 1] += r.cost
-        panel = Panel("Aylık enerji maliyeti", "Bin ₺, yıllar yan yana")
-        panel.lay.addWidget(bar_chart(MONTHS, cost, scale=1000, min_h=210, unit="bin ₺"), 1)
-        lay.addWidget(panel, 1)
+        mid = QHBoxLayout()
+        mid.setSpacing(18)
+        score = Panel(eyebrow="Building Health", title="Bina skoru")
+        score.setFixedWidth(340)
+        score.lay.addWidget(Gauge(h.total, h.grade))
+        score.lay.addSpacing(6)
+        for name, (pts, weight) in h.components.items():
+            r = QVBoxLayout()
+            r.setSpacing(2)
+            top = QHBoxLayout()
+            nm = QLabel(f"{name} <span style='color:{MUTED}; font-size:10px'>%{weight * 100:.0f}</span>")
+            nm.setStyleSheet("font-size: 12px; font-weight: 600;")
+            top.addWidget(nm)
+            r.addLayout(top)
+            r.addWidget(ScoreBar(pts))
+            score.lay.addLayout(r)
+        mid.addWidget(score)
+
+        cost_now, cost_prev = project.monthly_cost(project.year), project.monthly_cost(project.year - 1)
+        chart_panel = Panel(eyebrow="Aylık maliyet", title=f"Enerji maliyeti · {project.year}",
+                            subtitle=f"{fmt(sum(cost_now) / 1e6, 2)} M ₺ yıllık · bin ₺ cinsinden aylık")
+        chart_panel.lay.addWidget(area_chart(MONTHS, {str(project.year): cost_now, str(project.year - 1): cost_prev},
+                                             scale=1000, unit="bin ₺", min_h=300), 1)
+        mid.addWidget(chart_panel, 1)
+        lay.addLayout(mid)
+
+        bottom = QHBoxLayout()
+        bottom.setSpacing(18)
+        recs = Panel(eyebrow="EDIFI'CE öneri motoru", title="Öne çıkan fırsatlar")
+        recs.setFixedWidth(340)
+        for r in project.opportunity_results()[:3]:
+            pb = r.payback_years
+            col = G if pb <= 5 else AMBER if pb <= 15 else RED
+            qc = QColor(col)
+            card = QWidget()
+            card.setObjectName("rec")
+            card.setStyleSheet(f"QWidget#rec {{ background: rgba({qc.red()},{qc.green()},{qc.blue()},0.04);"
+                               f"border: 1px solid rgba({qc.red()},{qc.green()},{qc.blue()},0.13); border-radius: 12px; }}")
+            cl = QVBoxLayout(card)
+            cl.setContentsMargins(14, 12, 14, 12)
+            cl.setSpacing(4)
+            top = QHBoxLayout()
+            top.addWidget(badge("Hızlı kazanç" if pb <= 5 else "Orta vade" if pb <= 15 else "Uzun vade", col))
+            top.addStretch()
+            sv = QLabel(f"{fmt(r.annual_saving / 1000)} bin ₺/yıl")
+            sv.setStyleSheet(f"color: {G}; font-family: 'DM Mono','SF Mono',Menlo; font-size: 12px; background: transparent;")
+            top.addWidget(sv)
+            cl.addLayout(top)
+            t = QLabel(r.opportunity.name)
+            t.setStyleSheet("font-size: 12px; font-weight: 700; background: transparent;")
+            d = QLabel(f"CAPEX {fmt(r.capex / 1e6, 2)} M ₺ · geri ödeme {fmt_years(pb)}")
+            d.setStyleSheet(f"color: {SUB}; font-size: 11px; background: transparent;")
+            cl.addWidget(t)
+            cl.addWidget(d)
+            recs.lay.addWidget(card)
+        recs.lay.addStretch()
+        bottom.addWidget(recs)
+
+        en = Panel(eyebrow="Tüketim", title="Enerji tüketimi", subtitle="MWh · elektrik + doğalgaz")
+        e_now = [a + b for a, b in zip(project.monthly(project.year, UtilityType.ELECTRICITY), project.monthly(project.year, UtilityType.GAS))]
+        e_prev = [a + b for a, b in zip(project.monthly(project.year - 1, UtilityType.ELECTRICITY), project.monthly(project.year - 1, UtilityType.GAS))]
+        en.lay.addWidget(area_chart(MONTHS, {str(project.year): e_now, str(project.year - 1): e_prev}, scale=1000, unit="MWh", min_h=210), 1)
+        bottom.addWidget(en, 1)
+
+        co = Panel(eyebrow="Karbon", title="Karbon salımı", subtitle="tCO₂ · aylık")
+        c_now, c_prev = project.monthly_carbon(project.year), project.monthly_carbon(project.year - 1)
+        co.lay.addWidget(area_chart(MONTHS, {str(project.year): c_now, str(project.year - 1): c_prev}, scale=1000,
+                                    decimals=0, colors=["green", "indigo"], unit="tCO₂", min_h=210), 1)
+        bottom.addWidget(co, 1)
+        lay.addLayout(bottom)
 
 
 class ConsumptionPage:
     def __init__(self, project: Project):
         self.widget, lay = _page()
         lay.addWidget(header("Tüketim takibi", "Elektrik, doğalgaz ve su",
-                             "Fatura verisinden aylık tüketim; yıllar yan yana karşılaştırılır."))
-        scale = {UtilityType.ELECTRICITY: (1000, "MWh"), UtilityType.GAS: (1000, "MWh"),
-                 UtilityType.WATER: (1, "m³")}
+                             "Fatura verisinden aylık tüketim; bir önceki yıl ile karşılaştırılır."))
+        scale = {UtilityType.ELECTRICITY: (1000, "MWh"), UtilityType.GAS: (1000, "MWh"), UtilityType.WATER: (1, "m³")}
         for u in UtilityType:
-            groups: dict[str, list[float]] = {}
-            for r in sorted(project.readings, key=lambda r: (r.year, r.month)):
-                if r.utility == u:
-                    groups.setdefault(str(r.year), []).append(r.consumption)
             sc, unit = scale[u]
-            panel = Panel(UTILITY_NAMES[u], f"Aylık tüketim · {unit}")
-            panel.lay.addWidget(bar_chart(MONTHS, groups, scale=sc, min_h=170, unit=unit), 1)
+            now, prev = project.monthly(project.year, u), project.monthly(project.year - 1, u)
+            panel = Panel(eyebrow=UTILITY_NAMES[u], title=f"{fmt(sum(now) / sc, 0)} {unit}",
+                          subtitle=f"{project.year} yıllık toplam · aylık dağılım")
+            panel.lay.addWidget(area_chart(MONTHS, {str(project.year): now, str(project.year - 1): prev},
+                                           scale=sc, unit=unit, min_h=170,
+                                           colors=["green", "indigo"] if u != UtilityType.WATER else ["indigo", "amber"]), 1)
             lay.addWidget(panel, 1)
 
 
@@ -146,52 +200,49 @@ class OpportunitiesPage:
     def __init__(self, project: Project):
         self.widget, lay = _page()
         lay.addWidget(header("Dönüşüm önerileri", "Fırsatlar",
-                             "Geri ödeme süresine göre sıralı. Tasarruf oranları ve birim maliyetler "
-                             "varsayımdır, pilot bina etüdüyle güncellenecek."))
+                             "Geri ödeme süresine göre sıralı. Tasarruf oranları ve birim maliyetler varsayımdır, "
+                             "pilot bina etüdüyle güncellenecek."))
         res = project.opportunity_results()
         quick = [r for r in res if r.payback_years <= 5]
-        grid = QGridLayout()
-        grid.setSpacing(16)
-        c1 = Card("Öneri sayısı")
+        grid = QHBoxLayout()
+        grid.setSpacing(14)
+        c1 = Card("Öneri sayısı", accent=G)
         c1.set_number(len(res), lambda v: f"{v:.0f}", f"{len(quick)} tanesi 5 yıl altında geri ödüyor")
-        c2 = Card("Hızlı kazanç · yıllık tasarruf", hero=True)
-        c2.set_number(sum(r.annual_saving for r in quick) / 1e6, lambda v: f"{fmt(v, 2)} M ₺",
-                      "geri ödemesi ≤ 5 yıl olanlar")
-        c3 = Card("Hızlı kazanç · CAPEX")
+        c2 = Card("Hızlı kazanç · yıllık tasarruf", accent=G)
+        c2.set_number(sum(r.annual_saving for r in quick) / 1e6, lambda v: f"{fmt(v, 2)} M ₺", "geri ödemesi ≤ 5 yıl")
+        c3 = Card("Hızlı kazanç · CAPEX", accent=AMBER)
         c3.set_number(sum(r.capex for r in quick) / 1e6, lambda v: f"{fmt(v, 2)} M ₺", "gerekli yatırım")
-        for i, c in enumerate((c1, c2, c3)):
-            grid.addWidget(c, 0, i)
+        for c in (c1, c2, c3):
+            grid.addWidget(c)
         lay.addLayout(grid)
 
-        t = _table(["Öneri", "Kategori", "Enerji kWh/yıl", "Karbon kg/yıl",
-                    "Tasarruf ₺/yıl", "CAPEX ₺", "Geri ödeme"], left_cols=2)
+        t = _table(["Öneri", "Kategori", "Enerji kWh/yıl", "Karbon kg/yıl", "Tasarruf ₺/yıl", "CAPEX ₺", "Geri ödeme"], left_cols=2)
         t.setRowCount(len(res))
         for i, r in enumerate(res):
             pb = r.payback_years
-            col = GRADE_COLORS["A"] if pb <= 5 else GRADE_COLORS["C"] if pb <= 15 else GRADE_COLORS["E"]
-            _set_row(t, i, [r.opportunity.name, r.opportunity.category, fmt(r.saved_kwh),
-                            fmt(r.saved_carbon_kg), fmt(r.annual_saving), fmt(r.capex),
-                            fmt_years(pb)], left_cols=2, colors={6: col})
+            col = G if pb <= 5 else AMBER if pb <= 15 else RED
+            _set_row(t, i, [r.opportunity.name, r.opportunity.category, fmt(r.saved_kwh), fmt(r.saved_carbon_kg),
+                            fmt(r.annual_saving), fmt(r.capex), fmt_years(pb)], left_cols=2, colors={6: col})
+            t.item(i, 1).setForeground(QColor(SUB))
+            t.item(i, 1).setFont(qfont(12))
         t.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         _fit_height(t, len(res))
         panel = Panel()
         panel.lay.addWidget(t)
         lay.addWidget(panel)
 
-        chart_panel = Panel("Tasarruf ve yatırım", "Milyon ₺")
-        chart_panel.lay.addWidget(bar_chart(
-            [r.opportunity.name for r in res],
-            {"Yıllık tasarruf": [r.annual_saving for r in res], "CAPEX": [r.capex for r in res]},
-            scale=1e6, label_format="%.1f", min_h=230, colors=["emerald", "gold"], unit="M ₺"), 1)
-        lay.addWidget(chart_panel, 1)
+        cp = Panel(eyebrow="Karşılaştırma", title="Tasarruf ve yatırım", subtitle="milyon ₺")
+        cp.lay.addWidget(bar_chart([r.opportunity.name for r in res],
+                                   {"Yıllık tasarruf": [r.annual_saving for r in res], "CAPEX": [r.capex for r in res]},
+                                   scale=1e6, decimals=1, colors=["green", "amber"], unit="M ₺", min_h=240), 1)
+        lay.addWidget(cp, 1)
 
 
 class ScenarioPage:
     def __init__(self, project: Project):
         self.project = project
         self.widget, lay = _page()
-        lay.addWidget(header("Senaryo", "Mevcut vs Hedef",
-                             "Uygulanacak önerileri seçin; hedef durum anında hesaplanır."))
+        lay.addWidget(header("Senaryo", "Mevcut vs Hedef", "Uygulanacak önerileri seçin; hedef durum anında hesaplanır."))
         body = QHBoxLayout()
         body.setSpacing(18)
 
@@ -214,19 +265,19 @@ class ScenarioPage:
         left.addStretch()
         lw = QWidget()
         lw.setLayout(left)
-        lw.setFixedWidth(360)
+        lw.setFixedWidth(340)
         body.addWidget(lw)
 
         right = QVBoxLayout()
-        right.setSpacing(16)
+        right.setSpacing(14)
         grid = QGridLayout()
-        grid.setSpacing(16)
-        self.c_capex = Card("Toplam CAPEX")
-        self.c_save = Card("Yıllık tasarruf", hero=True)
-        self.c_pay = Card("Geri ödeme süresi")
-        self.c_co2 = Card("Karbon azalımı")
+        grid.setSpacing(14)
+        self.c_capex = Card("Toplam CAPEX", accent=AMBER)
+        self.c_save = Card("Yıllık tasarruf", accent=G)
+        self.c_pay = Card("Geri ödeme süresi", accent=INDIGO)
+        self.c_co2 = Card("Karbon azalımı", accent=G)
         for i, c in enumerate((self.c_capex, self.c_save, self.c_pay, self.c_co2)):
-            grid.addWidget(c, i // 2, i % 2)
+            grid.addWidget(c, 0, i)
         right.addLayout(grid)
         self.table = _table(["Gösterge", "Mevcut", "Hedef", "Değişim"])
         _fit_height(self.table, 5)
@@ -236,7 +287,7 @@ class ScenarioPage:
         body.addLayout(right, 1)
         lay.addLayout(body)
 
-        self.chart_panel = Panel("Mevcut vs Hedef", "Mevcut durum = 100")
+        self.chart_panel = Panel(eyebrow="Karşılaştırma", title="Mevcut vs Hedef", subtitle="mevcut durum = 100")
         self.chart_box = QVBoxLayout()
         self.chart_panel.lay.addLayout(self.chart_box, 1)
         lay.addWidget(self.chart_panel, 1)
@@ -259,7 +310,7 @@ class ScenarioPage:
         for i, (name, cur, tgt, d) in enumerate(rows):
             pct = (tgt / cur - 1) * 100 if cur else 0
             _set_row(self.table, i, [name, fmt(cur, d), fmt(tgt, d), f"{pct:+.1f}%".replace(".", ",")],
-                     colors={3: GRADE_COLORS["A"] if pct < -0.05 else MUTED})
+                     colors={3: G if pct < -0.05 else MUTED}, mono_from=1)
 
         while self.chart_box.count():
             old = self.chart_box.takeAt(0).widget()
@@ -269,9 +320,9 @@ class ScenarioPage:
             ["Elektrik", "Doğalgaz", "Enerji", "Karbon", "Maliyet"],
             {"Mevcut": [100] * 5,
              "Hedef": [100 * t.electricity_kwh / c.electricity_kwh, 100 * t.gas_kwh / c.gas_kwh,
-                       100 * t.total_energy_kwh / c.total_energy_kwh,
-                       100 * t.carbon_kg / c.carbon_kg, 100 * t.total_cost / c.total_cost]},
-            min_h=210, colors=["slate", "emerald"], unit="(%)"))
+                       100 * t.total_energy_kwh / c.total_energy_kwh, 100 * t.carbon_kg / c.carbon_kg,
+                       100 * t.total_cost / c.total_cost]},
+            min_h=220, colors=["slate", "green"], unit="%"))
 
         self.c_capex.set_number(s.capex / 1e6, lambda v: f"{fmt(v, 2)} M ₺", "toplam yatırım", live=True)
         self.c_save.set_number(s.annual_saving / 1e6, lambda v: f"{fmt(v, 2)} M ₺", "her yıl", live=True)

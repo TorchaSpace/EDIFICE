@@ -51,3 +51,6 @@ Her adım çalışır halde teslim edilen küçük milestone'lara bölünür.
 
 ## Durum (Milestone 1 tamam)
 Mock veriyle çalışan arayüz + hesap motoru hazır: `main.py`, `edifice/` (models, engine, service, ui), `tests/`. Çalıştırma için README. Sıradaki: Excel/CSV import + doğrulama, SQLite, gerçek pilot bina verisi, formüllerin netleştirilmesi.
+
+## Tasarım
+UI, kullanıcının Figma Make çıktısına ("Premium SaaS Dashboard Design", koyu tema) göre yapıldı: renkler `#070C12` zemin, `#0DDD96` yeşil, `#6366F1` indigo, `#F59E0B` amber, `#F43F5E` kırmızı; fontlar Manrope + DM Mono (yüklü değilse Menlo/Helvetica'ya düşer). Tasarım tokenları `edifice/ui/widgets.py` içinde, grafikler `edifice/ui/charts.py` içinde (özel çizim, aşağıdan yukarı yükselen animasyon). Figma'daki çoklu bina/portföy sayfaları MVP kapsamı dışında, sadece tek bina ekranları uygulandı.

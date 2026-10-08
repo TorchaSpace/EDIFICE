@@ -9,15 +9,16 @@ from edifice.ui.main_window import MainWindow
 
 def main():
     app = QApplication(sys.argv)
-    font = QFont("SF Pro Display", 12)
+    font = QFont("Manrope", 12)
     font.setStyleStrategy(QFont.PreferAntialias)
     app.setFont(font)
-    # Sistem koyu temadayken bile açık tema renkleri kullanılsın
+    # Figma tasarımının koyu teması (sistem temasından bağımsız)
     pal = QPalette()
-    for role, color in ((QPalette.Window, "#F5F4F0"), (QPalette.Base, "#FFFFFF"),
-                        (QPalette.AlternateBase, "#F5F4F0"), (QPalette.Text, "#0E2A24"),
-                        (QPalette.WindowText, "#0E2A24"), (QPalette.ButtonText, "#0E2A24"),
-                        (QPalette.Button, "#FFFFFF")):
+    for role, color in ((QPalette.Window, "#070C12"), (QPalette.Base, "#0B1624"),
+                        (QPalette.AlternateBase, "#070C12"), (QPalette.Text, "#E8F2FF"),
+                        (QPalette.WindowText, "#E8F2FF"), (QPalette.ButtonText, "#E8F2FF"),
+                        (QPalette.Button, "#0B1624"), (QPalette.ToolTipBase, "#05080E"),
+                        (QPalette.ToolTipText, "#E8F2FF")):
         pal.setColor(role, QColor(color))
     app.setPalette(pal)
     win = MainWindow(Project.mock())
