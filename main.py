@@ -8,6 +8,7 @@ from edifice.ui.main_window import MainWindow
 
 
 def main():
+    selftest = "--selftest" in sys.argv
     app = QApplication(sys.argv)
     font = QFont("Manrope", 12)
     font.setStyleStrategy(QFont.PreferAntialias | QFont.PreferQuality)
@@ -29,6 +30,21 @@ def main():
         store.seed_demo()
     win = MainWindow(store.load_project(store.latest_id()), store)
     win.show()
+    if selftest:   # paketleme sonrası hızlı sağlık kontrolü: pencere kurulur, tüm sayfalar açılır, çıkılır
+        for i in range(len(win.pages)):
+            win.select(i)
+            app.processEvents()
+        import tempfile
+        from pathlib import Path
+        from edifice.excel_io import build_template, read_workbook
+        from edifice.ui.report_pdf import build_pdf
+        with tempfile.TemporaryDirectory() as d:        # Excel şablonu + içe aktarma + PDF paketli uygulamada da çalışmalı
+            xlsx = build_template(str(Path(d) / "t.xlsx"), example=True)
+            read_workbook(xlsx)
+            pdf = build_pdf(win.project, [], str(Path(d) / "r.pdf"))
+            assert Path(pdf).stat().st_size > 5000
+        print("EDIFICE selftest OK")
+        sys.exit(0)
     sys.exit(app.exec())
 
 

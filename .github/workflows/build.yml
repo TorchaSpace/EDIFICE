@@ -1,0 +1,85 @@
+name: Build installers
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+      - name: Run tests
+        run: python -m pytest -q
+        env:
+          QT_QPA_PLATFORM: offscreen
+      - name: Build app
+        run: pyinstaller packaging/edifice.spec --noconfirm --log-level WARN
+      - name: Smoke test (selftest)
+        run: dist/EDIFICE/EDIFICE.exe --selftest
+        env:
+          QT_QPA_PLATFORM: offscreen
+          EDIFICE_DB: ${{ runner.temp }}/selftest.db
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          $ver = python -c "import edifice;print(edifice.__version__)"
+          iscc "/DMyVersion=$ver" packaging/installer.iss
+      - name: Portable zip
+        shell: pwsh
+        run: |
+          $ver = python -c "import edifice;print(edifice.__version__)"
+          Compress-Archive -Path dist/EDIFICE -DestinationPath "dist/EDIFICE-$ver-windows-x64-portable.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            dist/EDIFICE-Setup-*.exe
+            dist/EDIFICE-*-portable.zip
+
+  macos:
+    runs-on: macos-14   # Apple Silicon (arm64)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+      - name: Run tests
+        run: python -m pytest -q
+        env:
+          QT_QPA_PLATFORM: offscreen
+      - name: Build app and dmg
+        run: PY=python packaging/build_mac.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: dist/EDIFICE-*.dmg
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" artifacts/*/* --repo "$GITHUB_REPOSITORY" --title "EDIFI'CE ${GITHUB_REF_NAME}" --generate-notes

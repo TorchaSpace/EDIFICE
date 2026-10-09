@@ -33,3 +33,9 @@ yarn-error.log*
 dist/
 build/
 *.log
+
+# paketleme
+build/
+dist/
+*.dmg
+*.exe
