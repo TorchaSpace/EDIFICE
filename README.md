@@ -27,4 +27,4 @@ Proje klasöründeki `EDIFICE.app` çift tıklayınca uygulamayı açar (önce y
 ## Kurulum dosyaları (Windows ve Mac)
 - **macOS (Apple Silicon):** `EDIFICE-<sürüm>-macOS-arm64.dmg`: aç, EDIFICE'yi Applications'a sürükle. İmzasız olduğu için ilk açılışta sağ tık > Aç demek gerekir.
 - **Windows (64 bit):** `EDIFICE-Setup-<sürüm>.exe` (kurulum sihirbazı) ya da `...-portable.zip`. İlk açılışta SmartScreen uyarısı çıkarsa "Ek bilgi > Yine de çalıştır".
-- Üretim: Mac'te `packaging/build_mac.sh`; Windows kurulum dosyası GitHub Actions ile (`.github/workflows/build.yml`) üretilir. `v*` etiketi atılınca Release'e yüklenir.
+- Üretim: Mac'te `packaging/build_mac.sh`. Windows'ta `packaging\build_windows.bat` (Python 3.12 ve Inno Setup 6 kurulu olmalı). Otomatik üretim için `packaging/github-build.yml` dosyasını `.github/workflows/build.yml` olarak kopyalayın (GitHub'a `workflow` yetkisiyle push gerekir); `v*` etiketi atılınca Windows + Mac dosyaları Release'e yüklenir.
