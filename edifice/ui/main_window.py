@@ -18,6 +18,7 @@ from .add_choice import AddChoiceDialog
 from .building_dialog import BuildingDialog
 from .report_pdf import build_pdf
 from .method_page import MethodPage
+from .assistant_chat import ChatPage, ChatState
 from .projects_page import ProjectsTrackerPage
 from .tabs_page import ComingSoonPage, ReportPage, TabsPage
 from .portfolio import AssistantPage, EsgPage, FinancePage, PortfolioPage, summarize
@@ -32,6 +33,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.project = project
         self.store = store or Store(":memory:")
+        self.chat_state = ChatState()
         self.setWindowTitle("EDIFI'CE")
         self.resize(1440, 900)
         self.setMinimumSize(1180, 720)
@@ -40,7 +42,7 @@ class MainWindow(QMainWindow):
         self.sections = [
             ("Platform", [("Genel Bakış", "overview"), ("Portföy", "portfolio"), ("Projeler", "projects"),
                           ("Finans", "finance"), ("Ortaklar", "partners")]),
-            ("Intelligence", [("Asistan", "assistant", "OTO"), ("Digital Twin", "twin"), ("Sürdürülebilirlik", "esg"),
+            ("Intelligence", [("Asistan", "assistant", "LIVE"), ("Digital Twin", "twin"), ("Sürdürülebilirlik", "esg"),
                               ("Raporlar", "method"), ("Ayarlar", "settings")])]
         self.nav_specs = [(it[0], it[1]) for _, items in self.sections for it in items]
         self.pages = []
@@ -183,6 +185,7 @@ class MainWindow(QMainWindow):
         self.sub = {"Genel Bakış": OverviewPage(project, self.store), "Tüketim": ConsumptionPage(project),
                     "Öneriler": OpportunitiesPage(project), "Mevcut vs Hedef": ScenarioPage(project, self.store),
                     "Proje takibi": ProjectsTrackerPage(project, self.store, self._projects_changed),
+                    "Sohbet": ChatPage(project, self.store, self.chat_state, self._all_projects),
                     "Kaynaklar ve Yöntem": MethodPage(project),
                     "Ayarlar": SettingsPage(project, self.store, self._settings_saved)}
         sub = self.sub
@@ -193,7 +196,8 @@ class MainWindow(QMainWindow):
                       ("Ortaklar", ComingSoonPage("Ortaklar", "Ortaklar",
                                                   "Uygulayıcı firma ve ortak yönetimi için bina verisinden bağımsız bir ortak/teklif kaydı gerekir. "
                                                   "MVP tek bina analizine odaklandığı için bu modül sonraki fazda eklenecek.")),
-                      ("Asistan", AssistantPage(project)),
+                      ("Asistan", TabsPage([("Sohbet", sub["Sohbet"]),
+                                            ("Otomatik bulgular", AssistantPage(project))])),
                       ("Digital Twin", ComingSoonPage("Digital Twin", "Digital Twin",
                                                       "Dijital ikiz için BIM modeli ve canlı sensör (IoT/BMS) verisi gerekir; bunlar MVP kapsamı dışında "
                                                       "olduğundan sonraki fazda eklenecek.")),
@@ -284,6 +288,9 @@ class MainWindow(QMainWindow):
         self._dot_on = not self._dot_on
         dot = "●" if self._dot_on else "○"
         self.live.setText(f"{dot}  {self._short(self.project.building.name)}")
+
+    def _all_projects(self) -> dict:
+        return {bid: self.store.load_project(bid) for bid, _ in self.store.list_buildings()}
 
     def _projects_changed(self, rows):
         ov = self.sub.get("Genel Bakış")

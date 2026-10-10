@@ -31,3 +31,6 @@ Proje klasöründeki `EDIFICE.app` çift tıklayınca uygulamayı açar (önce y
 
 ## Yazı tipleri
 `edifice/assets/fonts/` içinde Manrope ve DM Mono (SIL Open Font License 1.1; lisans metinleri aynı klasörde) uygulamayla birlikte gelir.
+
+## Yapay zeka asistanı
+Asistan > Sohbet için kendi Anthropic API anahtarını gir (console.anthropic.com). Anahtar yalnız bu bilgisayarda saklanır; sorular ve ilgili bina verisi cevap üretmek için Anthropic'e gönderilir.

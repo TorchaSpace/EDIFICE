@@ -98,6 +98,17 @@ class Store:
             self.conn.execute("DELETE FROM opportunities")
             self.conn.execute("INSERT OR REPLACE INTO settings VALUES ('evidence_version', ?)", (self.EVIDENCE_VERSION,))
 
+    def get_setting(self, key: str, default: str | None = None) -> str | None:
+        row = self.conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+        return row[0] if row else default
+
+    def set_setting(self, key: str, value: str):
+        with self.conn:
+            if value:
+                self.conn.execute("INSERT OR REPLACE INTO settings VALUES (?, ?)", (key, value))
+            else:
+                self.conn.execute("DELETE FROM settings WHERE key=?", (key,))
+
     # ---- varsayımlar ve öneri kataloğu
     def load_assumptions(self) -> Assumptions:
         row = self.conn.execute("SELECT value FROM settings WHERE key='assumptions'").fetchone()
