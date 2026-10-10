@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QPointF, Qt
+from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
@@ -71,7 +71,7 @@ class PortfolioPage:
                for bid, r in self.rows if r["project"].building.lat is not None]
         if pts:
             mp = Panel(eyebrow="Konum", title="Bina konumları",
-                       subtitle="Girilen enlem/boylama göre; nokta rengi sağlık skoru. Harita altlığı yoktur, ızgara koordinat içindir.")
+                       subtitle="Girilen enlem/boylama göre; nokta rengi sağlık skoru. Tekerlekle yakınlaştırın, sürükleyerek kaydırın. Harita internetten yüklenir.")
             mp.lay.addWidget(LocationMap(pts, on_open), 1)
             lay.addWidget(mp)
         else:
@@ -273,64 +273,110 @@ def _insight_card(color: str, title: str, text: str) -> QWidget:
 
 
 class LocationMap(QWidget):
-    """Bina konumları: enlem/boylam ızgarası üzerinde nokta grafiği (harita altlığı yok, koordinatlar gerçek).
-    Nokta rengi sağlık skoruna göre; üzerine gelince bina adı görünür."""
+    """Canlı harita: karo haritası (OpenStreetMap) + bina noktaları.
+    Tekerlek: yakınlaştır, sürükle: kaydır. Nokta rengi sağlık skoru; tıklayınca bina açılır.
+    İnternet yoksa karolar gelmez, koordinat ızgarası ve noktalar çizilmeye devam eder."""
+
+    TILE = 256
+    URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 
     def __init__(self, points: list[tuple[int, str, float, float, float]], on_open):
         super().__init__()
+        from PySide6.QtNetwork import QNetworkAccessManager
         self.points, self.on_open = points, on_open
-        self.setMinimumHeight(300)
+        self.setMinimumHeight(380)
         self.setMouseTracking(True)
+        self._tiles: dict[tuple[int, int, int], object] = {}
+        self._pending: set[tuple[int, int, int]] = set()
+        self._net = QNetworkAccessManager(self)
+        self._hover = -1
+        self._drag = None
         lats = [p[2] for p in points]
         lons = [p[3] for p in points]
-        cl, co = (min(lats) + max(lats)) / 2, (min(lons) + max(lons)) / 2
-        self.span = max(max(lats) - min(lats), max(lons) - min(lons), 4.0) * 1.35
-        self.c = (cl, co)
-        self._hover = -1
+        self.clat, self.clon = (min(lats) + max(lats)) / 2, (min(lons) + max(lons)) / 2
+        span = max(max(lats) - min(lats), max(lons) - min(lons), 0.02)
+        import math
+        self.zoom = max(3, min(15, int(math.log2(360 / (span * 1.6)))))
+
+    # ---- web mercator
+    def _world(self, lat: float, lon: float, z: float) -> tuple[float, float]:
+        import math
+        n = self.TILE * 2 ** z
+        x = (lon + 180) / 360 * n
+        y = (1 - math.asinh(math.tan(math.radians(lat))) / math.pi) / 2 * n
+        return x, y
+
+    def _unworld(self, x: float, y: float, z: float) -> tuple[float, float]:
+        import math
+        n = self.TILE * 2 ** z
+        return math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * y / n)))), x / n * 360 - 180
 
     def _xy(self, lat: float, lon: float) -> QPointF:
-        w, h = self.width(), self.height()
-        s = min(w, h * 2) / self.span          # px / derece (iki eksen aynı ölçek)
-        return QPointF(w / 2 + (lon - self.c[1]) * s, h / 2 - (lat - self.c[0]) * s * 1.0)
+        cx, cy = self._world(self.clat, self.clon, self.zoom)
+        x, y = self._world(lat, lon, self.zoom)
+        return QPointF(self.width() / 2 + x - cx, self.height() / 2 + y - cy)
+
+    def _request(self, key):
+        from PySide6.QtCore import QUrl
+        from PySide6.QtNetwork import QNetworkRequest
+        if key in self._pending or key in self._tiles:
+            return
+        z, x, y = key
+        self._pending.add(key)
+        req = QNetworkRequest(QUrl(self.URL.format(z=z, x=x, y=y)))
+        req.setRawHeader(b"User-Agent", b"EDIFICE-desktop/1.0 (building dashboard)")
+        reply = self._net.get(req)
+        reply.finished.connect(lambda r=reply, k=key: self._tile_done(r, k))
+
+    def _tile_done(self, reply, key):
+        from PySide6.QtGui import QPixmap
+        self._pending.discard(key)
+        pm = QPixmap()
+        if reply.error() == reply.NetworkError.NoError and pm.loadFromData(reply.readAll().data()):
+            self._tiles[key] = pm
+            self.update()
+        reply.deleteLater()
 
     def paintEvent(self, e):
+        import math
         from PySide6.QtGui import QPainter, QPen
-        from .widgets import rgba, qfont
+        from .widgets import qfont, rgba
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        step = 1 if self.span < 12 else 2 if self.span < 24 else 5
-        p.setPen(QPen(rgba("#FFFFFF", 0.06), 1))
-        p.setFont(qfont(10))
-        w, h = self.width(), self.height()
-        import math
-        s = min(w, h * 2) / self.span
-        lon0, lon1 = self.c[1] - w / 2 / s, self.c[1] + w / 2 / s
-        lat0, lat1 = self.c[0] - h / 2 / s, self.c[0] + h / 2 / s
-        for lon in range(math.ceil(lon0 / step) * step, int(lon1) + 1, step):
-            x = self._xy(self.c[0], lon).x()
-            p.drawLine(QPointF(x, 0), QPointF(x, h))
-            p.setPen(QPen(rgba("#7A90A8", 0.7)))
-            p.drawText(QPointF(x + 4, h - 6), f"{lon}°E")
-            p.setPen(QPen(rgba("#FFFFFF", 0.06), 1))
-        for lat in range(math.ceil(lat0 / step) * step, int(lat1) + 1, step):
-            y = self._xy(lat, self.c[1]).y()
-            p.drawLine(QPointF(0, y), QPointF(w, y))
-            p.setPen(QPen(rgba("#7A90A8", 0.7)))
-            p.drawText(QPointF(6, y - 4), f"{lat}°N")
-            p.setPen(QPen(rgba("#FFFFFF", 0.06), 1))
+        p.setRenderHint(QPainter.SmoothPixmapTransform)
+        w, h, z, T = self.width(), self.height(), self.zoom, self.TILE
+        p.fillRect(self.rect(), QColor("#0B1624"))
+        cx, cy = self._world(self.clat, self.clon, z)
+        x0, y0 = cx - w / 2, cy - h / 2
+        n = 2 ** z
+        for tx in range(int(x0 // T), int((x0 + w) // T) + 1):
+            for ty in range(int(y0 // T), int((y0 + h) // T) + 1):
+                if not 0 <= ty < n:
+                    continue
+                key = (z, tx % n, ty)
+                pm = self._tiles.get(key)
+                if pm is not None:
+                    p.drawPixmap(QPointF(tx * T - x0, ty * T - y0), pm)
+                else:
+                    self._request(key)
         for i, (_, name, lat, lon, health) in enumerate(self.points):
             pt = self._xy(lat, lon)
             col = score_color(health)
             r = 9 if i == self._hover else 7
             p.setPen(Qt.NoPen)
-            p.setBrush(rgba(col, 0.22))
-            p.drawEllipse(pt, r + 7, r + 7)
+            p.setBrush(rgba(col, 0.25))
+            p.drawEllipse(pt, r + 8, r + 8)
             p.setBrush(QColor(col))
+            p.setPen(QPen(QColor("#050A0E"), 1.5))
             p.drawEllipse(pt, r, r)
             if i == self._hover:
                 p.setPen(QColor("#E8F2FF"))
                 p.setFont(qfont(12, 700))
                 p.drawText(pt + QPointF(r + 10, 4), name)
+        p.fillRect(QRectF(0, h - 18, 230, 18), rgba("#FFFFFF", 0.8))
+        p.setPen(QColor("#222222"))
+        p.setFont(qfont(10))
+        p.drawText(QPointF(6, h - 5), "© OpenStreetMap katkıda bulunanlar")
         p.end()
 
     def _hit(self, pos) -> int:
@@ -340,14 +386,35 @@ class LocationMap(QWidget):
                 return i
         return -1
 
+    def wheelEvent(self, e):
+        z = self.zoom + (1 if e.angleDelta().y() > 0 else -1)
+        if 2 <= z <= 17 and z != self.zoom:
+            self.zoom = z
+            self.update()
+        e.accept()
+
+    def mousePressEvent(self, e):
+        self._press = e.position()
+        self._drag = e.position()
+
     def mouseMoveEvent(self, e):
+        if e.buttons() & Qt.LeftButton and self._drag is not None:
+            d = e.position() - self._drag
+            self._drag = e.position()
+            cx, cy = self._world(self.clat, self.clon, self.zoom)
+            self.clat, self.clon = self._unworld(cx - d.x(), cy - d.y(), self.zoom)
+            self.update()
+            return
         i = self._hit(e.position())
         if i != self._hover:
             self._hover = i
             self.setCursor(Qt.PointingHandCursor if i >= 0 else Qt.ArrowCursor)
             self.update()
 
-    def mousePressEvent(self, e):
-        i = self._hit(e.position())
-        if i >= 0:
-            self.on_open(self.points[i][0])
+    def mouseReleaseEvent(self, e):
+        moved = (e.position() - self._press).manhattanLength() if getattr(self, "_press", None) is not None else 99
+        self._drag = None
+        if moved < 5:
+            i = self._hit(e.position())
+            if i >= 0:
+                self.on_open(self.points[i][0])
