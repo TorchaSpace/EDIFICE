@@ -13,9 +13,6 @@ from edifice.ui.main_window import MainWindow
 from edifice.ui.report import build_report
 
 
-W_SCEN, W_AYAR = 4, 9
-
-
 def _app():
     return QApplication.instance() or QApplication([])
 
@@ -24,7 +21,7 @@ def test_window_builds_and_scenario_updates():
     _app()
     p = Project.mock()
     w = MainWindow(p)
-    sc = w.pages[W_SCEN][1]
+    sc = w.sub["Mevcut vs Hedef"]
     sc.checks["LED"].setChecked(True)
     assert sc.selected_codes() == ["LED"]
     assert "EDIFI" in build_report(p, ["LED"])
@@ -70,7 +67,7 @@ def test_edit_building_and_settings_flow():
     store.update_building(bid, *d.result_data)
     w.set_project(store.load_project(bid))
     assert w.project.building.name == "Düzenlenmiş"
-    sp = w.pages[W_AYAR][1]
+    sp = w.sub["Ayarlar"]
     sp.b_eui.setValue(400)
     sp.opp_widgets[0][2].setValue(30)
     sp.save()
@@ -83,9 +80,9 @@ def test_scenario_restored_after_reload():
     store = Store(":memory:")
     bid = store.seed_demo()
     w = MainWindow(store.load_project(bid), store)
-    w.pages[W_SCEN][1].checks["LED"].setChecked(True)
+    w.sub["Mevcut vs Hedef"].checks["LED"].setChecked(True)
     w.set_project(store.load_project(bid))
-    assert w.pages[W_SCEN][1].selected_codes() == ["LED"]
+    assert w.sub["Mevcut vs Hedef"].selected_codes() == ["LED"]
 
 
 def test_pdf_report_generated(tmp_path):
@@ -134,7 +131,7 @@ def test_budget_slider_selects_package_and_finance_updates():
     store = Store(":memory:")
     bid = store.seed_demo()
     w = MainWindow(store.load_project(bid), store)
-    sc = w.pages[W_SCEN][1]
+    sc = w.sub["Mevcut vs Hedef"]
     sc.slider.setValue(0)
     assert sc.selected_codes() == []
     sc.slider.setValue(60)           # 3,0 M ₺

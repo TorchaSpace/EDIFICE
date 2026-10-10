@@ -18,6 +18,7 @@ from .add_choice import AddChoiceDialog
 from .building_dialog import BuildingDialog
 from .report_pdf import build_pdf
 from .method_page import MethodPage
+from .tabs_page import ComingSoonPage, ReportPage, TabsPage
 from .portfolio import AssistantPage, EsgPage, FinancePage, PortfolioPage, summarize
 from .settings_page import SettingsPage
 from .widgets import get_style, FadeStack, Logo, NavBar, section
@@ -36,10 +37,10 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(get_style())
 
         self.sections = [
-            ("Platform", [("Genel Bakış", "overview"), ("Portföy", "portfolio"), ("Tüketim", "consumption"),
-                          ("Öneriler", "opportunities"), ("Mevcut vs Hedef", "scenario")]),
-            ("Intelligence", [("Finans", "finance"), ("Asistan", "assistant", "OTO"), ("Sürdürülebilirlik", "esg"),
-                              ("Kaynaklar ve Yöntem", "method"), ("Ayarlar", "settings")])]
+            ("Platform", [("Genel Bakış", "overview"), ("Portföy", "portfolio"), ("Projeler", "projects"),
+                          ("Finans", "finance"), ("Ortaklar", "partners")]),
+            ("Intelligence", [("Asistan", "assistant", "OTO"), ("Digital Twin", "twin"), ("Sürdürülebilirlik", "esg"),
+                              ("Raporlar", "method"), ("Ayarlar", "settings")])]
         self.nav_specs = [(it[0], it[1]) for _, items in self.sections for it in items]
         self.pages = []
         self.stack = FadeStack()
@@ -178,15 +179,26 @@ class MainWindow(QMainWindow):
             w = self.stack.widget(0)
             self.stack.removeWidget(w)
             w.deleteLater()
-        self.pages = [("Genel Bakış", OverviewPage(project)),
+        self.sub = {"Genel Bakış": OverviewPage(project), "Tüketim": ConsumptionPage(project),
+                    "Öneriler": OpportunitiesPage(project), "Mevcut vs Hedef": ScenarioPage(project, self.store),
+                    "Kaynaklar ve Yöntem": MethodPage(project),
+                    "Ayarlar": SettingsPage(project, self.store, self._settings_saved)}
+        sub = self.sub
+        self.pages = [("Genel Bakış", TabsPage([("Genel Bakış", sub["Genel Bakış"]), ("Tüketim", sub["Tüketim"])])),
                       ("Portföy", PortfolioPage(self.store, self.open_building, self.search.text().strip())),
-                      ("Tüketim", ConsumptionPage(project)), ("Öneriler", OpportunitiesPage(project)),
-                      ("Mevcut vs Hedef", ScenarioPage(project, self.store)),
+                      ("Projeler", TabsPage([("Öneriler", sub["Öneriler"]), ("Mevcut vs Hedef", sub["Mevcut vs Hedef"])])),
                       ("Finans", FinancePage(self.store, self.open_building)),
+                      ("Ortaklar", ComingSoonPage("Ortaklar", "Ortaklar",
+                                                  "Uygulayıcı firma ve ortak yönetimi için bina verisinden bağımsız bir ortak/teklif kaydı gerekir. "
+                                                  "MVP tek bina analizine odaklandığı için bu modül sonraki fazda eklenecek.")),
                       ("Asistan", AssistantPage(project)),
+                      ("Digital Twin", ComingSoonPage("Digital Twin", "Digital Twin",
+                                                      "Dijital ikiz için BIM modeli ve canlı sensör (IoT/BMS) verisi gerekir; bunlar MVP kapsamı dışında "
+                                                      "olduğundan sonraki fazda eklenecek.")),
                       ("Sürdürülebilirlik", EsgPage(self.store, self.open_building)),
-                      ("Kaynaklar ve Yöntem", MethodPage(project)),
-                      ("Ayarlar", SettingsPage(project, self.store, self._settings_saved))]
+                      ("Raporlar", TabsPage([("Rapor", ReportPage(project, self.export_report)),
+                                             ("Kaynaklar ve Yöntem", sub["Kaynaklar ve Yöntem"])])),
+                      ("Ayarlar", TabsPage([("Ayarlar", sub["Ayarlar"])]))]
         self.idx = {n: i for i, (n, _) in enumerate(self.pages)}
         for _, page in self.pages:
             self.stack.addWidget(page.widget)
@@ -200,7 +212,7 @@ class MainWindow(QMainWindow):
         self.crumb.setText(self.pages[select][0])
         self.crumb1.setText("Platform" if select < 5 else "Intelligence")
         if notify:
-            self.pages[self.idx['Ayarlar']][1].saved_message()
+            self.sub['Ayarlar'].saved_message()
 
     def show_building_menu(self):
         menu = QMenu(self)
@@ -316,7 +328,7 @@ class MainWindow(QMainWindow):
         self.crumb1.setText("Platform" if index < 5 else "Intelligence")
 
     def export_report(self):
-        codes = self.pages[self.idx['Mevcut vs Hedef']][1].selected_codes()
+        codes = self.sub['Mevcut vs Hedef'].selected_codes()
         default = f"EDIFICE_{self.project.building.name.replace(' ', '_')}_{datetime.now():%Y-%m-%d}.pdf"
         path, _ = QFileDialog.getSaveFileName(self, "Raporu kaydet", default, "PDF (*.pdf)")
         if not path:

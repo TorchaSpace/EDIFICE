@@ -72,6 +72,11 @@ QPushButton#export:hover {{ background: rgba(13,221,150,0.18); }}
 QFrame#card {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 18px; }}
 QFrame#card:hover {{ border: 1px solid rgba(13,221,150,0.18); }}
 QFrame#inner {{ background: rgba(255,255,255,0.02); border: 1px solid {BORDER}; border-radius: 12px; }}
+QWidget#segbar {{ background: transparent; }}
+QPushButton#seg {{ background: rgba(255,255,255,0.03); color: {SUB}; border: 1px solid {BORDER}; border-radius: 15px;
+  padding: 6px 16px; font-size: 12px; font-weight: 600; }}
+QPushButton#seg:hover {{ color: {TEXT}; }}
+QPushButton#seg:checked {{ color: {G}; background: {G_SOFT}; border: 1px solid rgba(13,221,150,0.25); }}
 QLabel#eyebrow {{ color: {MUTED}; font-size: 11px; font-weight: 700; letter-spacing: 1.4px; }}
 QLabel#h1 {{ font-size: 26px; font-weight: 800; color: {TEXT}; }}
 QLabel#title {{ font-size: 17px; font-weight: 700; color: {TEXT}; }}
@@ -494,6 +499,19 @@ def nav_icon(kind: str) -> QIcon:
             p.drawLine(QPointF(10, 16), QPointF(10, 8))
             p.drawPolyline([QPointF(10, 11), QPointF(13.5, 7.5)])
             p.drawPolyline([QPointF(10, 13), QPointF(6.8, 10)])
+        elif kind == "projects":
+            p.drawRoundedRect(QRectF(3.5, 3.5, 13, 14), 2, 2)
+            p.drawLine(QPointF(7, 3.5), QPointF(7, 17.5))
+            p.drawLine(QPointF(10, 8), QPointF(14, 8))
+            p.drawLine(QPointF(10, 12), QPointF(13, 12))
+        elif kind == "partners":
+            p.drawEllipse(QRectF(2.5, 6, 8, 8))
+            p.drawEllipse(QRectF(9.5, 6, 8, 8))
+        elif kind == "twin":
+            p.drawPolygon([QPointF(10, 2.5), QPointF(17, 6.5), QPointF(17, 13.5), QPointF(10, 17.5), QPointF(3, 13.5), QPointF(3, 6.5)])
+            p.drawLine(QPointF(10, 10), QPointF(10, 17.5))
+            p.drawLine(QPointF(10, 10), QPointF(3, 6.5))
+            p.drawLine(QPointF(10, 10), QPointF(17, 6.5))
         elif kind == "consumption":
             for x, h in ((3, 8), (8.5, 15), (14, 11)):
                 p.drawRoundedRect(QRectF(x, 18 - h, 3.5, h), 1, 1)
