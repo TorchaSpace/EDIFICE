@@ -36,3 +36,5 @@ Kaynaklar: [Nectar karşılaştırması](https://nectarclimate.com/compare/measu
 - ✅ 1. Hava normalizasyonu (derece-gün), ✅ 2. Toplu CSV/Excel içe aktarma (fatura PDF/foto okuma henüz yok), ✅ 3. Gerçekleşen tasarruf takibi (M&V).
 - ✅ 4. GES (PVGIS ile) ve birim fiyat analizi (gerçek tarife optimizasyonu saatlik/demand verisi ister, yok), ✅ 5. Hedef yolu riski (kendi hedef yolunuzla; resmî CRREM verisi alınmadı), ✅ 6. Raporlama paketleri (ESG veri paketi, EKB hazırlık sayfası, portföy özeti; resmî beyan değil).
 - Sıradaki: resmî CRREM yolları (veri doğrulanarak), fatura PDF/foto okuma, saatlik yük/demand verisiyle tarife optimizasyonu, teşvik/hibe bulucu, çok kullanıcı ve bulut eşitleme.
+
+> Güncel ve daha kapsamlı karşılaştırma: [PIYASA_FARKLARI.md](PIYASA_FARKLARI.md)
