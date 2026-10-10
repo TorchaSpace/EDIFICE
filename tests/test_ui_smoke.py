@@ -230,3 +230,22 @@ def test_feedback_clarification_guard_and_reset():
     assert "skorum neden düştü" not in [t for _, _, t in store.list_examples()] and train.note
     train.reset()
     assert store.list_examples() == []
+
+
+def test_import_consumption_merges_into_building(tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QFileDialog, QMessageBox
+    from edifice.bulk_import import sample_csv
+    from edifice.db import Store
+    from edifice.ui.main_window import MainWindow
+
+    store = Store(":memory:")
+    bid = store.seed_demo()
+    w = MainWindow(store.load_project(bid), store)
+    before = len(w.project.readings)
+    csv_path = tmp_path / "yeni.csv"
+    csv_path.write_text("Yıl;Ay;Elektrik kWh;Elektrik ₺\n2027;1;1000;4200\n2027;2;900;3780\n", encoding="utf-8-sig")
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *a, **k: (str(csv_path), ""))
+    monkeypatch.setattr(QMessageBox, "exec", lambda self: QMessageBox.Yes)
+    w.import_consumption()
+    assert len(w.project.readings) == before + 2
+    assert any(r.year == 2027 and r.month == 1 and r.consumption == 1000 for r in w.project.readings)

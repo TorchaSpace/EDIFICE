@@ -231,6 +231,9 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
         menu.addAction("+  Yeni bina ekle").triggered.connect(self.add_building)
         if self.project.building_id is not None:
+            menu.addAction("⇪  Tüketimi içe aktar (CSV / Excel)…").triggered.connect(self.import_consumption)
+            menu.addAction("⇩  Örnek CSV indir").triggered.connect(self.download_sample_csv)
+        if self.project.building_id is not None:
             menu.addAction("✎  Bu binayı düzenle").triggered.connect(self.edit_building)
         if self.store.count() > 1 and self.project.building_id is not None:
             menu.addAction("Bu binayı sil").triggered.connect(self.delete_current)
@@ -265,6 +268,50 @@ class MainWindow(QMainWindow):
         more = f"\n… ve {len(errors) - 12} hata daha" if len(errors) > 12 else ""
         box.setInformativeText("•  " + "\n•  ".join(shown) + more + "\n\nDosyayı düzeltip tekrar yükleyin.")
         box.exec()
+
+    def download_sample_csv(self):
+        from ..bulk_import import sample_csv
+        path, _ = QFileDialog.getSaveFileName(self, "Örnek CSV'yi kaydet", "EDIFICE_tuketim_ornek.csv", "CSV (*.csv)")
+        if path:
+            sample_csv(path, self.project.readings)
+            QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+
+    def import_consumption(self):
+        """Fatura dökümü (CSV/Excel) -> önizleme (kaç kayıt, hangi dönem, uyarılar, veri kalitesi önce/sonra) -> onayla -> birleştir."""
+        from ..bulk_import import merge_readings, parse_file
+        from ..quality import assess
+        path, _ = QFileDialog.getOpenFileName(self, "Tüketim dosyası seç", "", "CSV veya Excel (*.csv *.xlsx *.xlsm)")
+        if not path:
+            return
+        res = parse_file(path, self.project.assumptions.default_tariffs)
+        box = QMessageBox(self)
+        box.setWindowTitle("Tüketimi içe aktar")
+        if not res.readings:
+            box.setIcon(QMessageBox.Warning)
+            box.setText("Dosyadan tüketim kaydı okunamadı")
+            box.setInformativeText("•  " + "\n•  ".join(res.warnings[:8] or ["Dosya boş görünüyor."]) +
+                                   "\n\nİpucu: menüden «Örnek CSV indir» ile beklenen biçimi görebilirsiniz.")
+            box.exec()
+            return
+        merged, added, replaced = merge_readings(self.project.readings, res.readings)
+        before = assess(self.project)
+        after = assess(Project(self.project.building, merged, self.project.equipment, [], self.project.assumptions))
+        (y0, m0), (y1, m1) = res.period
+        box.setIcon(QMessageBox.Question)
+        box.setText(f"{len(res.readings)} kayıt okundu ({m0}/{y0} – {m1}/{y1})")
+        shown = res.warnings[:6]
+        more = f"\n•  … ve {len(res.warnings) - 6} uyarı daha" if len(res.warnings) > 6 else ""
+        box.setInformativeText(
+            f"Yeni eklenecek: {added} · mevcut kaydı değişecek: {replaced}\n"
+            f"Veri güvenilirliği: {before.score:.0f} ({before.level}) → {after.score:.0f} ({after.level})"
+            + (("\n\nUyarılar:\n•  " + "\n•  ".join(shown) + more) if shown else "") + "\n\nİçe aktarılsın mı?")
+        box.setStandardButtons(QMessageBox.Yes | QMessageBox.Cancel)
+        box.button(QMessageBox.Yes).setText("İçe aktar")
+        box.button(QMessageBox.Cancel).setText("Vazgeç")
+        if box.exec() != QMessageBox.Yes:
+            return
+        self.store.update_building(self.project.building_id, self.project.building, merged, self.project.equipment)
+        self.set_project(self.store.load_project(self.project.building_id))
 
     def edit_building(self):
         dlg = BuildingDialog(self, project=self.project, tariffs=self.project.assumptions.default_tariffs)
