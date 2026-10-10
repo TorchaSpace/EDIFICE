@@ -94,3 +94,27 @@ def test_location_roundtrip_and_validation(tmp_path):
     p.building.lat = None
     bid2 = st.save_building(p.building, p.readings, p.equipment)
     assert st.load_project(bid2).building.lat is None
+
+
+def test_project_status_roundtrip(tmp_path):
+    from edifice.db import Store
+    from edifice.service import Project
+    st = Store(str(tmp_path / "t.db"))
+    p = Project.mock()
+    bid = st.save_building(p.building, p.readings, p.equipment)
+    st.save_project(bid, "LED", "Uygulanıyor", 2027)
+    st.save_project(bid, "LED", "Tamamlandı", 2028)
+    assert st.load_projects(bid) == {"LED": ("Tamamlandı", 2028)}
+    st.delete_building(bid)
+    assert st.load_projects(bid) == {}
+
+
+def test_anomaly_insight_flags_spike():
+    from edifice.models import UtilityType
+    from edifice.service import Project
+    from edifice.ui.portfolio import insights
+    p = Project.mock()
+    for r in p.readings:
+        if r.utility == UtilityType.ELECTRICITY and r.year == p.year and r.month == 3:
+            r.consumption *= 2
+    assert any("anomali" in title and "Elektrik" in title for _, title, _ in insights(p))

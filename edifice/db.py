@@ -24,6 +24,9 @@ CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS opportunities (
   code TEXT PRIMARY KEY, name TEXT, category TEXT, affects TEXT, saving_pct REAL, capex_per_m2 REAL,
   description TEXT, position INTEGER);
+CREATE TABLE IF NOT EXISTS projects (
+  building_id INTEGER NOT NULL REFERENCES buildings(id) ON DELETE CASCADE,
+  code TEXT NOT NULL, status TEXT NOT NULL, year INTEGER NOT NULL, PRIMARY KEY (building_id, code));
 CREATE TABLE IF NOT EXISTS scenarios (
   building_id INTEGER PRIMARY KEY REFERENCES buildings(id) ON DELETE CASCADE, codes TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS equipment (
@@ -144,6 +147,14 @@ class Store:
             self.conn.executemany(
                 "INSERT INTO equipment (building_id,category,name,year_installed,condition,notes) VALUES (?,?,?,?,?,?)",
                 [(bid, e.category, e.name, e.year_installed, e.condition, e.notes) for e in equipment])
+
+    def save_project(self, bid: int, code: str, status: str, year: int):
+        with self.conn:
+            self.conn.execute("INSERT OR REPLACE INTO projects VALUES (?,?,?,?)", (bid, code, status, year))
+
+    def load_projects(self, bid: int) -> dict[str, tuple[str, int]]:
+        return {c: (s, y) for c, s, y in self.conn.execute(
+            "SELECT code,status,year FROM projects WHERE building_id=?", (bid,))}
 
     def save_scenario(self, bid: int, codes: list[str]):
         with self.conn:

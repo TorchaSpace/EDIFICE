@@ -18,6 +18,7 @@ from .add_choice import AddChoiceDialog
 from .building_dialog import BuildingDialog
 from .report_pdf import build_pdf
 from .method_page import MethodPage
+from .projects_page import ProjectsTrackerPage
 from .tabs_page import ComingSoonPage, ReportPage, TabsPage
 from .portfolio import AssistantPage, EsgPage, FinancePage, PortfolioPage, summarize
 from .settings_page import SettingsPage
@@ -179,14 +180,15 @@ class MainWindow(QMainWindow):
             w = self.stack.widget(0)
             self.stack.removeWidget(w)
             w.deleteLater()
-        self.sub = {"Genel Bakış": OverviewPage(project), "Tüketim": ConsumptionPage(project),
+        self.sub = {"Genel Bakış": OverviewPage(project, self.store), "Tüketim": ConsumptionPage(project),
                     "Öneriler": OpportunitiesPage(project), "Mevcut vs Hedef": ScenarioPage(project, self.store),
+                    "Proje takibi": ProjectsTrackerPage(project, self.store, self._projects_changed),
                     "Kaynaklar ve Yöntem": MethodPage(project),
                     "Ayarlar": SettingsPage(project, self.store, self._settings_saved)}
         sub = self.sub
         self.pages = [("Genel Bakış", TabsPage([("Genel Bakış", sub["Genel Bakış"]), ("Tüketim", sub["Tüketim"])])),
                       ("Portföy", PortfolioPage(self.store, self.open_building, self.search.text().strip())),
-                      ("Projeler", TabsPage([("Öneriler", sub["Öneriler"]), ("Mevcut vs Hedef", sub["Mevcut vs Hedef"])])),
+                      ("Projeler", TabsPage([("Öneriler", sub["Öneriler"]), ("Proje takibi", sub["Proje takibi"]), ("Mevcut vs Hedef", sub["Mevcut vs Hedef"])])),
                       ("Finans", FinancePage(self.store, self.open_building)),
                       ("Ortaklar", ComingSoonPage("Ortaklar", "Ortaklar",
                                                   "Uygulayıcı firma ve ortak yönetimi için bina verisinden bağımsız bir ortak/teklif kaydı gerekir. "
@@ -282,6 +284,11 @@ class MainWindow(QMainWindow):
         self._dot_on = not self._dot_on
         dot = "●" if self._dot_on else "○"
         self.live.setText(f"{dot}  {self._short(self.project.building.name)}")
+
+    def _projects_changed(self, rows):
+        ov = self.sub.get("Genel Bakış")
+        if ov is not None:
+            ov.timeline.set_rows(rows)
 
     def open_building(self, bid: int):
         self.set_project(self.store.load_project(bid), select=0)

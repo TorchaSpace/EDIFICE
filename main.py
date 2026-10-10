@@ -10,6 +10,11 @@ from edifice.ui.main_window import MainWindow
 def main():
     selftest = "--selftest" in sys.argv
     app = QApplication(sys.argv)
+    from pathlib import Path
+    from PySide6.QtGui import QFontDatabase
+    import edifice
+    for f in sorted((Path(edifice.__file__).parent / "assets" / "fonts").glob("*.ttf")):   # Manrope + DM Mono (SIL OFL)
+        QFontDatabase.addApplicationFont(str(f))
     font = QFont("Manrope", 12)
     font.setStyleStrategy(QFont.PreferAntialias | QFont.PreferQuality)
     font.setHintingPreference(QFont.PreferNoHinting)

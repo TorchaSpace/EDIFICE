@@ -148,6 +148,7 @@ class BuildingDialog(QDialog):
                                     "Mahalle, cadde/sokak yazın; öneriler seçtiğiniz ilçeye göre gelir",
                                     context=lambda: ", ".join(x.strip() for x in (self.district.text(), self.state.text(), self.country.text()) if x.strip()))
         self._place_coord: tuple[float, float] | None = None
+        self.p_country.selected = "Türkiye"
         self._precise: tuple[float, float] | None = None
         for pin in (self.p_country, self.p_state, self.p_district):
             pin.picked.connect(self._place_picked)
@@ -382,9 +383,11 @@ class BuildingDialog(QDialog):
         parts = [x.strip() for x in b.address.split(",") if x.strip()]
         if len(parts) >= 4:
             self.country.setText(parts[-1]); self.state.setText(parts[-2]); self.district.setText(parts[-3])
+            self.p_country.selected, self.p_state.selected, self.p_district.selected = parts[-1], parts[-2], parts[-3]
             self.address.setText(", ".join(parts[:-3]))
         elif len(parts) == 3:
             self.country.setText(parts[2]); self.state.setText(parts[1]); self.district.setText(parts[0]); self.address.setText("")
+            self.p_country.selected, self.p_state.selected, self.p_district.selected = parts[2], parts[1], parts[0]
         else:
             self.country.setText(""); self.state.setText(""); self.district.setText("")
             self.address.setText(b.address)
@@ -421,6 +424,9 @@ class BuildingDialog(QDialog):
 
     # ---- toplama / kaydetme
     def collect(self):
+        bad = [lbl for lbl, pin in (("Ülke", self.p_country), ("İl", self.p_state), ("İlçe", self.p_district)) if not pin.is_valid()]
+        if bad:
+            raise ValidationError([f"{lbl}: önerilen listeden seçin (yazdığınız değer listede yok)" for lbl in bad])
         if getattr(self, "_addr_edited", False) and not self.lat.text().strip() and self._full_address():
             hit = self._precise or lookup_first(self._full_address()) or self._place_coord
             if hit:

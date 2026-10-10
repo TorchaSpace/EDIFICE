@@ -28,3 +28,6 @@ Proje klasöründeki `EDIFICE.app` çift tıklayınca uygulamayı açar (önce y
 - **macOS (Apple Silicon):** `EDIFICE-<sürüm>-macOS-arm64.dmg`: aç, EDIFICE'yi Applications'a sürükle. İmzasız olduğu için ilk açılışta sağ tık > Aç demek gerekir.
 - **Windows (64 bit):** `EDIFICE-Setup-<sürüm>.exe` (kurulum sihirbazı) ya da `...-portable.zip`. İlk açılışta SmartScreen uyarısı çıkarsa "Ek bilgi > Yine de çalıştır".
 - Üretim: Mac'te `packaging/build_mac.sh`; Windows'ta `packaging\build_windows.bat`; ikisi birden GitHub Actions ile (`.github/workflows/build.yml`): `v*` etiketi (örn. `git tag v1.0.1 && git push --tags`) atılınca testler çalışır, Windows + Mac dosyaları üretilir ve Releases sayfasına yüklenir.
+
+## Yazı tipleri
+`edifice/assets/fonts/` içinde Manrope ve DM Mono (SIL Open Font License 1.1; lisans metinleri aynı klasörde) uygulamayla birlikte gelir.

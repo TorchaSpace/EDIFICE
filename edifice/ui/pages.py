@@ -13,7 +13,7 @@ from ..service import Project
 from .charts import AreaChart, BarChart, CashFlowChart, ClassScale, PercentileBar
 from .forms import SmoothSelectTable
 from .widgets import (AMBER, G, GRADE_COLORS, INDIGO, MUTED, RED, SUB, TEXT, Card, Gauge, Panel, ScoreBar, badge,
-                      fmt, fmt_years, header, muted, qfont, section)
+                      fmt, fmt_years, header, muted, qfont, score_color, section)
 
 UTILITY_NAMES = {UtilityType.ELECTRICITY: "Elektrik", UtilityType.GAS: "Doğalgaz", UtilityType.WATER: "Su"}
 MONTHS = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"]
@@ -98,7 +98,7 @@ def _trend_text(pct: float) -> tuple[str, bool]:
 
 
 class OverviewPage:
-    def __init__(self, project: Project):
+    def __init__(self, project: Project, store=None):
         self.widget, lay = _page()
         b, k, h = project.building, project.kpis(), project.health()
         yoy = project.yoy()
@@ -115,6 +115,8 @@ class OverviewPage:
             ("Doğalgaz", k.gas_kwh / 1000, lambda v: f"{fmt(v)} MWh", f"%{fmt(100 * k.gas_kwh / k.total_energy_kwh)} pay", "gas", INDIGO),
             ("Su", k.water_m3, lambda v: f"{fmt(v)} m³", f"{fmt(k.water_m3_m2, 2)} m³/m²", "water", INDIGO),
             ("Yıllık maliyet", k.total_cost / 1e6, lambda v: f"{fmt(v, 2)} M ₺", "enerji + su", "cost", AMBER),
+            ("Sağlık skoru", h.total, lambda v: f"{fmt(v)}/100", f"not {h.grade}", "health", score_color(h.total)),
+            ("Enerji sınıfı", 0, lambda v: project.rating()["class"], "tahmini (BEP-TR ölçeği)", "rating", AMBER),
         ]
         for idx, (title, val, f, sub, key, accent) in enumerate(specs):
             c = Card(title, sub=sub, accent=accent)
@@ -122,7 +124,7 @@ class OverviewPage:
             if key in yoy:
                 txt, good = _trend_text(yoy[key])
                 c.set_trend(txt, good)
-            row.addWidget(c, idx // 3, idx % 3)
+            row.addWidget(c, idx // 4, idx % 4)
         lay.addLayout(row)
 
         mid = QHBoxLayout()
@@ -246,6 +248,18 @@ class OverviewPage:
                                     decimals=0, colors=["green", "indigo"], unit="tCO₂", min_h=210), 1)
         bottom.addWidget(co, 1)
         lay.addLayout(bottom)
+
+        from .projects_page import STATUSES, TimelineChart
+        tl = Panel(eyebrow="Proje zaman çizelgesi", title="Planlanan dönüşüm projeleri",
+                   subtitle="Projeler > Proje takibi'nde durumunu ve yılını seçtiğiniz öneriler.")
+        rows = []
+        if store is not None and project.building_id is not None:
+            names = {r.opportunity.code: r.opportunity.name for r in project.opportunity_results()}
+            rows = sorted(((names[c], s_, y) for c, (s_, y) in store.load_projects(project.building_id).items()
+                           if c in names and s_ != STATUSES[0]), key=lambda r: (r[2], r[0]))
+        self.timeline = TimelineChart(rows)
+        tl.lay.addWidget(self.timeline)
+        lay.addWidget(tl)
 
 
 class ConsumptionPage:

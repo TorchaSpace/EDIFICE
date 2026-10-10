@@ -228,6 +228,21 @@ def insights(project: Project) -> list[tuple[str, str, str]]:
         if total[i] > 1.4 * avg:
             out.append((AMBER, f"{MONTHS[i]} ayında tüketim ortalamanın %{(total[i] / avg - 1) * 100:.0f} üstünde",
                         "Mevsimsel pik olabilir; ısıtma/soğutma çizelgesini kontrol edin."))
+    prev = project.previous_year()
+    if prev is not None:
+        from statistics import median
+        for u, label in ((UtilityType.ELECTRICITY, "Elektrik"), (UtilityType.GAS, "Doğalgaz")):
+            now, before = project.monthly(project.year, u), project.monthly(prev, u)
+            ratios = {i: now[i] / before[i] for i in range(12) if before[i] > 0}
+            if len(ratios) < 6:
+                continue
+            med = median(ratios.values())
+            odd = [(i, v / med - 1) for i, v in ratios.items() if med > 0 and abs(v / med - 1) > 0.25]
+            if odd:
+                i, d = max(odd, key=lambda x: abs(x[1]))
+                out.append((AMBER, f"{label} tüketiminde anomali: {MONTHS[i]} ayı",
+                            f"{MONTHS[i]} ayı geçen yılın aynı ayına göre diğer aylardaki değişime kıyasla %{abs(d) * 100:.0f} "
+                            f"{'fazla' if d > 0 else 'az'}. Fatura, sayaç ya da kullanım değişikliğini kontrol edin."))
     r = project.rating()
     out.append((G if r["class"] in "ABC" else AMBER, f"Tahmini enerji sınıfı {r['class']}",
                 f"EUI {r['eui']:.0f} kWh/m²·yıl, kıyas {r['benchmark']:.0f}. Resmî EKB değildir."))

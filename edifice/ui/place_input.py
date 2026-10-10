@@ -16,6 +16,8 @@ class PlaceInput(QObject):
         self.edit, self.kind, self.parents = edit, kind, list(parent_fields)
         self.context = context         # açık adres: yazılana eklenen ilçe, il, ülke metni
         self.coord: tuple[float, float] | None = None
+        self.selected: str | None = None     # listeden seçilen (ya da kayıttan gelen) değer
+        self.had_results = False             # servis bu alan için hiç öneri döndürdü mü (internet yoksa zorlama yok)
         edit.setPlaceholderText(placeholder)
         self._hits: dict[str, dict] = {}
         self._model = QStringListModel(self)
@@ -54,6 +56,12 @@ class PlaceInput(QObject):
                 f" ({h['name']})" if h["name"] and h["name"] != h["street"] and h["name"] != h["district"] else "")
         return ", ".join(x for x in (h["district"], h["name"]) if x)
 
+    def is_valid(self) -> bool:
+        t = self.edit.text().strip()
+        if not t or not self.had_results:
+            return True
+        return self.selected is not None and self.selected.casefold() == t.casefold()
+
     def _results(self, hits: list):
         names, self._hits = [], {}
         for h in hits:
@@ -65,12 +73,14 @@ class PlaceInput(QObject):
             if label and label not in self._hits:
                 self._hits[label] = h
                 names.append(label)
+        self.had_results = self.had_results or bool(names)
         self._model.setStringList(names[:7])
         if names and self.edit.hasFocus():
             self._comp.complete()
 
     def _chosen(self, name: str):
         h = self._hits.get(name)
+        self.selected = name
         if h:
             self.coord = (h["lat"], h["lon"])
             self.picked.emit(h["lat"], h["lon"])
