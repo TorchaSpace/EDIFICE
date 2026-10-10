@@ -5,8 +5,8 @@ from typing import Callable
 
 from PySide6.QtCore import (Property, QEasingCurve, QParallelAnimationGroup, QPointF, QPropertyAnimation, QRectF, QSize, Qt,
                             QVariantAnimation)
-from PySide6.QtGui import (QBrush, QColor, QFont, QIcon, QLinearGradient, QPainter, QPainterPath,
-                           QPen, QPixmap)
+from PySide6.QtGui import (QColor, QFont, QIcon, QLinearGradient, QPainter, QPainterPath, QPen,
+                           QPixmap)
 from PySide6.QtWidgets import (QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel, QPushButton,
                                QStackedWidget, QVBoxLayout, QWidget)
 

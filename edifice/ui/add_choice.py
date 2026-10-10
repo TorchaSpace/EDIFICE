@@ -1,12 +1,11 @@
 """Bina ekleme yöntemi seçimi: formu doldur ya da Excel şablonuyla yükle."""
 from __future__ import annotations
 
-from datetime import datetime
 
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (QDialog, QFileDialog, QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel,
-                               QPushButton, QVBoxLayout, QWidget)
+                               QPushButton, QVBoxLayout)
 
 from ..excel_io import build_template
 from .widgets import G, RED, header, muted

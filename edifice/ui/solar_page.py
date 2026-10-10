@@ -8,7 +8,7 @@ from .. import solar
 from ..engine import solar_sizing as ss
 from ..models import UtilityType
 from .pages import MONTHS, _clear_layout, _page, area_chart, bar_chart
-from .widgets import AMBER, G, INDIGO, SUB, Card, Panel, fmt, fmt_years, header, muted
+from .widgets import AMBER, G, INDIGO, Card, Panel, fmt, fmt_years, header, muted
 
 
 class SolarLoader(QObject):

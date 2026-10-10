@@ -1,6 +1,5 @@
 """EDIFI'CE uygulama ikonu (1024px PNG). Tamamen vektör çizim: skor halkası içinde, anahtar sapından yükselen
 binalar (logonun amblemi). Halka = dashboard/Health Score göstergesi."""
-import math
 import os
 import sys
 

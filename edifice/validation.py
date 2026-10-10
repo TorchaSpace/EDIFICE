@@ -72,7 +72,7 @@ def _year_rows(year: int, rows: list[list[str]], label: str, errors: list[str], 
         for c, text in enumerate(row):
             try:
                 v = parse_number(text)
-            except ValueError as e:
+            except ValueError:
                 errors.append(f"{label} · {MONTH_NAMES[m - 1]} · {COLUMNS[c // 2][1 + c % 2]}: “{text}” geçerli bir sayı değil")
                 v = None
             if v is not None and v < 0:

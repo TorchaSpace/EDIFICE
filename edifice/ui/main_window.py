@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from pathlib import Path
 
 from PySide6.QtCore import QTimer, QUrl, Qt
 from PySide6.QtGui import QDesktopServices, QFontMetrics
@@ -27,7 +26,7 @@ from .projects_page import ProjectsTrackerPage
 from .tabs_page import ComingSoonPage, ReportPage, TabsPage
 from .portfolio import AssistantPage, EsgPage, FinancePage, PortfolioPage, summarize
 from .settings_page import SettingsPage
-from .widgets import get_style, FadeStack, Logo, NavBar, section
+from .widgets import get_style, FadeStack, Logo, NavBar
 
 TR_MONTHS = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"]
 

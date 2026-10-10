@@ -573,7 +573,7 @@ class LocationMap(QWidget):
         reply.finished.connect(lambda r=reply, k=key: self._tile_done(r, k))
 
     def _tile_done(self, reply, key):
-        from PySide6.QtGui import QImage, QPainter, QPixmap
+        from PySide6.QtGui import QImage, QPixmap
         self._pending.discard(key)
         img = QImage()
         if reply.error() == reply.NetworkError.NoError and img.loadFromData(reply.readAll().data()):
@@ -601,7 +601,6 @@ class LocationMap(QWidget):
         return False
 
     def paintEvent(self, e):
-        import math
         from PySide6.QtGui import QPainter, QPainterPath, QPen
         from .widgets import qfont, rgba
         p = QPainter(self)

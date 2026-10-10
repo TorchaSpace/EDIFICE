@@ -10,7 +10,6 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ..models import UtilityType
 from .weather_norm import _fit
 
 MIN_PRE, MIN_POST = 12, 3

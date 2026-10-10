@@ -212,6 +212,24 @@ class SettingsPage:
         sp.lay.addSpacing(6)
         sp.lay.addLayout(brow)
         lay.addWidget(sp)
+
+        import edifice as _e
+        about = Panel("Hakkında ve atıflar", f"EDIFI'CE {_e.__version__} · yerel masaüstü uygulaması. Veriler bu bilgisayarda (~/.edifice) durur.")
+        credits = QLabel(
+            "<b>Veri kaynakları ve atıflar</b><br>"
+            "• Harita: © OpenStreetMap katkıda bulunanlar (ODbL); adres araması: Photon (Komoot), OpenStreetMap verisi.<br>"
+            "• Hava verisi (geçmiş, anlık, tahmin): <a href='https://open-meteo.com' style='color:#0DDD96'>Open-Meteo.com</a> (CC BY 4.0). "
+            "Ücretsiz plan ticari olmayan kullanım içindir.<br>"
+            "• Güneş üretimi: PVGIS, © Avrupa Birliği, Ortak Araştırma Merkezi (JRC).<br>"
+            "• CRREM yolları: kullanıcının crrem.org'dan kendi indirdiği dosya; CRREM Foundation, CRREM Global Pathways. Uygulama CRREM verisi içermez.<br>"
+            "• Emisyon faktörleri, sınıf ölçeği, finans metodolojisi: Kaynaklar ve Yöntem ekranındaki kaynakça.<br>"
+            "• Yazı tipleri: Manrope ve DM Mono (SIL Open Font License 1.1).<br><br>"
+            "<b>Önemli:</b> Enerji sınıfı yaklaşık bir göstergedir, resmî Enerji Kimlik Belgesi değildir. Hesaplar karar desteğidir; yatırım tavsiyesi değildir.")
+        credits.setWordWrap(True)
+        credits.setOpenExternalLinks(True)
+        credits.setStyleSheet(f"color: {SUB}; font-size: 12px; background: transparent;")
+        about.lay.addWidget(credits)
+        lay.addWidget(about)
         lay.addStretch()
         self._weights_changed()
 

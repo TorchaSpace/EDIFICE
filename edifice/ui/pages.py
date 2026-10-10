@@ -8,12 +8,12 @@ from PySide6.QtWidgets import (QAbstractItemView, QSizePolicy, QSlider, QGridLay
 
 from ..engine.rating import CLASS_COLORS, CLASSES, z_of
 from ..engine.relevance import LABELS as FIT_LABELS
-from ..models import UTILITY_UNITS, UtilityType
+from ..models import UtilityType
 from ..service import Project
 from .charts import AreaChart, BarChart, CashFlowChart, ClassScale, PercentileBar
 from .forms import SmoothSelectTable
-from .widgets import (AMBER, G, GRADE_COLORS, INDIGO, MUTED, RED, SUB, TEXT, Card, Gauge, Panel, ScoreBar, badge,
-                      fmt, fmt_years, header, muted, qfont, score_color, section)
+from .widgets import (AMBER, G, GRADE_COLORS, INDIGO, MUTED, RED, SUB, Card, Gauge, Panel, ScoreBar, badge, fmt,
+                      fmt_years, header, muted, qfont, score_color, section)
 
 UTILITY_NAMES = {UtilityType.ELECTRICITY: "Elektrik", UtilityType.GAS: "Doğalgaz", UtilityType.WATER: "Su"}
 MONTHS = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"]
@@ -248,7 +248,7 @@ class OverviewPage:
             score.lay.addLayout(r)
         mid.addWidget(score)
 
-        prev = project.previous_year()
+        project.previous_year()
         cost_now, cost_prev = project.monthly_cost(project.year), project.monthly_cost(project.year - 1)
         chart_panel = Panel(eyebrow="Aylık maliyet", title=f"Enerji maliyeti · {project.year}",
                             subtitle=f"{fmt(sum(cost_now) / 1e6, 2)} M ₺ yıllık · bin ₺ cinsinden aylık")

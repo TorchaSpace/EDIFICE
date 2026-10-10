@@ -6,7 +6,6 @@ import logging
 import shutil
 import sqlite3
 import sys
-import time
 from datetime import date, datetime
 from pathlib import Path
 

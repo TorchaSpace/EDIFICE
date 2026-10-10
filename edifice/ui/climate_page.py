@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 from .. import weather
 from ..engine.outlook import outlook
 from .pages import _clear_layout, _fit_height, _page, _set_row, _table, area_chart
-from .widgets import AMBER, G, INDIGO, MUTED, RED, SUB, Card, Panel, badge, fmt, header, muted
+from .widgets import AMBER, G, INDIGO, MUTED, Card, Panel, fmt, header, muted
 
 
 class ClimateLoader(QObject):
@@ -154,3 +154,4 @@ class ClimatePage:
             r2 = ", ".join(f"{('doğalgaz' if k == 'gas' else 'elektrik')} R² {v:.2f}" for k, v in ol.r2.items())
             op.lay.addWidget(muted(f"Model güveni: {r2}. HDD/CDD taban 15/22 °C (varsayım). Tahmin günlük hava + aylık regresyondur; gerçek tüketim hafta sonu ve tatilden etkilenir."))
         self.body.addWidget(op)
+        self.body.addWidget(muted("Hava verisi: Open-Meteo.com (CC BY 4.0)."))

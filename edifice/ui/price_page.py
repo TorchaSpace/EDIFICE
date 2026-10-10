@@ -5,7 +5,7 @@ from PySide6.QtWidgets import QHBoxLayout
 from ..engine.pricing import analyze
 from ..models import UtilityType
 from .pages import MONTHS, _fit_height, _page, _set_row, _table, area_chart
-from .widgets import AMBER, G, RED, Card, Panel, badge, fmt, header, muted
+from .widgets import G, RED, Card, Panel, fmt, header, muted
 
 
 class PricePage:

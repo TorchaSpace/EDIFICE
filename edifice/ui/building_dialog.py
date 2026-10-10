@@ -7,16 +7,15 @@ from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt
 from PySide6.QtGui import QColor, QGuiApplication, QKeySequence
 from PySide6.QtWidgets import (QAbstractItemView, QCompleter, QDialog, QDoubleSpinBox,
                                QGraphicsOpacityEffect, QGridLayout, QHBoxLayout, QHeaderView, QLabel,
-                               QLineEdit, QPushButton, QScrollArea, QSpinBox, QTabBar, QTableWidget,
-                               QTableWidgetItem, QVBoxLayout, QWidget)
+                               QLineEdit, QPushButton, QSpinBox, QTabBar, QTableWidget, QTableWidgetItem,
+                               QVBoxLayout, QWidget)
 
 from ..geocode import lookup_first
-from ..validation import (COLUMNS, EQUIPMENT_CATEGORIES, EQUIPMENT_NAMES, MONTH_NAMES, USE_TYPES, ValidationError,
-                          build_from_inputs)
+from ..validation import (EQUIPMENT_CATEGORIES, EQUIPMENT_NAMES, MONTH_NAMES, USE_TYPES, ValidationError, build_from_inputs)
 from .dropdown import PremiumCombo
 from .place_input import PlaceInput
 from .forms import PillTable, SmoothSelectTable, field, scroll, tune_spin
-from .widgets import FadeStack, Panel, header, muted, qfont
+from .widgets import FadeStack, Panel, header, qfont
 
 
 def make_item(text: str, col: int) -> QTableWidgetItem:

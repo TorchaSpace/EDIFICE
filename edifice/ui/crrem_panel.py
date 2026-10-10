@@ -10,7 +10,7 @@ from ..engine.stranding import analyze
 from ..models import UtilityType
 from .dropdown import PremiumCombo
 from .pages import _clear_layout, area_chart
-from .widgets import AMBER, G, MUTED, RED, SUB, Panel, badge, fmt, muted
+from .widgets import AMBER, G, RED, SUB, Panel, fmt, muted
 
 METRICS = {"ghg": "Karbon (kgCO₂e/m²)", "kwh": "Enerji (kWh/m²)"}
 DEFAULT_TYPE = {"Ofis": "OFF", "Otel": "HOT", "Konut": "RMF", "Hastane": "HEC", "Ticari / AVM": "RSM", "Sanayi": "DWW"}

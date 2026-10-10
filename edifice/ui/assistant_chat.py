@@ -11,7 +11,7 @@ from ..ai.tools import Toolbox
 from ..db import Store
 from ..service import Project
 from .dropdown import PremiumCombo
-from .widgets import AMBER, G, MUTED, SUB, Panel, header, qfont
+from .widgets import AMBER, G, MUTED, SUB, Panel, header
 
 SUGGESTIONS = ["Bu binanın en büyük sorunu ne?", "Hangi öneriyle başlamalıyım?", "2 milyon ₺ bütçeyle ne yapmalıyım?",
                "Skorum neden düştü?", "Elektrik mi doğalgaz mı daha çok?", "Portföyde en kötü bina hangisi?"]
@@ -29,6 +29,9 @@ def build_assistant(store: Store | None) -> LocalAssistant:
     """Yerleşik örneklere kullanıcının öğrettiği örnekleri ekleyip modeli (milisaniyelerde) yeniden eğitir."""
     extra = [(i, t) for _, i, t in store.list_examples()] if store is not None else []
     return LocalAssistant(extra)
+
+
+_LIVE_WORKERS: set = set()     # çalışan iş parçacıkları sayfa yok edilse bile bitene kadar canlı tutulur (QThread çökmesini önler)
 
 
 class ChatWorker(QThread):
@@ -232,6 +235,8 @@ class ChatPage:
         self.worker.extras.connect(self._on_extras)
         self.worker.failed.connect(self._on_failed)
         self.worker.finished.connect(self._on_done)
+        _LIVE_WORKERS.add(self.worker)
+        self.worker.finished.connect(lambda w=self.worker: _LIVE_WORKERS.discard(w))
         self.worker.start()
 
     def _on_text(self, delta: str):

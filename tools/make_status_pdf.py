@@ -9,7 +9,7 @@ from pathlib import Path
 root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(root))
 
-from PySide6.QtCore import QMarginsF, QSizeF
+from PySide6.QtCore import QMarginsF
 from PySide6.QtGui import QFont, QFontDatabase, QPageLayout, QPageSize, QPdfWriter, QTextDocument
 from PySide6.QtWidgets import QApplication
 
@@ -79,7 +79,7 @@ HAVE = [
         "<b>Veri güvenliği:</b> günlük otomatik yedek (son 7), açılışta bütünlük denetimi ve bozuksa yedekten geri yükleme, JSON dışa aktarma, hata günlüğü (~/.edifice/edifice.log) ve kullanıcıya bildirim.",
         "<b>Dış veri (ilk kullanımda indirilir, önbelleğe alınır, çevrimdışıyken son veri gösterilir):</b> OpenStreetMap karoları ve Photon (adres), Open-Meteo (geçmiş + canlı hava), PVGIS (güneş). Hiçbiri API anahtarı istemez.",
         "<b>Tasarım:</b> koyu premium tema, Manrope ve DM Mono gömülü yazı tipleri, özel çizimli grafikler (aşağıdan yükselen animasyon), yumuşak geçişler.",
-        "<b>Paketleme:</b> macOS (Apple Silicon) DMG, Windows kurulum (.exe) ve taşınabilir zip; GitHub Actions ile otomatik derleme ve Release; paketli uygulamada otomatik kendi kendini sınama (selftest). Yayımlanan sürüm: v1.1.0.",
+        "<b>Paketleme:</b> macOS (Apple Silicon) DMG, Windows kurulum (.exe) ve taşınabilir zip; GitHub Actions ile otomatik derleme ve Release; paketli uygulamada otomatik kendi kendini sınama (selftest). Yayımlanan sürüm: v1.2.0 (v1.1.0 öncesi sürümler de Releases'te).",
         f"<b>Test ve doğrulama:</b> {tests} otomatik test: motor kimlikleri (KPI'ların ham veriden yeniden hesaplanması, NPV/IRR kimlikleri, optimizatör brute-force karşılaştırması, sınıf tek yönlülüğü), 60 bozuk girdi (fuzz), 8 bozuk binada tüm sayfaların açılması, hava/M&amp;V'nin bilinen gerçeği geri kazanması (yapay veri), ayrıştırıcılar, kaynak-öneri tutarlılığı, asistan akışları.",
         "<b>Belgeler:</b> docs/KAYNAKCA.md (30 kaynak, düzeyleriyle), PIYASA_FARKLARI.md, STRATEJI.md, RESMI_VERI_DURUMU.md, FIGMA_FARKLAR.md; CLAUDE.md proje notları.",
     ]),
@@ -120,7 +120,7 @@ LIMITS = [
     "Derece-gün taban sıcaklıkları (15/22 °C) ve veri kalitesi eşikleri sağduyu varsayımıdır (isimli sabitler; gerçek veriyle ayarlanmalı).",
     "Günlük enerji öngörüsü aylık modelin günlüğe indirilmesidir; hafta sonu/tatil etkisini bilmez. Hava verisi modellenmiştir, istasyon ölçümü değildir.",
     "Asistan bilmediği soruda bunu söyler; serbest sohbet yapamaz. Eğitim sekmesi ve 👍/👎 ile gelişir.",
-    "v1.1.0 sonrası eklenenler (canlı iklim, CRREM içe aktarma, piyasa belgeleri) henüz bir sürüm olarak yayımlanmadı.",
+    "Kurulum dosyaları imzasızdır; Windows ve Mac ilk açılışta uyarı verebilir. Windows yalnız GitHub otomasyonunda sınandı.",
 ]
 
 NEXT = [
@@ -129,7 +129,6 @@ NEXT = [
     "BEP-TR yöntem belgesi ve gerçek EKB ile sınıf kalibrasyonu; Türkiye emsal verisi.",
     "CRREM License Partner anlaşması ya da kullanıcı içe aktarmasıyla devam; güncel dosya biçimi doğrulaması.",
     "Kod imzalama, çok kullanıcı/bulut, bağımsız güvenlik incelemesi.",
-    "Yeni sürüm (v1.2.0) yayını.",
 ]
 
 
@@ -145,7 +144,7 @@ def table(rows, header, widths):
 
 parts = [f"""
 <h1 style="color:#0B3D2E;font-size:22pt;margin-bottom:0">EDIFI'CE · Durum Raporu</h1>
-<p style="color:#555;font-size:10pt">Sürüm {edifice.__version__} (yayımlanan: v1.1.0) · Hazırlanma tarihi: {date.today():%d.%m.%Y} · Bu belge neyin VAR, neyin YOK olduğunu ve nedenini dürüstçe listeler.</p>
+<p style="color:#555;font-size:10pt">Sürüm {edifice.__version__} (GitHub Releases'te yayımlandı) · Hazırlanma tarihi: {date.today():%d.%m.%Y} · Bu belge neyin VAR, neyin YOK olduğunu ve nedenini dürüstçe listeler.</p>
 <h2 style="color:#0B3D2E">Özet</h2>
 <ul>
 <li>EDIFI'CE, tek ya da birkaç binanın enerji, karbon, su ve maliyet verisini analiz eden, dönüşüm önerilerini finansal olarak değerlendiren, Türkiye'ye uyarlanmış bir <b>masaüstü uygulamasıdır</b> (Python/PySide6; macOS Apple Silicon ve Windows).</li>

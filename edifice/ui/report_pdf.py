@@ -6,8 +6,7 @@ from datetime import datetime
 from PySide6.QtCore import QMarginsF, QPointF, QRectF, Qt
 from pathlib import Path
 
-from PySide6.QtGui import (QBrush, QColor, QFont, QImage, QLinearGradient, QPageSize, QPainter, QPainterPath,
-                           QPdfWriter, QPen)
+from PySide6.QtGui import (QColor, QFont, QImage, QPageSize, QPainter, QPainterPath, QPdfWriter, QPen)
 
 from ..engine.rating import CLASS_COLORS
 from ..engine.relevance import LABELS as FIT_LABELS

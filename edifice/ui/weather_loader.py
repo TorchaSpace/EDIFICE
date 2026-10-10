@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import date
 
 from PySide6.QtCore import QObject, QUrl, Signal
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest

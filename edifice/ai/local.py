@@ -591,7 +591,7 @@ class LocalAssistant:
                 f"Öncelik önerisi: **{rows[0]['ad']}** (en düşük sağlık skoru).")
 
     def a_evidence(self, q, t, b, c):
-        p = t.projects[t.current]
+        t.projects[t.current]
         if c:
             rows = {r["kod"]: r for r in json.loads(t.run("get_opportunities", {}))}
             out = []
@@ -649,7 +649,6 @@ class LocalAssistant:
             lines.append(f"- **Su yoğunluğu** ({pts['Su yoğunluğu']:.0f}/100): {_n(k.water_m3_m2, 2)} m³/m², kıyas {_n(a.benchmark_water_m3_m2, 2)}.")
         if pts["Ekipman durumu"] < 60:
             from datetime import date
-            from ..engine.health import service_life
             rows = sorted(p.equipment, key=lambda e: (e.condition, e.year_installed))[:3]
             eq = "; ".join(f"{e.name} ({date.today().year - e.year_installed} yaş, durum {e.condition}/5)" for e in rows)
             lines.append(f"- **Ekipman durumu** ({pts['Ekipman durumu']:.0f}/100): en zayıflar: {eq}.")
