@@ -216,6 +216,11 @@ class ChatPage:
         from .. import solar as _solar
         for bid, p in projects.items():
             if p.building.lat is not None:
+                got = self.store.load_climate(p.building.lat, p.building.lon)
+                if got:
+                    tb.climate[bid] = got
+        for bid, p in projects.items():
+            if p.building.lat is not None:
                 y = self.store.load_solar(p.building.lat, p.building.lon, _solar.DEFAULT_ANGLE, _solar.DEFAULT_ASPECT)
                 if y:
                     tb.solar[bid] = y

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 import os
 import sqlite3
 from pathlib import Path
@@ -31,6 +32,9 @@ CREATE TABLE IF NOT EXISTS weather (lat REAL NOT NULL, lon REAL NOT NULL, year I
   hdd REAL, cdd REAL, days INTEGER, PRIMARY KEY (lat, lon, year, month));
 CREATE TABLE IF NOT EXISTS solar (lat REAL NOT NULL, lon REAL NOT NULL, angle REAL NOT NULL, aspect REAL NOT NULL, month INTEGER NOT NULL,
   kwh_per_kwp REAL, PRIMARY KEY (lat, lon, angle, aspect, month));
+CREATE TABLE IF NOT EXISTS weather_daily (lat REAL NOT NULL, lon REAL NOT NULL, day TEXT NOT NULL, tmean REAL, tmin REAL, tmax REAL,
+  PRIMARY KEY (lat, lon, day));
+CREATE TABLE IF NOT EXISTS climate_live (lat REAL NOT NULL, lon REAL NOT NULL, payload TEXT NOT NULL, fetched_at TEXT NOT NULL, PRIMARY KEY (lat, lon));
 CREATE TABLE IF NOT EXISTS ai_unknown (id INTEGER PRIMARY KEY AUTOINCREMENT, question TEXT NOT NULL UNIQUE, asked_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS ai_examples (id INTEGER PRIMARY KEY AUTOINCREMENT, intent TEXT NOT NULL, text TEXT NOT NULL UNIQUE);
 CREATE TABLE IF NOT EXISTS scenarios (
@@ -183,6 +187,24 @@ class Store:
         k = self.weather_key(lat, lon)
         return {(y, m): (h, c, n) for y, m, h, c, n in self.conn.execute(
             "SELECT year, month, hdd, cdd, days FROM weather WHERE lat=? AND lon=?", k)}
+
+    # ---- anlık iklim (son çekim) ve günlük gözlem birikimi
+    def save_climate(self, lat: float, lon: float, parsed: dict):
+        k = self.weather_key(lat, lon)
+        today = datetime.now().date().isoformat()
+        with self.conn:
+            self.conn.execute("INSERT OR REPLACE INTO climate_live VALUES (?,?,?,?)", (k[0], k[1], json.dumps(parsed), datetime.now().isoformat(timespec="seconds")))
+            self.conn.executemany("INSERT OR REPLACE INTO weather_daily VALUES (?,?,?,?,?,?)",
+                                  [(k[0], k[1], d["date"], d["tmean"], d["tmin"], d["tmax"]) for d in parsed["daily"] if d["date"] < today])
+
+    def load_climate(self, lat: float, lon: float) -> tuple[dict, str] | None:
+        k = self.weather_key(lat, lon)
+        row = self.conn.execute("SELECT payload, fetched_at FROM climate_live WHERE lat=? AND lon=?", k).fetchone()
+        return (json.loads(row[0]), row[1]) if row else None
+
+    def load_weather_daily(self, lat: float, lon: float) -> list[tuple[str, float]]:
+        k = self.weather_key(lat, lon)
+        return [(d, t) for d, t in self.conn.execute("SELECT day, tmean FROM weather_daily WHERE lat=? AND lon=? ORDER BY day", k)]
 
     # ---- GES verimi önbelleği (PVGIS, 1 kWp başına aylık kWh)
     def save_solar(self, lat: float, lon: float, angle: float, aspect: float, monthly: list[float]):

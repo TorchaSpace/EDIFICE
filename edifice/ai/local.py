@@ -58,6 +58,8 @@ INTENTS: dict[str, list[str]] = {
                  "kaynaklara git", "genel bakışa dön", "tüketim sayfasını aç"],
     "act_scenario": ["senaryoyu uygula", "bu paketi senaryoya koy", "led ve vfd yi seç", "mevcut vs hedefte göster",
                      "senaryo sayfasında aç", "bu önerileri senaryoda seç", "seçili yap"],
+    "climate": ["hava durumu nasıl", "bugün hava kaç derece", "anlık sıcaklık", "bu hafta hava nasıl olacak", "yarın hava", "önümüzdeki hafta enerji tahmini",
+                "bu hafta tüketim ne olur", "soğuk hava geliyor mu", "canlı iklim verisi", "yağmur var mı"],
     "solar": ["güneş enerjisi", "ges kurulumu mantıklı mı", "çatıya güneş paneli", "kaç kw ges", "solar yatırım", "ges geri ödeme",
               "güneş paneli kendini öder mi", "fotovoltaik"],
     "price": ["birim fiyat analizi", "fazla ödeme var mı", "fatura neden pahalı", "reaktif ceza", "etkin birim fiyat", "elektrik faturası şüpheli",
@@ -134,6 +136,12 @@ class IntentModel:
         known = {w[:4] for ex in self.raw[intent] for w in norm(ex).split() if w not in STOP and len(w) > 2}
         return bool(words & known)
 
+    def coverage(self, text: str, intent: str) -> float:
+        """Sorunun anlamlı kelimelerinin kaçı bu niyetin eğitim cümlelerinde (ilk 4 harf) geçiyor? Zayıf öneriyi elemek için."""
+        words = {w[:4] for w in norm(text).split() if w not in STOP and len(w) > 2}
+        known = {w[:4] for ex in self.raw[intent] for w in norm(ex).split() if w not in STOP and len(w) > 2}
+        return len(words & known) / len(words) if words else 0.0
+
     def classify(self, text: str) -> list[tuple[str, float]]:
         q = self._vec(_grams(text))
         best: dict[str, float] = {}
@@ -149,7 +157,7 @@ INTENT_LABELS = {
     "carbon": "Karbon", "water": "Su", "cost": "Maliyet", "trend": "Yıllık değişim", "peak": "Pik ay", "anomaly": "Anomali",
     "opportunities": "Öneri listesi", "start": "Nereden başlamalı", "budget": "Bütçeye göre paket", "scenario": "Senaryo (ne olur?)",
     "finance": "Finans (NPV, geri ödeme)", "equipment": "Ekipman", "portfolio": "Portföy", "why": "Neden?", "compare": "Karşılaştırma",
-    "solar": "Güneş enerjisi (GES)", "price": "Birim fiyat analizi", "mv": "Gerçekleşen tasarruf (M&V)", "weather": "Hava düzeltmesi", "quality": "Veri kalitesi", "evidence": "Kaynak / kanıt", "act_status": "İşlem: proje durumu", "act_report": "İşlem: rapor", "act_open": "İşlem: sayfa aç",
+    "climate": "Anlık hava ve haftalık öngörü", "solar": "Güneş enerjisi (GES)", "price": "Birim fiyat analizi", "mv": "Gerçekleşen tasarruf (M&V)", "weather": "Hava düzeltmesi", "quality": "Veri kalitesi", "evidence": "Kaynak / kanıt", "act_status": "İşlem: proje durumu", "act_report": "İşlem: rapor", "act_open": "İşlem: sayfa aç",
     "act_scenario": "İşlem: senaryo seç", "greet": "Selamlama / yardım"}
 
 
@@ -289,8 +297,11 @@ class LocalAssistant:
         codes = find_codes(question, toolbox)
         if {"ges", "gunes", "solar", "fotovoltaik", "pv"} & set(norm(question).split()):
             intent, score = "solar", max(score, 0.5)          # GES sözcüğü kesin işarettir ("ges geri ödeme" finans sanılmasın)
-        if intent == "weather" and not weather_topic(question):
-            score = 0.0            # "bugün hava nasıl" gibi genel hava sorusu bu uygulamanın konusu değil
+        qtok = set(norm(question).split())
+        if ({"hava", "sicaklik", "yagmur", "derece"} & qtok or "hava durumu" in norm(question)) and not weather_topic(question):
+            intent, score = "climate", max(score, 0.5)       # "bugün hava nasıl": canlı iklim; "hava düzeltmeli tüketim" ise normalizasyon
+        elif intent == "weather" and not weather_topic(question):
+            score = 0.0
         if score < self.THRESHOLD or not self.model.content_overlap(question, intent) or (len(ranked) > 1 and score - ranked[1][1] < 0.02 and score < 0.5):
             if budget and mem.intent in ("budget", "scenario", "start"):
                 intent = "budget"           # "peki 3 milyon olursa?"
@@ -331,7 +342,7 @@ class LocalAssistant:
     def _unknown(self, question: str = "", mem: Memory | None = None, ranked=None) -> str:
         if mem is not None:
             mem.unknown, mem.pending_unknown = question, question
-            mem.suggest = [i for i, sc in (ranked or [])[:3] if sc >= 0.15 and i != "greet" and self.model.content_overlap(question, i) and (i != "weather" or weather_topic(question))][:3]
+            mem.suggest = [i for i, sc in (ranked or [])[:3] if sc >= 0.15 and i != "greet" and self.model.coverage(question, i) >= 0.4 and (i != "weather" or weather_topic(question))][:3]
             if mem.suggest:
                 return "Tam emin olamadım. Aşağıdakilerden birini mi kastettin? Seçersen bunu öğrenirim."
         return ("Bunu tam anlayamadım. Şunları cevaplayabilirim:\n\n"
@@ -341,6 +352,25 @@ class LocalAssistant:
                 "- Rakamların kaynağı ve kanıt düzeyi, “neden?” soruları\n- Karşılaştırma (iki bina, elektrik–doğalgaz, ay–yıl)\n"
                 "- İşlem: proje durumunu değiştirme, sayfa açma, senaryo seçme, rapor üretme\n\n"
                 "Örnek: “2 milyon ₺ bütçeyle ne yapmalıyım?” Anlamadığım soruları Asistan > Eğitim sekmesinde bana öğretebilirsin.")
+
+    def a_climate(self, q, t, b, c):
+        d = json.loads(t.run("get_climate", {}))
+        if "hata" in d:
+            return d["hata"]
+        head = (f"Şu an **{d['sicaklik_C']:.0f} °C** ({d['durum'].lower()}), hissedilen {d['hissedilen_C']:.0f} °C, nem %{d['nem_yuzde']:.0f}, rüzgâr {d['ruzgar_kmh']:.0f} km/s "
+                f"(veri: {d['cekim_zamani'][11:16]}).")
+        days = "\n".join(f"- {g['tarih'][8:]}.{g['tarih'][5:7]}: {g['min']:.0f} / {g['max']:.0f} °C, {g['durum'].lower()}" for g in d["gunler"][:5])
+        eo = d["enerji_ongorusu"]
+        if "hata" in eo:
+            tail = f"\n\nEnerji öngörüsü yapılamadı: {eo['hata']}"
+        else:
+            parts = []
+            for key, label in (("dogalgaz", "doğalgaz"), ("elektrik", "elektrik")):
+                dp, kwh = eo[f"{key}_normale_gore_yuzde"], eo[f"{key}_kwh_7gun"]
+                if kwh:
+                    parts.append(f"{label} ≈ {_n(kwh / 1000, 1)} MWh" + (f" (normal haftaya göre %{abs(dp):.0f} {'fazla' if dp > 0 else 'az'})" if dp is not None else ""))
+            tail = "\n\nÖnümüzdeki 7 gün tahmini tüketim: " + "; ".join(parts) + f". {eo['not']}"
+        return head + "\n\n" + days + tail
 
     def a_solar(self, q, t, b, c):
         d = json.loads(t.run("get_solar", {}))

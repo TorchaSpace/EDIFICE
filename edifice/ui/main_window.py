@@ -18,6 +18,7 @@ from .add_choice import AddChoiceDialog
 from .building_dialog import BuildingDialog
 from .report_pdf import build_pdf
 from .method_page import MethodPage
+from .climate_page import ClimateLoader, ClimatePage
 from .price_page import PricePage
 from .solar_page import SolarLoader, SolarPage
 from .weather_loader import WeatherLoader
@@ -116,6 +117,11 @@ class MainWindow(QMainWindow):
         tl.addWidget(sep)
         tl.addWidget(self.crumb)
         tl.addStretch()
+        self.wx = QLabel("")
+        self.wx.setObjectName("datepill")
+        self.wx.setFixedHeight(28)
+        self.wx.hide()
+        tl.addWidget(self.wx)
         self.search = QLineEdit()
         self.search.setObjectName("search")
         self.search.setPlaceholderText("Bina ara…")
@@ -194,7 +200,8 @@ class MainWindow(QMainWindow):
         sub = self.sub
         sub["Eğitim"] = TrainingPage(self.store, sub["Sohbet"].reload_ai)
         sub["GES"] = SolarPage(project, self.store)
-        self.pages = [("Genel Bakış", TabsPage([("Genel Bakış", sub["Genel Bakış"]), ("Tüketim", sub["Tüketim"])])),
+        sub["İklim"] = ClimatePage(project, self.store, self._refresh_climate)
+        self.pages = [("Genel Bakış", TabsPage([("Genel Bakış", sub["Genel Bakış"]), ("Tüketim", sub["Tüketim"]), ("İklim", sub["İklim"])])),
                       ("Portföy", PortfolioPage(self.store, self.open_building, self.search.text().strip())),
                       ("Projeler", TabsPage([("Öneriler", sub["Öneriler"]), ("Proje takibi", sub["Proje takibi"]), ("Mevcut vs Hedef", sub["Mevcut vs Hedef"])])),
                       ("Finans", TabsPage([("Portföy finansı", FinancePage(self.store, self.open_building)), ("Güneş enerjisi (GES)", sub["GES"]), ("Birim fiyat analizi", PricePage(project))])),
@@ -213,6 +220,7 @@ class MainWindow(QMainWindow):
         self.idx = {n: i for i, (n, _) in enumerate(self.pages)}
         self._start_weather(project)
         self._start_solar(project)
+        self._refresh_climate()
         for _, page in self.pages:
             self.stack.addWidget(page.widget)
         name = project.building.name
@@ -381,6 +389,30 @@ class MainWindow(QMainWindow):
             self._weather_loader.done.connect(self._on_weather)
         self._weather_loader.load(self.store, project)
 
+    def _refresh_climate(self):
+        if not hasattr(self, "_climate_loader"):
+            self._climate_loader = ClimateLoader(self)
+            self._climate_loader.done.connect(self._on_climate)
+            self._climate_timer = QTimer(self)             # uygulama açıkken 30 dakikada bir canlı veriyi yenile
+            self._climate_timer.timeout.connect(self._refresh_climate)
+            self._climate_timer.start(30 * 60 * 1000)
+        self._climate_loader.refresh(self.store, self.project)
+
+    def _on_climate(self, bid, data, status, fetched):
+        if bid != self.project.building_id:
+            return
+        from .. import weather as _wx
+        if data is not None:
+            name, icon = _wx.describe(data["current"]["code"])
+            self.wx.setText(f"{icon} {data['current']['temp']:.0f}°C")
+            self.wx.setToolTip(f"{name} · hissedilen {data['current']['feels']:.0f}°C · {self.project.building.name}" + ("" if status == "ok" else " (çevrimdışı, son veri)"))
+            self.wx.show()
+        else:
+            self.wx.hide()
+        page = self.sub.get("İklim")
+        if page is not None:
+            page.set_data(data, status, fetched)
+
     def _start_solar(self, project):
         if not hasattr(self, "_solar_loader"):
             self._solar_loader = SolarLoader(self)
@@ -396,10 +428,18 @@ class MainWindow(QMainWindow):
         if bid != self.project.building_id:
             return                          # kullanıcı bu arada başka binaya geçti
         from ..engine.weather_norm import normalize
+        b = self.project.building
+        if dd and b.lat is not None:                       # arşivin gecikmesini son günlerin canlı gözlemleriyle kapat
+            from .. import weather as _wx
+            dd = _wx.merge_recent(dd, self.store.load_weather_daily(b.lat, b.lon))
+        self._dd = dd
         wn = normalize(self.project, dd) if dd else None
         ov = self.sub.get("Genel Bakış")
         if ov is not None and hasattr(ov, "set_weather"):
             ov.set_weather(wn, status)
+        cl = self.sub.get("İklim")
+        if cl is not None:
+            cl.set_dd(dd or {})
         tr = self.sub.get("Proje takibi")
         if tr is not None:
             tr.set_weather(dd)

@@ -67,7 +67,7 @@ def test_building_name_switches_context(ai, tb):
 
 
 def test_out_of_scope_gets_honest_fallback(ai, tb):
-    assert "anlayamadım" in ai.answer("bugün hava nasıl", tb, Memory())
+    assert "anlayamadım" in ai.answer("en iyi makarna tarifi nedir", tb, Memory())
 
 
 def test_why_compare_and_actions(ai, tb):

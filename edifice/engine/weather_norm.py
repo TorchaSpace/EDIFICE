@@ -125,3 +125,22 @@ def normalize(project, dd: dict) -> WeatherNorm | None:
     conf = "Yok" if not used else ("Yüksek" if heavy.ok and heavy.r2 >= R2_OK else "Orta" if heavy.ok else "Düşük")
     return WeatherNorm(year, prev, result, raw_t, norm_t, raw_p, norm_p, ch(raw_t, raw_p) if raw_p else None,
                        ch(norm_t, norm_p) if norm_p else None, NORMAL_YEARS, conf)
+
+
+def fit_models(project, dd: dict) -> dict[UtilityType, tuple[float, float, float, float, int]]:
+    """Enerji türü -> (a, b, c, R², n). Yeterli gözlem ve R² ≥ 0,3 yoksa o tür yer almaz."""
+    years = [y for y in (project.year, project.previous_year()) if y is not None]
+    out = {}
+    for u in (UtilityType.GAS, UtilityType.ELECTRICITY):
+        pts = []
+        for y in years:
+            for m, v in enumerate(project.monthly(y, u), start=1):
+                if v > 0 and (y, m) in dd and dd[(y, m)][2] >= 27:
+                    pts.append((v, dd[(y, m)][0], dd[(y, m)][1]))
+        if len(pts) < MIN_POINTS:
+            continue
+        arr = np.array(pts)
+        (a, b, c), r2 = _fit(arr[:, 0], arr[:, 1], arr[:, 2])
+        if r2 >= R2_WEAK:
+            out[u] = (a, b, c, r2, len(pts))
+    return out

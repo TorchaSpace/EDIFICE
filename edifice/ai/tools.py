@@ -18,6 +18,7 @@ class Toolbox:
     def __init__(self, projects: dict[int, Project], current: int | None, weather: dict | None = None):
         self.projects, self.current = projects, current
         self.weather = weather or {}
+        self.climate: dict[int, tuple[dict, str]] = {}      # bina -> (anlık/tahmin verisi, çekim zamanı)
         self.solar: dict[int, list[float]] = {}       # bina -> 12 aylık kWh/kWp (PVGIS önbelleği)
         self.completed: dict[int, dict] = {}     # bina -> {öneri kodu: (yıl, ay)} (tamamlanan projeler)        # bina kimliği -> aylık derece-gün sözlüğü (önbellekten)
 
@@ -130,6 +131,28 @@ class Toolbox:
                         "oncesi_ay": r.n_pre, "sonrasi_ay": r.n_post, "tasarruf_kwh": _r(r.saved_kwh, 0), "tasarruf_yuzde": _r(r.saved_pct * 100),
                         "belirsizlik_kwh": _r(r.uncertainty_kwh, 0), "anlamli": r.significant, "katalog_beklentisi_kwh": _r(r.expected_kwh, 0),
                         "gerceklesme_yuzde": _r(r.realization_pct, 0), "model_guvenilir": r.model_ok, "cv_rmse": _r(r.cv_rmse, 3)})
+        return out
+
+    def t_get_climate(self, a):
+        from datetime import date
+        from ..engine.outlook import outlook
+        from ..weather import describe
+        bid, p = self._p(a)
+        got = self.climate.get(bid)
+        if not got:
+            return {"hata": "Bu bina için canlı iklim verisi yok (konum girilmemiş ya da henüz çekilmemiş; İklim sekmesini açın)."}
+        data, fetched = got
+        cur = data["current"]
+        ol = outlook(p, self.weather.get(bid) or {}, data["daily"])
+        out = {"cekim_zamani": fetched, "durum": describe(cur["code"])[0], "sicaklik_C": cur["temp"], "hissedilen_C": cur["feels"], "nem_yuzde": cur["humidity"],
+               "ruzgar_kmh": cur["wind"], "gunes_isinimi_Wm2": cur["radiation"],
+               "gunler": [{"tarih": d["date"], "min": d["tmin"], "max": d["tmax"], "durum": describe(d["code"])[0], "yagis_mm": d["precip"]}
+                          for d in data["daily"] if d["date"] >= date.today().isoformat()][:7]}
+        if ol.ok:
+            out["enerji_ongorusu"] = {"dogalgaz_kwh_7gun": _r(ol.gas_total, 0), "elektrik_kwh_7gun": _r(ol.elec_total, 0),
+                                      "dogalgaz_normale_gore_yuzde": _r(ol.delta_pct("gas")), "elektrik_normale_gore_yuzde": _r(ol.delta_pct("elec")), "not": ol.note}
+        else:
+            out["enerji_ongorusu"] = {"hata": ol.note}
         return out
 
     def t_get_solar(self, a):
