@@ -249,3 +249,35 @@ def test_import_consumption_merges_into_building(tmp_path, monkeypatch):
     w.import_consumption()
     assert len(w.project.readings) == before + 2
     assert any(r.year == 2027 and r.month == 1 and r.consumption == 1000 for r in w.project.readings)
+
+
+def test_esg_stranded_table_reflects_plan():
+    from edifice.db import Store
+    from edifice.ui.main_window import MainWindow
+    store = Store(":memory:")
+    bid = store.seed_demo()
+    w = MainWindow(store.load_project(bid), store)
+    page = w.pages[w.idx["Sürdürülebilirlik"]][1]
+    texts = [lbl.text() for lbl in page.widget.findChildren(__import__("PySide6.QtWidgets", fromlist=["QLabel"]).QLabel)]
+    assert any("Binalar hedef yolunu ne zaman aşar" in t for t in texts)
+    from PySide6.QtWidgets import QTableWidget
+    tables = page.widget.findChildren(QTableWidget)
+    cells = [t.item(r, c).text() for t in tables for r in range(t.rowCount()) for c in range(t.columnCount()) if t.item(r, c)]
+    assert any(c in ("Şimdi aşıyor", "Hedefte") or c.endswith("'de aşar") for c in cells)
+
+
+def test_export_packs_write_files(tmp_path, monkeypatch):
+    from openpyxl import load_workbook
+    from PySide6.QtWidgets import QFileDialog
+    from PySide6.QtGui import QDesktopServices
+    from edifice.db import Store
+    from edifice.ui.main_window import MainWindow
+    store = Store(":memory:")
+    bid = store.seed_demo()
+    w = MainWindow(store.load_project(bid), store)
+    monkeypatch.setattr(QDesktopServices, "openUrl", staticmethod(lambda *_: True))
+    for kind in ("esg", "ekb", "portfoy"):
+        out = tmp_path / f"{kind}.xlsx"
+        monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, o=out, **k: (str(o), "")))
+        w.export_pack(kind)
+        assert load_workbook(out).sheetnames

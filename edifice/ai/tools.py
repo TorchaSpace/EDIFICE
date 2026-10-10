@@ -18,6 +18,7 @@ class Toolbox:
     def __init__(self, projects: dict[int, Project], current: int | None, weather: dict | None = None):
         self.projects, self.current = projects, current
         self.weather = weather or {}
+        self.solar: dict[int, list[float]] = {}       # bina -> 12 aylık kWh/kWp (PVGIS önbelleği)
         self.completed: dict[int, dict] = {}     # bina -> {öneri kodu: (yıl, ay)} (tamamlanan projeler)        # bina kimliği -> aylık derece-gün sözlüğü (önbellekten)
 
     def _p(self, args: dict) -> tuple[int, Project]:
@@ -129,6 +130,37 @@ class Toolbox:
                         "oncesi_ay": r.n_pre, "sonrasi_ay": r.n_post, "tasarruf_kwh": _r(r.saved_kwh, 0), "tasarruf_yuzde": _r(r.saved_pct * 100),
                         "belirsizlik_kwh": _r(r.uncertainty_kwh, 0), "anlamli": r.significant, "katalog_beklentisi_kwh": _r(r.expected_kwh, 0),
                         "gerceklesme_yuzde": _r(r.realization_pct, 0), "model_guvenilir": r.model_ok, "cv_rmse": _r(r.cv_rmse, 3)})
+        return out
+
+    def t_get_solar(self, a):
+        from ..engine import solar_sizing as ss
+        from ..models import UtilityType as U
+        bid, p = self._p(a)
+        y = self.solar.get(bid)
+        if not y:
+            return {"hata": "Bu bina için güneş verisi yok (konum girilmemiş ya da henüz indirilmemiş; GES sayfasını bir kez açın)."}
+        cons, price = p.monthly(p.year, U.ELECTRICITY), p.prices()[U.ELECTRICITY]
+        if sum(cons) <= 0 or price <= 0:
+            return {"hata": "Elektrik tüketimi ya da birim fiyatı yok."}
+        cap = ss.max_kwp(p.building.floor_area_m2, p.building.floors)
+        best, _ = ss.size_for_best_npv(y, cons, price, p.assumptions, cap)
+        if best is None:
+            return {"hata": "Varsayılan birim maliyetle NPV'si pozitif bir GES boyutu yok.", "cati_siniri_kwp": _r(cap, 0)}
+        f = best.finance
+        return {"kwp": best.kwp, "cati_siniri_kwp": _r(cap, 0), "yillik_uretim_kwh": _r(best.production_kwh, 0), "oz_tuketim_kwh": _r(best.self_kwh, 0),
+                "elektrik_karsilama_yuzde": _r(best.coverage_pct), "yillik_tasarruf_TL": _r(best.saving, 0), "capex_TL": _r(best.capex, 0),
+                "geri_odeme_yil": _r(f.simple_payback), "npv_TL": _r(f.npv, 0), "irr": _r(f.irr, 4), "karbon_onlenen_kg": _r(best.carbon_avoided_kg, 0),
+                "varsayimlar": f"birim maliyet {ss.DEFAULT_CAPEX_PER_KWP:.0f} TL/kWp, eşzamanlılık %{ss.SELF_MATCH * 100:.0f}, fazla üretim değersiz; hepsi varsayım"}
+
+    def t_get_price_analysis(self, a):
+        from ..engine.pricing import analyze
+        from ..models import UtilityType as U
+        bid, p = self._p(a)
+        out = {}
+        for u, label in ((U.ELECTRICITY, "elektrik"), (U.GAS, "dogalgaz")):
+            r = analyze(p, u)
+            out[label] = {"analiz_edilebildi": r.ok and not r.tariff_derived, "not": r.note, "medyan_fiyat": _r(r.median_price, 2),
+                          "supheli_aylar": [m.month for m in r.months if m.flagged], "olasi_fazla_odeme_TL": _r(r.excess_total, 0)}
         return out
 
     def t_get_data_quality(self, a):

@@ -29,6 +29,8 @@ CREATE TABLE IF NOT EXISTS projects (
   code TEXT NOT NULL, status TEXT NOT NULL, year INTEGER NOT NULL, PRIMARY KEY (building_id, code));
 CREATE TABLE IF NOT EXISTS weather (lat REAL NOT NULL, lon REAL NOT NULL, year INTEGER NOT NULL, month INTEGER NOT NULL,
   hdd REAL, cdd REAL, days INTEGER, PRIMARY KEY (lat, lon, year, month));
+CREATE TABLE IF NOT EXISTS solar (lat REAL NOT NULL, lon REAL NOT NULL, angle REAL NOT NULL, aspect REAL NOT NULL, month INTEGER NOT NULL,
+  kwh_per_kwp REAL, PRIMARY KEY (lat, lon, angle, aspect, month));
 CREATE TABLE IF NOT EXISTS ai_unknown (id INTEGER PRIMARY KEY AUTOINCREMENT, question TEXT NOT NULL UNIQUE, asked_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS ai_examples (id INTEGER PRIMARY KEY AUTOINCREMENT, intent TEXT NOT NULL, text TEXT NOT NULL UNIQUE);
 CREATE TABLE IF NOT EXISTS scenarios (
@@ -181,6 +183,19 @@ class Store:
         k = self.weather_key(lat, lon)
         return {(y, m): (h, c, n) for y, m, h, c, n in self.conn.execute(
             "SELECT year, month, hdd, cdd, days FROM weather WHERE lat=? AND lon=?", k)}
+
+    # ---- GES verimi önbelleği (PVGIS, 1 kWp başına aylık kWh)
+    def save_solar(self, lat: float, lon: float, angle: float, aspect: float, monthly: list[float]):
+        k = self.weather_key(lat, lon)
+        with self.conn:
+            self.conn.executemany("INSERT OR REPLACE INTO solar VALUES (?,?,?,?,?,?)",
+                                  [(k[0], k[1], angle, aspect, m + 1, v) for m, v in enumerate(monthly)])
+
+    def load_solar(self, lat: float, lon: float, angle: float, aspect: float) -> list[float] | None:
+        k = self.weather_key(lat, lon)
+        rows = self.conn.execute("SELECT kwh_per_kwp FROM solar WHERE lat=? AND lon=? AND angle=? AND aspect=? ORDER BY month",
+                                 (k[0], k[1], angle, aspect)).fetchall()
+        return [r[0] for r in rows] if len(rows) == 12 else None
 
     # ---- asistan eğitimi
     def log_unknown(self, question: str):

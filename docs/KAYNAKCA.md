@@ -25,6 +25,11 @@ Bu dosya `edifice/evidence.py` kaydından üretilir (`python tools/make_docs.py`
 | Hava | Hava normalizasyonu yöntemi | aylık tüketim = a + b·HDD + c·CDD (b,c ≥ 0) | İkincil aktarım | IPMVP, OPENMETEO | Derece-gün regresyonu; R² < 0,3 ise düzeltme yapılmaz, 0,6 üstü “güvenilir” sayılır (eşikler varsayımdır). Normal yıl: son 10 tam yılın aylık ortalaması. |
 | Hava | Isıtma derece-gün taban sıcaklığı | 15 °C | Varsayım | - | Günlük ortalama sıcaklığın bu değerin altı ısıtma yükü sayılır; kaynak doğrulanmadı, binaya göre değişir. |
 | Hava | Soğutma derece-gün taban sıcaklığı | 22 °C | Varsayım | - | Günlük ortalama sıcaklığın bu değerin üstü soğutma yükü sayılır; kaynak doğrulanmadı, binaya göre değişir. |
+| GES | Aylık üretim verisi | PVGIS kWh/kWp (30° eğim, güney, %14 kayıp) | Özet okundu | PVGIS | Modellenmiş üretim; gölgelenme, kirlenme ve gerçek çatı geometrisi dahil değildir. |
+| GES | Eşzamanlı tüketim oranı | %85 (aylık örtüşmenin) | Varsayım | - | Saatlik yük verisi yok; gündüz ağırlıklı ofis varsayımı. Depolama yok. |
+| GES | Şebekeye verilen fazlanın değeri | tarifenin %0'ı | Varsayım | - | Muhafazakâr: fazla üretim gelire sayılmaz; mevzuat ve güncel satış fiyatı doğrulanmadı. |
+| GES | Çatı kullanılabilirliği ve kWp başına alan | %60 · 6 m²/kWp | Varsayım | - | Kat başına alanın bir kısmı kullanılabilir sayılır; gerçek çatı için keşif gerekir. |
+| GES | GES birim maliyeti | 25,000 ₺/kWp | Varsayım | - | Piyasa fiyatı doğrulanmadı; teklifle değiştirin. Sonuçlar bu değere çok duyarlıdır. |
 | Finans | İskonto oranı | %8,0 (reel) | Varsayım | EU244 | AB metodolojisi reel oran ve en az iki oranla duyarlılık analizi ister (makroekonomik referans reel %3); finansal oranın değeri belirtilmez. Duyarlılık tablosunda %3 ve ±2 puan gösterilir. |
 | Finans | Enerji fiyat artışı | %3,0 (reel) | Varsayım | - | Kaynak yok; duyarlılık tablosunda %0 senaryosu var. |
 | Finans | Analiz süresi | 20 yıl | Kaynak okundu | EU244 | AB 244/2012: ticari konut dışı binalar için 20 yıl, konut ve kamu binaları için 30 yıl. |
@@ -42,6 +47,14 @@ Bu dosya `edifice/evidence.py` kaydından üretilir (`python tools/make_docs.py`
 | Yoğuşmalı kazan | %7.0 | %12.0 | %21.0 | İkincil aktarım | MNCEE_BOILER | Nominal verimi %70-82 olan eski kazandan, ölçülen ortalama %88,6'ya (MnCEE, 12 bina) geçişte yakıt tasarrufu 1-η_eski/η_yeni = %7-21 (η=%78 için %12). Gazın ısıtmaya gittiği varsayımı. |
 
 ## Kaynakça
+
+### PVGIS (Özet okundu)
+
+European Commission JRC, Photovoltaic Geographical Information System (PVGIS) — PVcalc, şebeke bağlantılı PV aylık üretim tahmini.
+
+Konum, eğim, yön ve sistem kaybına göre MODELLENMİŞ üretim (uydu radyasyon verisi); ölçüm değildir. Ücretsiz, kaynak gösterilmelidir. Türkiye kapsamı API yanıtıyla doğrulandı (Ankara ≈ 1465 kWh/kWp·yıl, 30° güney).
+
+https://re.jrc.ec.europa.eu/pvg_tools/en/
 
 ### OPENMETEO (İkincil aktarım)
 

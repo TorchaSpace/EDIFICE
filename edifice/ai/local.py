@@ -58,6 +58,10 @@ INTENTS: dict[str, list[str]] = {
                  "kaynaklara git", "genel bakışa dön", "tüketim sayfasını aç"],
     "act_scenario": ["senaryoyu uygula", "bu paketi senaryoya koy", "led ve vfd yi seç", "mevcut vs hedefte göster",
                      "senaryo sayfasında aç", "bu önerileri senaryoda seç", "seçili yap"],
+    "solar": ["güneş enerjisi", "ges kurulumu mantıklı mı", "çatıya güneş paneli", "kaç kw ges", "solar yatırım", "ges geri ödeme",
+              "güneş paneli kendini öder mi", "fotovoltaik"],
+    "price": ["birim fiyat analizi", "fazla ödeme var mı", "fatura neden pahalı", "reaktif ceza", "etkin birim fiyat", "elektrik faturası şüpheli",
+              "tarife analizi", "kWh fiyatı yükseldi mi"],
     "mv": ["gerçekleşen tasarruf", "ölçülen tasarruf", "proje işe yaradı mı", "yatırım gerçekten tasarruf sağladı mı", "biten projeler ne kadar kazandırdı",
            "tahmin ile gerçekleşen", "doğrulanmış tasarruf", "m&v sonucu"],
     "weather": ["hava düzeltmeli tüketim", "iklim etkisi", "derece gün", "hava durumuna göre düzeltilmiş", "sıcak kış yüzünden mi düştü",
@@ -145,7 +149,7 @@ INTENT_LABELS = {
     "carbon": "Karbon", "water": "Su", "cost": "Maliyet", "trend": "Yıllık değişim", "peak": "Pik ay", "anomaly": "Anomali",
     "opportunities": "Öneri listesi", "start": "Nereden başlamalı", "budget": "Bütçeye göre paket", "scenario": "Senaryo (ne olur?)",
     "finance": "Finans (NPV, geri ödeme)", "equipment": "Ekipman", "portfolio": "Portföy", "why": "Neden?", "compare": "Karşılaştırma",
-    "mv": "Gerçekleşen tasarruf (M&V)", "weather": "Hava düzeltmesi", "quality": "Veri kalitesi", "evidence": "Kaynak / kanıt", "act_status": "İşlem: proje durumu", "act_report": "İşlem: rapor", "act_open": "İşlem: sayfa aç",
+    "solar": "Güneş enerjisi (GES)", "price": "Birim fiyat analizi", "mv": "Gerçekleşen tasarruf (M&V)", "weather": "Hava düzeltmesi", "quality": "Veri kalitesi", "evidence": "Kaynak / kanıt", "act_status": "İşlem: proje durumu", "act_report": "İşlem: rapor", "act_open": "İşlem: sayfa aç",
     "act_scenario": "İşlem: senaryo seç", "greet": "Selamlama / yardım"}
 
 
@@ -283,6 +287,8 @@ class LocalAssistant:
         intent, score = ranked[0]
         budget = parse_budget(question)
         codes = find_codes(question, toolbox)
+        if {"ges", "gunes", "solar", "fotovoltaik", "pv"} & set(norm(question).split()):
+            intent, score = "solar", max(score, 0.5)          # GES sözcüğü kesin işarettir ("ges geri ödeme" finans sanılmasın)
         if intent == "weather" and not weather_topic(question):
             score = 0.0            # "bugün hava nasıl" gibi genel hava sorusu bu uygulamanın konusu değil
         if score < self.THRESHOLD or not self.model.content_overlap(question, intent) or (len(ranked) > 1 and score - ranked[1][1] < 0.02 and score < 0.5):
@@ -335,6 +341,30 @@ class LocalAssistant:
                 "- Rakamların kaynağı ve kanıt düzeyi, “neden?” soruları\n- Karşılaştırma (iki bina, elektrik–doğalgaz, ay–yıl)\n"
                 "- İşlem: proje durumunu değiştirme, sayfa açma, senaryo seçme, rapor üretme\n\n"
                 "Örnek: “2 milyon ₺ bütçeyle ne yapmalıyım?” Anlamadığım soruları Asistan > Eğitim sekmesinde bana öğretebilirsin.")
+
+    def a_solar(self, q, t, b, c):
+        d = json.loads(t.run("get_solar", {}))
+        if "hata" in d:
+            return d["hata"]
+        return (f"Önerilen çatı GES: **{_n(d['kwp'])} kWp** (çatı sınırı ≈ {_n(d['cati_siniri_kwp'])} kWp). Yıllık üretim {_n(d['yillik_uretim_kwh'] / 1000)} MWh, "
+                f"elektriğin %{d['elektrik_karsilama_yuzde']:.0f}'ini karşılar; yıllık tasarruf {_tl(d['yillik_tasarruf_TL'])}.\n\n"
+                f"- CAPEX {_m(d['capex_TL'])}, geri ödeme {_n(d['geri_odeme_yil'], 1)} yıl, NPV **{_m(d['npv_TL'])}**"
+                + (f", IRR %{d['irr'] * 100:.1f}" if d["irr"] is not None else "") + f"\n- Önlenen karbon {_n(d['karbon_onlenen_kg'] / 1000, 1)} tCO₂/yıl\n\n"
+                f"Dikkat: {d['varsayimlar']}. Üretim PVGIS modelidir (ölçüm değil); gerçek teklif ve çatı keşfiyle sonuç değişir.")
+
+    def a_price(self, q, t, b, c):
+        d = json.loads(t.run("get_price_analysis", {}))
+        lines = []
+        for name, r in d.items():
+            if not r["analiz_edilebildi"]:
+                lines.append(f"- **{name}**: analiz yapılamadı. {r['not']}")
+            elif r["supheli_aylar"]:
+                lines.append(f"- **{name}**: medyan {r['medyan_fiyat']:.2f} ₺/kWh; {len(r['supheli_aylar'])} ay şüpheli (ay {', '.join(map(str, r['supheli_aylar']))}), "
+                             f"olası fazla ödeme en fazla {_tl(r['olasi_fazla_odeme_TL'])}")
+            else:
+                lines.append(f"- **{name}**: medyan {r['medyan_fiyat']:.2f} ₺/kWh; belirgin sapma yok.")
+        return ("Birim fiyat analizi (fatura tutarı ÷ tüketim, medyandan %15'ten fazla sapan aylar):\n\n" + "\n".join(lines) +
+                "\n\nNedeni (reaktif bedel, güç aşımı, tarife grubu) fatura kalemleri olmadan söylenemez; şüpheli ayların faturasını inceleyin.")
 
     def a_mv(self, q, t, b, c):
         d = json.loads(t.run("get_mv", {}))

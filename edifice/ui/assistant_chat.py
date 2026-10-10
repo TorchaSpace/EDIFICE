@@ -213,6 +213,12 @@ class ChatPage:
         projects = self.load_projects()
         weather = {bid: self.store.load_weather(p.building.lat, p.building.lon) for bid, p in projects.items() if p.building.lat is not None}
         tb = Toolbox(projects, self.project.building_id, weather)
+        from .. import solar as _solar
+        for bid, p in projects.items():
+            if p.building.lat is not None:
+                y = self.store.load_solar(p.building.lat, p.building.lon, _solar.DEFAULT_ANGLE, _solar.DEFAULT_ASPECT)
+                if y:
+                    tb.solar[bid] = y
         for bid in projects:
             months = self.store.load_project_months(bid)
             tb.completed[bid] = {c: (y, months.get(c, 1)) for c, (s, y) in self.store.load_projects(bid).items() if s == "Tamamlandı"}

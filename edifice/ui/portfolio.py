@@ -187,7 +187,7 @@ class EsgPage:
 
     def __init__(self, store: Store, on_open):
         from PySide6.QtWidgets import QSpinBox
-        from .pages import bar_chart
+        from .pages import _fit_height, _set_row, _table, bar_chart
         from .projects_page import STATUSES
         from .widgets import Ring
         self.store = store
@@ -205,6 +205,7 @@ class EsgPage:
         baseline_year = prev_year if have_prev else base_year
         full = 0.0          # tüm uygun öneriler uygulanırsa
         saved_by_year: dict[int, float] = {}
+        per_building: dict[int, dict[int, float]] = {}
         for bid, r in rows:
             p_ = r["project"]
             res = {x.opportunity.code: x for x in p_.opportunity_results()}
@@ -214,6 +215,7 @@ class EsgPage:
             for code, (st_, yr) in store.load_projects(bid).items():
                 if st_ != STATUSES[0] and code in res:
                     saved_by_year[yr] = saved_by_year.get(yr, 0.0) + res[code].saved_carbon_kg / 1000
+                    per_building.setdefault(bid, {})[yr] = per_building.get(bid, {}).get(yr, 0.0) + res[code].saved_carbon_kg
 
         t_year = int(store.get_setting("esg_target_year", "2030"))
         t_pct = float(store.get_setting("esg_target_pct", "40"))
@@ -314,6 +316,37 @@ class EsgPage:
                 line.addWidget(badge(("✓ " if okk else "✗ ") + f"≥ {label}", G if okk else RED))
             th.lay.addLayout(line)
         lay.addWidget(th)
+
+        # ---- hedef yoluna göre risk ("stranded asset" yılı): kendi hedefinize göre, resmî bir yol değil
+        risk = Panel(eyebrow="Hedef yolu riski", title="Binalar hedef yolunu ne zaman aşar?",
+                     subtitle=f"Her binanın karbon yoğunluğu (kgCO₂/m²), {baseline_year} değerinden {t_year}'e doğrusal %{t_pct:.0f} azalan KENDİ HEDEF YOLUNUZLA kıyaslanır; "
+                              "plan = Proje takibi'ndeki tarihli projelerin tasarrufu. Şebeke emisyonunun düşeceği varsayılmaz. Resmî CRREM yolu değildir.")
+        rt = _table(["Bina", "Şimdi (kg/m²)", f"Hedef {t_year} (kg/m²)", "Plan " + str(t_year), "Yol aşım yılı", "Durum"], left_cols=1)
+        risk_rows = []
+        for bid, r in rows:
+            pb, area_ = r["project"], r["project"].building.floor_area_m2
+            if area_ <= 0:
+                continue
+            b0 = pb.kpis_for(prev_year).carbon_kg / area_ if have_prev else r["kpis"].carbon_kg / area_
+            now_i = r["kpis"].carbon_kg / area_
+            tgt_i = b0 * (1 - t_pct / 100)
+            def path_at(y):
+                return b0 + (tgt_i - b0) * min(max(y - baseline_year, 0) / max(t_year - baseline_year, 1), 1.0)
+            def plan_at(y):
+                cum = sum(v for yy, v in per_building.get(bid, {}).items() if yy <= y)
+                return now_i - cum / area_
+            years_ = range(base_year, t_year + 1)
+            breach = next((y for y in years_ if plan_at(y) > path_at(y) + 1e-9), None)
+            final = plan_at(t_year)
+            status = "Hedefte" if breach is None else "Şimdi aşıyor" if breach == base_year else f"{breach}'de aşar"
+            color = G if breach is None else RED if breach == base_year else AMBER
+            risk_rows.append((r["project"].building.name, now_i, tgt_i, final, str(breach) if breach else "-", status, color))
+        rt.setRowCount(len(risk_rows))
+        for i, (nm, a_, b_, c_, y_, st_, col) in enumerate(risk_rows):
+            _set_row(rt, i, [nm, fmt(a_, 1), fmt(b_, 1), fmt(c_, 1), y_, st_], colors={5: col}, mono_from=1)
+        _fit_height(rt, max(len(risk_rows), 1))
+        risk.lay.addWidget(rt)
+        lay.addWidget(risk)
 
         p2 = Panel(eyebrow="Bina bazında", title="Karbon sıralaması", subtitle="En yüksek karbon yoğunluğundan düşüğe. Binaya tıklayın.")
         for bid, r in sorted(rows, key=lambda x: -x[1]["kpis"].carbon_kg_m2):

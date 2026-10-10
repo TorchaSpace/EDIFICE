@@ -62,7 +62,7 @@ class ComingSoonPage:
 class ReportPage:
     """Raporlar: seçili bina için PDF raporu üretir."""
 
-    def __init__(self, project, on_export):
+    def __init__(self, project, on_export, on_pack=None):
         self.widget, lay = _page()
         lay.addWidget(header("Raporlar", "Yatırımcı raporu", f"{project.building.name} için tek sayfalık PDF"))
         p = Panel(eyebrow="PDF", title="Raporu oluştur",
@@ -77,4 +77,23 @@ class ReportPage:
         p.lay.addSpacing(8)
         p.lay.addWidget(btn)
         lay.addWidget(p)
+        packs = Panel(eyebrow="Excel paketleri", title="Raporlama veri paketleri",
+                      subtitle="Resmî beyan ya da belge değildir: raporlayıcıya/uzmana hazır veri ve açık yöntem sağlar.")
+        pr = QHBoxLayout()
+        pr.setSpacing(10)
+        for key, label, tip in (("esg", "ESG veri paketi", "Kapsam 1-2 emisyon, enerji, su, aylık döküm, yöntem ve kaynaklar, veri kalitesi"),
+                                ("ekb", "EKB hazırlık sayfası", "Enerji Kimlik Belgesi düzenleyecek uzman için bina, tüketim ve ekipman verisi"),
+                                ("portfoy", "Portföy özeti", "Tüm binalar: EUI, sınıf, skor, karbon, CAPEX, tasarruf, NPV, veri güvenilirliği")):
+            b = QPushButton(label)
+            b.setObjectName("export")
+            b.setMinimumHeight(38)
+            b.setCursor(Qt.PointingHandCursor)
+            b.setToolTip(tip)
+            if on_pack:
+                b.clicked.connect(lambda _=False, k=key: on_pack(k))
+            pr.addWidget(b)
+        pr.addStretch()
+        packs.lay.addSpacing(6)
+        packs.lay.addLayout(pr)
+        lay.addWidget(packs)
         lay.addStretch()

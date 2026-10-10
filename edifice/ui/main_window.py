@@ -18,6 +18,8 @@ from .add_choice import AddChoiceDialog
 from .building_dialog import BuildingDialog
 from .report_pdf import build_pdf
 from .method_page import MethodPage
+from .price_page import PricePage
+from .solar_page import SolarLoader, SolarPage
 from .weather_loader import WeatherLoader
 from .assistant_chat import ChatPage, ChatState, TrainingPage
 from .projects_page import ProjectsTrackerPage
@@ -191,10 +193,11 @@ class MainWindow(QMainWindow):
                     "Ayarlar": SettingsPage(project, self.store, self._settings_saved)}
         sub = self.sub
         sub["Eğitim"] = TrainingPage(self.store, sub["Sohbet"].reload_ai)
+        sub["GES"] = SolarPage(project, self.store)
         self.pages = [("Genel Bakış", TabsPage([("Genel Bakış", sub["Genel Bakış"]), ("Tüketim", sub["Tüketim"])])),
                       ("Portföy", PortfolioPage(self.store, self.open_building, self.search.text().strip())),
                       ("Projeler", TabsPage([("Öneriler", sub["Öneriler"]), ("Proje takibi", sub["Proje takibi"]), ("Mevcut vs Hedef", sub["Mevcut vs Hedef"])])),
-                      ("Finans", FinancePage(self.store, self.open_building)),
+                      ("Finans", TabsPage([("Portföy finansı", FinancePage(self.store, self.open_building)), ("Güneş enerjisi (GES)", sub["GES"]), ("Birim fiyat analizi", PricePage(project))])),
                       ("Ortaklar", ComingSoonPage("Ortaklar", "Ortaklar",
                                                   "Uygulayıcı firma ve ortak yönetimi için bina verisinden bağımsız bir ortak/teklif kaydı gerekir. "
                                                   "MVP tek bina analizine odaklandığı için bu modül sonraki fazda eklenecek.")),
@@ -204,11 +207,12 @@ class MainWindow(QMainWindow):
                                                       "Dijital ikiz için BIM modeli ve canlı sensör (IoT/BMS) verisi gerekir; bunlar MVP kapsamı dışında "
                                                       "olduğundan sonraki fazda eklenecek.")),
                       ("Sürdürülebilirlik", EsgPage(self.store, self.open_building)),
-                      ("Raporlar", TabsPage([("Rapor", ReportPage(project, self.export_report)),
+                      ("Raporlar", TabsPage([("Rapor", ReportPage(project, self.export_report, self.export_pack)),
                                              ("Kaynaklar ve Yöntem", sub["Kaynaklar ve Yöntem"])])),
                       ("Ayarlar", TabsPage([("Ayarlar", sub["Ayarlar"])]))]
         self.idx = {n: i for i, (n, _) in enumerate(self.pages)}
         self._start_weather(project)
+        self._start_solar(project)
         for _, page in self.pages:
             self.stack.addWidget(page.widget)
         name = project.building.name
@@ -377,6 +381,17 @@ class MainWindow(QMainWindow):
             self._weather_loader.done.connect(self._on_weather)
         self._weather_loader.load(self.store, project)
 
+    def _start_solar(self, project):
+        if not hasattr(self, "_solar_loader"):
+            self._solar_loader = SolarLoader(self)
+            self._solar_loader.done.connect(self._on_solar)
+        self._solar_loader.load(self.store, project)
+
+    def _on_solar(self, monthly, status):
+        page = self.sub.get("GES")
+        if page is not None:
+            page.set_yield(monthly, status)
+
     def _on_weather(self, bid, dd, status):
         if bid != self.project.building_id:
             return                          # kullanıcı bu arada başka binaya geçti
@@ -437,6 +452,22 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentIndex(index)
         self.crumb.setText(self.pages[index][0])
         self.crumb1.setText("Platform" if index < 5 else "Intelligence")
+
+    def export_pack(self, kind: str):
+        """Excel raporlama paketi: esg (seçili bina), ekb (seçili bina), portfoy (tüm binalar)."""
+        from .. import reports_xlsx as rx
+        names = {"esg": ("EDIFICE_ESG_veri_paketi", rx.build_esg_package), "ekb": ("EDIFICE_EKB_hazirlik", rx.build_ekb_sheet),
+                 "portfoy": ("EDIFICE_Portfoy_ozeti", None)}
+        stem, fn = names[kind]
+        default = f"{stem}_{self.project.building.name.replace(' ', '_') if kind != 'portfoy' else ''}{datetime.now():%Y-%m-%d}.xlsx".replace("__", "_")
+        path, _ = QFileDialog.getSaveFileName(self, "Excel paketini kaydet", default, "Excel (*.xlsx)")
+        if not path:
+            return
+        if kind == "portfoy":
+            rx.build_portfolio_workbook(list(self._all_projects().values()), path)
+        else:
+            fn(self.project, path)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(path))
 
     def export_report(self):
         codes = self.sub['Mevcut vs Hedef'].selected_codes()
