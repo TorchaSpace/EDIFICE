@@ -20,7 +20,7 @@ Bu belge pazarlama değil, açık bir eksik listesidir: ✅ var · 🟡 kısmen 
 | **Resmî Türkiye çıktısı** | BEP-TR ile EKB (yetkili uzman) | EKB hazırlık veri sayfası, gösterge sınıfı | 🟡 resmî belge üretilmez (üretmemeli); gerçek EKB ile kalibrasyon yapılmadı |
 | **Retrofit planlama** | Fizik tabanlı sanal retrofit, asset/fon/portföy (Deepki, iddia) | Literatür aralıklı tasarruf oranları, kanıt düzeyli, NPV/IRR, bütçe optimizasyonu, M&V | 🟡 şeffaf ama bina fiziğini modellemez; CAPEX birim fiyatları doğrulanmamış varsayım |
 | **Gerçekleşen tasarruf (M&V)** | ❔ satıcı belgelerinde IPMVP desteği bulunamadı | Hava normalizasyonlu M&V, belirsizlikli | ✅ (rakiplerde olabilir) — ama gerçek bina verisiyle henüz hiç doğrulanmadı |
-| **Karbon yolu / "stranded"** | CRREM aracı (Envizi) | Kendi hedef yolunuz | ❌ resmî CRREM yolları yok; şebeke dekarbonizasyonu modellenmiyor |
+| **Karbon yolu / "stranded"** | CRREM aracı (Envizi) | Kendi hedef yolunuz + kullanıcının içe aktardığı resmî CRREM yolları (gömülü değil, lisans), isteğe bağlı şebeke dekarbonizasyonu | 🟡 Türkiye CRREM'de yok (vekil ülke), resmî CRREM aracının tüm metodolojisi (ör. ayrıntılı yeniden yapılandırma) yok |
 | **Raporlama/beyan** | GHG Protocol, SFDR, AB Taksonomisi, GRESB (iddialar) | Excel veri paketleri (Kapsam 1–2) | 🟡 resmî format/şablon, Kapsam 3, denetim izi yok |
 | **Güvenlik ve güvence** | ISO 27001, ISAE 3000 Type 2 gibi iddialar (doğrulanmadı), SSO, roller | Yerel masaüstü, imzasız kurulum | ❌ bağımsız denetim/sertifika yok; yerel veri bir avantaj ama kurumsal satın alma "kanıt" ister |
 | **Çok kullanıcı / bulut / API** | Var (kurumsal) | Tek kullanıcı, yerel | ❌ eşitleme, roller, API, denetim kaydı yok |

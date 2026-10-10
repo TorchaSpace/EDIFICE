@@ -206,6 +206,7 @@ class EsgPage:
         full = 0.0          # tüm uygun öneriler uygulanırsa
         saved_by_year: dict[int, float] = {}
         per_building: dict[int, dict[int, float]] = {}
+        per_building_kwh: dict[int, dict[int, float]] = {}
         for bid, r in rows:
             p_ = r["project"]
             res = {x.opportunity.code: x for x in p_.opportunity_results()}
@@ -216,6 +217,7 @@ class EsgPage:
                 if st_ != STATUSES[0] and code in res:
                     saved_by_year[yr] = saved_by_year.get(yr, 0.0) + res[code].saved_carbon_kg / 1000
                     per_building.setdefault(bid, {})[yr] = per_building.get(bid, {}).get(yr, 0.0) + res[code].saved_carbon_kg
+                    per_building_kwh.setdefault(bid, {})[yr] = per_building_kwh.get(bid, {}).get(yr, 0.0) + res[code].saved_kwh
 
         t_year = int(store.get_setting("esg_target_year", "2030"))
         t_pct = float(store.get_setting("esg_target_pct", "40"))
@@ -347,6 +349,9 @@ class EsgPage:
         _fit_height(rt, max(len(risk_rows), 1))
         risk.lay.addWidget(rt)
         lay.addWidget(risk)
+
+        from .crrem_panel import CrremPanel
+        lay.addWidget(CrremPanel(store, rows, per_building, per_building_kwh, base_year))
 
         p2 = Panel(eyebrow="Bina bazında", title="Karbon sıralaması", subtitle="En yüksek karbon yoğunluğundan düşüğe. Binaya tıklayın.")
         for bid, r in sorted(rows, key=lambda x: -x[1]["kpis"].carbon_kg_m2):

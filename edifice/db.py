@@ -35,6 +35,9 @@ CREATE TABLE IF NOT EXISTS solar (lat REAL NOT NULL, lon REAL NOT NULL, angle RE
 CREATE TABLE IF NOT EXISTS weather_daily (lat REAL NOT NULL, lon REAL NOT NULL, day TEXT NOT NULL, tmean REAL, tmin REAL, tmax REAL,
   PRIMARY KEY (lat, lon, day));
 CREATE TABLE IF NOT EXISTS climate_live (lat REAL NOT NULL, lon REAL NOT NULL, payload TEXT NOT NULL, fetched_at TEXT NOT NULL, PRIMARY KEY (lat, lon));
+CREATE TABLE IF NOT EXISTS crrem_pathways (metric TEXT NOT NULL, country TEXT NOT NULL, ptype TEXT NOT NULL, year INTEGER NOT NULL, value REAL,
+  PRIMARY KEY (metric, country, ptype, year));
+CREATE TABLE IF NOT EXISTS crrem_grid (country TEXT NOT NULL, year INTEGER NOT NULL, ef REAL, PRIMARY KEY (country, year));
 CREATE TABLE IF NOT EXISTS ai_unknown (id INTEGER PRIMARY KEY AUTOINCREMENT, question TEXT NOT NULL UNIQUE, asked_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS ai_examples (id INTEGER PRIMARY KEY AUTOINCREMENT, intent TEXT NOT NULL, text TEXT NOT NULL UNIQUE);
 CREATE TABLE IF NOT EXISTS scenarios (
@@ -187,6 +190,40 @@ class Store:
         k = self.weather_key(lat, lon)
         return {(y, m): (h, c, n) for y, m, h, c, n in self.conn.execute(
             "SELECT year, month, hdd, cdd, days FROM weather WHERE lat=? AND lon=?", k)}
+
+    # ---- CRREM (kullanıcının kendi içe aktardığı resmî dosya; uygulamayla dağıtılmaz)
+    def import_crrem(self, data) -> int:
+        rows = [(m, c, t, y, v) for m, d in data.pathways.items() for (c, t), ys in d.items() for y, v in ys.items()]
+        with self.conn:
+            self.conn.execute("DELETE FROM crrem_pathways")
+            self.conn.execute("DELETE FROM crrem_grid")
+            self.conn.executemany("INSERT INTO crrem_pathways VALUES (?,?,?,?,?)", rows)
+            self.conn.executemany("INSERT INTO crrem_grid VALUES (?,?,?)", [(c, y, e) for c, ys in data.grid.items() for y, e in ys.items()])
+            self.conn.execute("INSERT OR REPLACE INTO settings VALUES ('crrem_meta', ?)",
+                              (json.dumps({"version": data.version, "file": data.source_file, "imported": datetime.now().isoformat(timespec="seconds")}),))
+        return len(rows)
+
+    def crrem_meta(self) -> dict | None:
+        row = self.conn.execute("SELECT value FROM settings WHERE key='crrem_meta'").fetchone()
+        return json.loads(row[0]) if row else None
+
+    def crrem_options(self) -> tuple[list[str], list[str]]:
+        c = [r[0] for r in self.conn.execute("SELECT DISTINCT country FROM crrem_pathways ORDER BY country")]
+        t = [r[0] for r in self.conn.execute("SELECT DISTINCT ptype FROM crrem_pathways ORDER BY ptype")]
+        return c, t
+
+    def crrem_pathway(self, metric: str, country: str, ptype: str) -> dict[int, float]:
+        return {y: v for y, v in self.conn.execute(
+            "SELECT year, value FROM crrem_pathways WHERE metric=? AND country=? AND ptype=? ORDER BY year", (metric, country, ptype))}
+
+    def crrem_grid(self, country: str) -> dict[int, float]:
+        return {y: e for y, e in self.conn.execute("SELECT year, ef FROM crrem_grid WHERE country=? ORDER BY year", (country,))}
+
+    def clear_crrem(self):
+        with self.conn:
+            for t in ("crrem_pathways", "crrem_grid"):
+                self.conn.execute(f"DELETE FROM {t}")
+            self.conn.execute("DELETE FROM settings WHERE key='crrem_meta'")
 
     # ---- anlık iklim (son çekim) ve günlük gözlem birikimi
     def save_climate(self, lat: float, lon: float, parsed: dict):

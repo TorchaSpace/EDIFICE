@@ -25,6 +25,7 @@ Bu dosya `edifice/evidence.py` kaydından üretilir (`python tools/make_docs.py`
 | Hava | Hava normalizasyonu yöntemi | aylık tüketim = a + b·HDD + c·CDD (b,c ≥ 0) | İkincil aktarım | IPMVP, OPENMETEO | Derece-gün regresyonu; R² < 0,3 ise düzeltme yapılmaz, 0,6 üstü “güvenilir” sayılır (eşikler varsayımdır). Normal yıl: son 10 tam yılın aylık ortalaması. |
 | Hava | Isıtma derece-gün taban sıcaklığı | 15 °C | Varsayım | - | Günlük ortalama sıcaklığın bu değerin altı ısıtma yükü sayılır; kaynak doğrulanmadı, binaya göre değişir. |
 | Hava | Soğutma derece-gün taban sıcaklığı | 22 °C | Varsayım | - | Günlük ortalama sıcaklığın bu değerin üstü soğutma yükü sayılır; kaynak doğrulanmadı, binaya göre değişir. |
+| Karbon | CRREM yolu (yol aşımı) | kullanıcının içe aktardığı resmî dosyadan | Kaynak okundu | CRREM | Uygulama CRREM verisi içermez (lisans). Türkiye kapsamda olmadığı için vekil ülke seçilir; şebeke dekarbonizasyonu isteğe bağlı ve model varsayımıdır. |
 | GES | Aylık üretim verisi | PVGIS kWh/kWp (30° eğim, güney, %14 kayıp) | Özet okundu | PVGIS | Modellenmiş üretim; gölgelenme, kirlenme ve gerçek çatı geometrisi dahil değildir. |
 | GES | Eşzamanlı tüketim oranı | %85 (aylık örtüşmenin) | Varsayım | - | Saatlik yük verisi yok; gündüz ağırlıklı ofis varsayımı. Depolama yok. |
 | GES | Şebekeye verilen fazlanın değeri | tarifenin %0'ı | Varsayım | - | Muhafazakâr: fazla üretim gelire sayılmaz; mevzuat ve güncel satış fiyatı doğrulanmadı. |
@@ -47,6 +48,14 @@ Bu dosya `edifice/evidence.py` kaydından üretilir (`python tools/make_docs.py`
 | Yoğuşmalı kazan | %7.0 | %12.0 | %21.0 | İkincil aktarım | MNCEE_BOILER | Nominal verimi %70-82 olan eski kazandan, ölçülen ortalama %88,6'ya (MnCEE, 12 bina) geçişte yakıt tasarrufu 1-η_eski/η_yeni = %7-21 (η=%78 için %12). Gazın ısıtmaya gittiği varsayımı. |
 
 ## Kaynakça
+
+### CRREM (Kaynak okundu)
+
+CRREM Foundation, CRREM Global Pathways (1,5 °C Paris uyumlu karbon ve enerji yoğunluğu yolları; ülke × mülk türü).
+
+Resmî veri; kullanım koşulları gereği uygulamaya GÖMÜLMEZ, kullanıcı kendi indirip içe aktarır (https://crrem.org/library/use-of-data/). İncelenen V2.01 dosyasında 65 ülke/şehir kodu var, Türkiye (TR) yok: vekil ülke kullanıcı kararıdır.
+
+https://crrem.org/library/pathways-datasets/
 
 ### PVGIS (Özet okundu)
 

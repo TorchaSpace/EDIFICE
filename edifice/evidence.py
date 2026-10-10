@@ -15,6 +15,9 @@ KBTU_FT2_TO_KWH_M2 = 3.15459   # 1 kBtu/ft² = 3,15459 kWh/m²
 LEVELS = {"birincil": "Kaynak okundu", "özet": "Özet okundu", "ikincil": "İkincil aktarım", "varsayım": "Varsayım"}
 
 SOURCES: dict[str, dict] = {
+    "CRREM": {"cite": "CRREM Foundation, CRREM Global Pathways (1,5 °C Paris uyumlu karbon ve enerji yoğunluğu yolları; ülke × mülk türü).",
+              "url": "https://crrem.org/library/pathways-datasets/", "level": "birincil",
+              "note": "Resmî veri; kullanım koşulları gereği uygulamaya GÖMÜLMEZ, kullanıcı kendi indirip içe aktarır (https://crrem.org/library/use-of-data/). İncelenen V2.01 dosyasında 65 ülke/şehir kodu var, Türkiye (TR) yok: vekil ülke kullanıcı kararıdır."},
     "PVGIS": {"cite": "European Commission JRC, Photovoltaic Geographical Information System (PVGIS) — PVcalc, şebeke bağlantılı PV aylık üretim tahmini.",
               "url": "https://re.jrc.ec.europa.eu/pvg_tools/en/", "level": "özet",
               "note": "Konum, eğim, yön ve sistem kaybına göre MODELLENMİŞ üretim (uydu radyasyon verisi); ölçüm değildir. Ücretsiz, kaynak gösterilmelidir. Türkiye kapsamı API yanıtıyla doğrulandı (Ankara ≈ 1465 kWh/kWp·yıl, 30° güney)."},
@@ -186,6 +189,8 @@ def parameter_rows(a) -> list[tuple]:
          "Derece-gün regresyonu; R² < 0,3 ise düzeltme yapılmaz, 0,6 üstü “güvenilir” sayılır (eşikler varsayımdır). Normal yıl: son 10 tam yılın aylık ortalaması."),
         ("Hava", "Isıtma derece-gün taban sıcaklığı", "15 °C", [], "varsayım", "Günlük ortalama sıcaklığın bu değerin altı ısıtma yükü sayılır; kaynak doğrulanmadı, binaya göre değişir."),
         ("Hava", "Soğutma derece-gün taban sıcaklığı", "22 °C", [], "varsayım", "Günlük ortalama sıcaklığın bu değerin üstü soğutma yükü sayılır; kaynak doğrulanmadı, binaya göre değişir."),
+        ("Karbon", "CRREM yolu (yol aşımı)", "kullanıcının içe aktardığı resmî dosyadan", ["CRREM"], "birincil",
+         "Uygulama CRREM verisi içermez (lisans). Türkiye kapsamda olmadığı için vekil ülke seçilir; şebeke dekarbonizasyonu isteğe bağlı ve model varsayımıdır."),
         ("GES", "Aylık üretim verisi", "PVGIS kWh/kWp (30° eğim, güney, %14 kayıp)", ["PVGIS"], "özet", "Modellenmiş üretim; gölgelenme, kirlenme ve gerçek çatı geometrisi dahil değildir."),
         ("GES", "Eşzamanlı tüketim oranı", "%85 (aylık örtüşmenin)", [], "varsayım", "Saatlik yük verisi yok; gündüz ağırlıklı ofis varsayımı. Depolama yok."),
         ("GES", "Şebekeye verilen fazlanın değeri", "tarifenin %0'ı", [], "varsayım", "Muhafazakâr: fazla üretim gelire sayılmaz; mevzuat ve güncel satış fiyatı doğrulanmadı."),
