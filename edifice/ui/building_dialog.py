@@ -3,13 +3,14 @@ from __future__ import annotations
 
 from datetime import date
 
-from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt
+from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QStringListModel, Qt
 from PySide6.QtGui import QColor, QGuiApplication, QKeySequence
 from PySide6.QtWidgets import (QAbstractItemView, QCompleter, QDialog, QDoubleSpinBox,
                                QGraphicsOpacityEffect, QGridLayout, QHBoxLayout, QHeaderView, QLabel,
                                QLineEdit, QPushButton, QScrollArea, QSpinBox, QTabBar, QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
+from ..geocode import Geocoder, lookup_first
 from ..validation import (COLUMNS, EQUIPMENT_CATEGORIES, EQUIPMENT_NAMES, MONTH_NAMES, USE_TYPES, ValidationError,
                           build_from_inputs)
 from .dropdown import PremiumCombo
@@ -132,11 +133,21 @@ class BuildingDialog(QDialog):
         self.name = QLineEdit()
         self.name.setPlaceholderText("Örn. Merkez Ofis Binası")
         self.address = QLineEdit()
-        self.address.setPlaceholderText("İl / ilçe / adres")
+        self.address.setPlaceholderText("İl / ilçe / adres yazın, öneriler çıkar (ör. Ankara)")
         self.lat = QLineEdit()
         self.lat.setPlaceholderText("Örn. 41.0082")
         self.lon = QLineEdit()
         self.lon.setPlaceholderText("Örn. 28.9784")
+        self._geo_hits: dict[str, tuple[float, float]] = {}
+        self._geo = Geocoder(self)
+        self._addr_model = QStringListModel(self)
+        self._addr_completer = QCompleter(self._addr_model, self)
+        self._addr_completer.setCompletionMode(QCompleter.UnfilteredPopupCompletion)
+        self._addr_completer.setCaseSensitivity(Qt.CaseInsensitive)
+        self.address.setCompleter(self._addr_completer)
+        self.address.textEdited.connect(self._address_typed)
+        self._geo.results.connect(self._address_results)
+        self._addr_completer.activated.connect(self._address_picked)
         self.use_type = PremiumCombo()
         self.use_type.addItems(USE_TYPES)
         self.area = _tune_spin(QDoubleSpinBox())
@@ -151,7 +162,7 @@ class BuildingDialog(QDialog):
         self.floors.setRange(1, 200)
         self.occupants = _tune_spin(QSpinBox())
         self.occupants.setRange(0, 100000)
-        for w in (self.name, self.address, self.use_type, self.lat, self.lon):
+        for w in (self.name, self.address, self.use_type):
             w.setMinimumHeight(40)
 
         general = Panel("Genel bilgiler", "Binayı tanımlayan temel bilgiler")
@@ -160,9 +171,7 @@ class BuildingDialog(QDialog):
         g.setVerticalSpacing(14)
         g.addWidget(_field("Bina adı *", self.name, "Raporlarda ve bina listesinde görünecek ad"), 0, 0, 1, 2)
         g.addWidget(_field("Kullanım tipi", self.use_type, "Binanın ana işlevi"), 0, 2)
-        g.addWidget(_field("Adres", self.address, "İsteğe bağlı: il, ilçe ve açık adres"), 1, 0, 1, 3)
-        g.addWidget(_field("Enlem", self.lat, "İsteğe bağlı: harita için ondalık derece"), 2, 0)
-        g.addWidget(_field("Boylam", self.lon, "İsteğe bağlı: harita için ondalık derece"), 2, 1)
+        g.addWidget(_field("Adres", self.address, "İsteğe bağlı: yazdıkça öneri çıkar; seçilen adres haritada gösterilir"), 1, 0, 1, 3)
         for c in range(3):
             g.setColumnStretch(c, 1)
         general.lay.addSpacing(6)
@@ -343,6 +352,24 @@ class BuildingDialog(QDialog):
             self.eq.select_row(r)
             name.setFocus()
 
+    def _address_typed(self, text: str):
+        self._addr_edited = True
+        self.lat.setText("")
+        self.lon.setText("")
+        self._geo.search(text)
+
+    def _address_results(self, hits: list):
+        self._geo_hits = {label: (la, lo) for label, la, lo in hits}
+        self._addr_model.setStringList([h[0] for h in hits])
+        if hits and self.address.hasFocus():
+            self._addr_completer.complete()
+
+    def _address_picked(self, label: str):
+        if label in self._geo_hits:
+            la, lo = self._geo_hits[label]
+            self.lat.setText(f"{la:.6f}")
+            self.lon.setText(f"{lo:.6f}")
+
     def _prefill(self, p):
         b = p.building
         self.name.setText(b.name)
@@ -380,6 +407,11 @@ class BuildingDialog(QDialog):
 
     # ---- toplama / kaydetme
     def collect(self):
+        if getattr(self, "_addr_edited", False) and self.address.text().strip() and not self.lat.text().strip():
+            hit = lookup_first(self.address.text())
+            if hit:
+                self.lat.setText(f"{hit[0]:.6f}")
+                self.lon.setText(f"{hit[1]:.6f}")
         info = dict(name=self.name.text(), address=self.address.text(), use_type=self.use_type.currentText(),
                     floor_area_m2=self.area.value(), year_built=self.year_built.value(),
                     floors=self.floors.value(), occupants=self.occupants.value(),
