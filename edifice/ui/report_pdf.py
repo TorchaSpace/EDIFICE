@@ -101,6 +101,10 @@ def build_pdf(project: Project, codes: list[str], path: str) -> str:
     c.text(PAGE_W - MARGIN - 112 - 128, y + 4, 118, 20, f"{rating['class']}  →  {after}" if after != rating["class"] else rating["class"],
            13, "#1B2B27", QFont.Bold, Qt.AlignHCenter, mono=True)
     c.text(PAGE_W - MARGIN - 112 - 128, y + 22, 118, 14, "Tahmini enerji sınıfı", 7.5, MUTED, align=Qt.AlignHCenter)
+    from ..quality import assess
+    dq = assess(project)
+    c.text(MARGIN, y + 46, cw, 12, f"Girdi verisi güvenilirliği: {dq.level} ({dq.score:.0f}/100)"
+           + (f" · {len(dq.issues)} uyarı" if dq.issues else ""), 8, {"Yüksek": "#0A9B6B", "Orta": "#B7791F", "Düşük": "#C53030"}[dq.level])
 
     # ---- KPI kartları
     y = 164

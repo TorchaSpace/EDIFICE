@@ -128,6 +128,38 @@ class OverviewPage:
             row.addWidget(c, idx // 4, idx % 4)
         lay.addLayout(row)
 
+        # ---- veri güvenilirliği
+        from ..quality import assess
+        q = assess(project)
+        self.quality = q
+        qcol = {"Yüksek": G, "Orta": AMBER, "Düşük": RED}[q.level]
+        qp = Panel(eyebrow="Veri güvenilirliği", title=f"Girdi verisi: {q.level} ({q.score:.0f}/100)",
+                   subtitle=f"Son iki yılın aylık verisinin %{q.completeness * 100:.0f}'i dolu. Bu skor hesapların değil, girilen verinin güvenilirliğini ölçer.")
+        qrow = QHBoxLayout()
+        qrow.setSpacing(20)
+        from .widgets import Ring
+        ring = Ring(q.score, qcol, "Veri skoru", q.level)
+        ring.setFixedWidth(170)
+        qrow.addWidget(ring)
+        qcol_l = QVBoxLayout()
+        qcol_l.setSpacing(6)
+        if not q.issues:
+            qcol_l.addWidget(muted("Tutarsızlık ya da eksik bulunmadı."))
+        for it in q.issues[:6]:
+            line = QHBoxLayout()
+            line.addWidget(badge(it.severity.capitalize(), {"kritik": RED, "uyarı": AMBER, "bilgi": SUB}[it.severity]))
+            msg = QLabel(f"<b>{it.area}</b> · {it.message}")
+            msg.setWordWrap(True)
+            msg.setStyleSheet(f"color: {SUB}; font-size: 12px; background: transparent;")
+            line.addWidget(msg, 1)
+            qcol_l.addLayout(line)
+        if len(q.issues) > 6:
+            qcol_l.addWidget(muted(f"… ve {len(q.issues) - 6} madde daha"))
+        qcol_l.addStretch()
+        qrow.addLayout(qcol_l, 1)
+        qp.lay.addLayout(qrow)
+        lay.addWidget(qp)
+
         # ---- portföy düzeyi (Figma ana ekranı): harita + portföy skoru
         if store is not None:
             from .portfolio import LocationMap, summarize

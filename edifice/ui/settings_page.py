@@ -177,6 +177,41 @@ class SettingsPage:
         bar.addWidget(reset)
         bar.addWidget(save)
         lay.addLayout(bar)
+
+        from .. import safety
+        sp = Panel("Veri güvenliği", "Uygulama verinizi her gün otomatik yedekler (son 7 yedek) ve açılışta veritabanını denetler. "
+                                    "İsterseniz tüm verinizi okunabilir bir dosyaya da aktarabilirsiniz.")
+        brow = QHBoxLayout()
+        brow.setSpacing(10)
+        exp = QPushButton("Tüm veriyi JSON olarak dışa aktar")
+        exp.setObjectName("export")
+        exp.setCursor(Qt.PointingHandCursor)
+        opn = QPushButton("Yedek klasörünü aç")
+        opn.setObjectName("export")
+        opn.setCursor(Qt.PointingHandCursor)
+        self.safety_msg = QLabel("")
+        self.safety_msg.setStyleSheet(f"color: {SUB}; font-size: 12px; background: transparent;")
+
+        def _export():
+            from datetime import datetime
+            from PySide6.QtWidgets import QFileDialog
+            path, _ = QFileDialog.getSaveFileName(self.widget, "Veriyi dışa aktar", f"EDIFICE_veri_{datetime.now():%Y-%m-%d}.json", "JSON (*.json)")
+            if path:
+                safety.export_json(self.store, path)
+                self.safety_msg.setText(f"Kaydedildi: {path}")
+
+        def _open():
+            from PySide6.QtCore import QUrl
+            from PySide6.QtGui import QDesktopServices
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(safety.backup_dir())))
+        exp.clicked.connect(_export)
+        opn.clicked.connect(_open)
+        brow.addWidget(exp)
+        brow.addWidget(opn)
+        brow.addWidget(self.safety_msg, 1)
+        sp.lay.addSpacing(6)
+        sp.lay.addLayout(brow)
+        lay.addWidget(sp)
         lay.addStretch()
         self._weights_changed()
 

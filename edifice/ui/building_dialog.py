@@ -468,4 +468,16 @@ class BuildingDialog(QDialog):
             if self.tabbar.currentIndex() != target:
                 self.tabbar.setCurrentIndex(target)
             return
+        from ..models import Assumptions
+        from ..quality import assess
+        from ..service import Project
+        b_, r_, e_ = self.result_data
+        q = assess(Project(b_, r_, e_, [], Assumptions()))
+        sig = (q.score, len(q.issues))
+        if q.level == "Düşük" and getattr(self, "_warned", None) != sig:
+            self._warned = sig
+            shown = [f"{i.area}: {i.message}" for i in q.issues[:5]]
+            self._show_error(f"Veri güvenilirliği düşük ({q.score:.0f}/100). Yine de kaydetmek için tekrar “Binayı kaydet”e basın, "
+                             "ya da önce şunları düzeltin:\n•  " + "\n•  ".join(shown))
+            return
         self.accept()

@@ -18,7 +18,9 @@ def summarize(project: Project) -> dict:
     codes = project.applicable_codes()
     fin = project.finance(codes) if codes else None
     sc = project.scenario(codes) if codes else None
-    return {"project": project, "kpis": k, "health": h.total, "grade": h.grade, "rating": project.rating()["class"],
+    from ..quality import assess
+    q = assess(project)
+    return {"quality": q, "project": project, "kpis": k, "health": h.total, "grade": h.grade, "rating": project.rating()["class"],
             "saving": sc.annual_saving if sc else 0.0, "capex": sc.capex if sc else 0.0,
             "npv": fin.npv if fin else 0.0, "payback": sc.payback_years if sc else float("inf")}
 
@@ -115,6 +117,10 @@ class PortfolioPage:
         txt.addWidget(meta)
         h.addWidget(score)
         h.addLayout(txt, 1)
+        qd = badge(f"Veri {r['quality'].level}", {"Yüksek": G, "Orta": AMBER, "Düşük": RED}[r["quality"].level])
+        qd.setFixedHeight(24)
+        qd.setToolTip("; ".join(i.message for i in r["quality"].issues[:3]) or "Girdi verisinde sorun bulunmadı")
+        h.addWidget(qd, 0, Qt.AlignVCenter)
         cls = r["rating"]
         bd = badge(f"Sınıf {cls}", CLASS_COLORS[cls])
         bd.setFixedHeight(24)

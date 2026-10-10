@@ -47,8 +47,9 @@ def _equipment_score(equipment: list[Equipment], life: int, today: int | None = 
     today = today or date.today().year
     scores = []
     for e in equipment:
-        age_score = max(0.0, 1 - (today - e.year_installed) / service_life(e.name, life))
-        cond_score = (e.condition - 1) / 4
+        age = max(0, today - e.year_installed)        # gelecekteki kurulum yılı yaşı negatif yapmasın
+        age_score = min(1.0, max(0.0, 1 - age / service_life(e.name, life)))
+        cond_score = min(1.0, max(0.0, (e.condition - 1) / 4))
         scores.append(100 * (0.4 * age_score + 0.6 * cond_score))
     return sum(scores) / len(scores)
 
@@ -69,7 +70,8 @@ def compute_health(kpis: KPIs, equipment: list[Equipment], a: Assumptions,
         "Ekipman durumu": _equipment_score(equipment, a.equipment_life_years, today),
     }
     w = a.health_weights
-    total = sum(comps[k] * w[k] for k in comps)
+    comps = {k: min(100.0, max(0.0, v)) for k, v in comps.items()}
+    total = min(100.0, max(0.0, sum(comps[k] * w[k] for k in comps)))
     return HealthScore(total=round(total, 1),
                        components={k: (round(v, 1), w[k]) for k, v in comps.items()},
                        grade=grade(total))

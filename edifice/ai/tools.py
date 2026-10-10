@@ -99,6 +99,13 @@ class Toolbox:
         year = a.get("year", p.year)
         return {"yil": year, "birim": "m3" if u == UtilityType.WATER else "kWh", "aylar": [_r(v, 0) for v in p.monthly(year, u)]}
 
+    def t_get_data_quality(self, a):
+        from ..quality import assess
+        bid, p = self._p(a)
+        q = assess(p)
+        return {"skor": q.score, "seviye": q.level, "doluluk": round(q.completeness, 2),
+                "sorunlar": [{"onem": i.severity, "alan": i.area, "mesaj": i.message} for i in q.issues]}
+
     def t_get_equipment(self, a):
         bid, p = self._p(a)
         return [{"kategori": e.category, "ad": e.name, "kurulum_yili": e.year_installed, "durum_1_5": e.condition, "not": e.notes}

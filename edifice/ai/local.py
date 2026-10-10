@@ -58,6 +58,8 @@ INTENTS: dict[str, list[str]] = {
                  "kaynaklara git", "genel bakışa dön", "tüketim sayfasını aç"],
     "act_scenario": ["senaryoyu uygula", "bu paketi senaryoya koy", "led ve vfd yi seç", "mevcut vs hedefte göster",
                      "senaryo sayfasında aç", "bu önerileri senaryoda seç", "seçili yap"],
+    "quality": ["veri kalitesi", "verilerim güvenilir mi", "eksik veri var mı", "veri güvenilirliği", "girdiler doğru mu",
+                "hatalı veri var mı", "veriye güvenebilir miyim", "sonuçlar ne kadar güvenilir"],
     "evidence": ["bu oranlar nereden", "kaynak nedir", "neye dayanıyor", "kanıt düzeyi", "tasarruf oranları hangi kaynaklara dayanıyor",
                  "emisyon faktörü kaynağı", "güvenilir mi", "nasıl hesaplıyorsun", "varsayımlar neler", "literatür"],
 }
@@ -139,7 +141,7 @@ INTENT_LABELS = {
     "carbon": "Karbon", "water": "Su", "cost": "Maliyet", "trend": "Yıllık değişim", "peak": "Pik ay", "anomaly": "Anomali",
     "opportunities": "Öneri listesi", "start": "Nereden başlamalı", "budget": "Bütçeye göre paket", "scenario": "Senaryo (ne olur?)",
     "finance": "Finans (NPV, geri ödeme)", "equipment": "Ekipman", "portfolio": "Portföy", "why": "Neden?", "compare": "Karşılaştırma",
-    "evidence": "Kaynak / kanıt", "act_status": "İşlem: proje durumu", "act_report": "İşlem: rapor", "act_open": "İşlem: sayfa aç",
+    "quality": "Veri kalitesi", "evidence": "Kaynak / kanıt", "act_status": "İşlem: proje durumu", "act_report": "İşlem: rapor", "act_open": "İşlem: sayfa aç",
     "act_scenario": "İşlem: senaryo seç", "greet": "Selamlama / yardım"}
 
 
@@ -323,6 +325,14 @@ class LocalAssistant:
                 "- İşlem: proje durumunu değiştirme, sayfa açma, senaryo seçme, rapor üretme\n\n"
                 "Örnek: “2 milyon ₺ bütçeyle ne yapmalıyım?” Anlamadığım soruları Asistan > Eğitim sekmesinde bana öğretebilirsin.")
 
+    def a_quality(self, q, t, b, c):
+        d = json.loads(t.run("get_data_quality", {}))
+        if not d["sorunlar"]:
+            return f"Girdi verisi **{d['seviye']}** güvenilirlikte ({d['skor']:.0f}/100); eksik ya da tutarsız bir şey bulmadım."
+        lines = "\n".join(f"- **{i['onem']}** · {i['alan']}: {i['mesaj']}" for i in d["sorunlar"][:8])
+        return (f"Girdi verisi güvenilirliği **{d['seviye']}** ({d['skor']:.0f}/100, son iki yılın %{d['doluluk'] * 100:.0f}'i dolu).\n\n{lines}\n\n"
+                "Bu skor hesapların değil, girilen verinin güvenilirliğini gösterir; düzeltmek için bina düzenleme ekranını kullan.")
+
     def a_greet(self, q, t, b, c):
         return ("Merhaba! Ben EDIFI'CE'in kendi yapay zekasıyım; internet ya da dış servis kullanmadan, bu uygulamadaki hesaplara bakarak "
                 "cevap veririm. Binanın durumunu, önerileri, finansı ve rakamların kaynağını sorabilirsin.\n\n" + self._unknown().split("\n\n", 1)[1])
@@ -330,11 +340,14 @@ class LocalAssistant:
     def a_overview(self, q, t, b, c):
         d = json.loads(t.run("get_building", {}))
         k, h, r = d["kpi"], d["saglik_skoru"], d["enerji_sinifi"]
+        dq = json.loads(t.run("get_data_quality", {}))
+        caveat = (f"\n\n⚠ Veri güvenilirliği **{dq['seviye']}** ({dq['skor']:.0f}/100): rakamlara temkinli yaklaş; ayrıntı için “veri kalitesi” diye sor."
+                  if dq["seviye"] != "Yüksek" else "")
         return (f"**{d['ad']}** · {d['kullanim']} · {_n(d['alan_m2'])} m² · {d['yapim_yili']}\n\n"
                 f"- Sağlık skoru **{h['toplam']:.0f}/100** (not {h['not']})\n- Tahmini enerji sınıfı **{r['sinif']}** (EUI {_n(k['eui_kwh_m2'])} kWh/m², "
                 f"benzer binalardan %{r['yuzdelik']:.0f}'inden daha çok tüketiyor)\n- Yıllık enerji {_n(k['toplam_enerji_kwh'] / 1000)} MWh, "
                 f"karbon {_n(k['karbon_kg'] / 1000, 1)} tCO₂, maliyet {_m(k['toplam_maliyet_TL'])}\n\n"
-                "İstersen en zayıf noktayı ya da önerileri anlatayım.")
+                "İstersen en zayıf noktayı ya da önerileri anlatayım." + caveat)
 
     def a_problem(self, q, t, b, c):
         d = json.loads(t.run("get_building", {}))

@@ -30,7 +30,20 @@ def main():
     pal.setColor(QPalette.PlaceholderText, QColor("#6E849B"))
     pal.setColor(QPalette.Highlight, QColor(13, 221, 150, 40))
     app.setPalette(pal)
+    from edifice import safety
+    from edifice.db import default_path
+    from PySide6.QtWidgets import QMessageBox
+    safety.install_crash_log(lambda msg: QMessageBox.warning(None, "EDIFI'CE", msg))
+    path = default_path()
+    note = None if selftest else safety.recover_if_corrupt(path)      # bozuk veritabanı: yedekten kurtar
+    if not selftest:
+        try:
+            safety.backup_db(path)                                    # günlük otomatik yedek (en son 7)
+        except Exception:
+            safety.LOG.exception("Yedek alınamadı")
     store = Store()
+    if note:
+        QMessageBox.information(None, "EDIFI'CE", note)
     if store.count() == 0:
         store.seed_demo()
     win = MainWindow(store.load_project(store.latest_id()), store)
