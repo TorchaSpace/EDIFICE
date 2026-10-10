@@ -1,0 +1,70 @@
+import pytest
+
+from edifice.ai.local import INTENTS, IntentModel, LocalAssistant, Memory, norm, parse_budget
+from edifice.ai.tools import Toolbox
+from edifice.service import Project
+
+
+@pytest.fixture(scope="module")
+def ai():
+    return LocalAssistant()
+
+
+@pytest.fixture
+def tb():
+    p, p2 = Project.mock(), Project.mock()
+    p2.building.name = "Plaza Kule"
+    return Toolbox({1: p, 2: p2}, 1)
+
+
+def test_norm_handles_turkish_letters():
+    assert norm("İstanbul Çankaya ŞÜĞ") == "istanbul cankaya sug"
+
+
+def test_parse_budget_units():
+    assert parse_budget("2 milyon tl bütçem var") == 2_000_000
+    assert parse_budget("500 bin lira") == 500_000
+    assert parse_budget("1,5 milyon") == 1_500_000
+    assert parse_budget("bütçem yok") is None
+
+
+@pytest.mark.parametrize("question,intent", [
+    ("binam nasıl", "overview"), ("sağlık skorum kaç", "health"), ("enerji sınıfım neden böyle", "rating"),
+    ("hangi öneriyle başlamalıyım", "start"), ("2 milyon bütçem var ne yapayım", "budget"), ("geçen yıla göre nasıl", "trend"),
+    ("hangi ay en yüksek", "peak"), ("tasarruf oranları nereden geliyor", "evidence"), ("karbon ne kadar", "carbon"),
+    ("chiller kaç yaşında", "equipment"), ("portföyde en kötü bina hangisi", "portfolio"),
+])
+def test_intent_classifier(ai, question, intent):
+    assert ai.model.classify(question)[0][0] == intent
+
+
+def test_every_training_example_classified_to_itself():
+    m = IntentModel()
+    wrong = [(ex, name) for name, exs in INTENTS.items() for ex in exs if m.classify(ex)[0][0] != name]
+    assert not wrong
+
+
+def test_answers_use_real_numbers(ai, tb):
+    p = tb.projects[1]
+    mem = Memory()
+    assert f"{p.health().total:.0f}/100" in ai.answer("sağlık skorum kaç", tb, mem)
+    ans = ai.answer("2 milyon bütçeyle ne yapmalıyım", tb, mem)
+    codes, fin = p.best_package(2_000_000)
+    assert "2,00 M ₺" in ans and all(o.name in ans for o in p.opportunities if o.code in codes)
+
+
+def test_follow_up_and_scenario_entities(ai, tb):
+    mem = Memory()
+    ai.answer("2 milyon bütçem var", tb, mem)
+    assert "5,00 M ₺ bütçeyle" in ai.answer("peki 5 milyon olursa", tb, mem)
+    ans = ai.answer("led ve vfd yaparsam ne olur", tb, mem)
+    assert "LED, VFD" in ans and "NPV" in ans
+
+
+def test_building_name_switches_context(ai, tb):
+    tb.projects[2].building.floor_area_m2 = 12000
+    assert "Plaza Kule" in ai.answer("plaza kule nasıl", tb, Memory())
+
+
+def test_out_of_scope_gets_honest_fallback(ai, tb):
+    assert "anlayamadım" in ai.answer("bugün hava nasıl", tb, Memory())

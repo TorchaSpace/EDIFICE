@@ -139,34 +139,24 @@ def test_budget_slider_selects_package_and_finance_updates():
     assert store.load_scenario(bid) == sc.selected_codes()
 
 
-def test_assistant_chat_flow_with_fake_stream(monkeypatch):
+def test_assistant_chat_answers_locally_and_keeps_history():
     import time
     from PySide6.QtWidgets import QApplication
-    from edifice.ai import agent
     from edifice.db import Store
-    from edifice.service import Project
     from edifice.ui.main_window import MainWindow
 
-    def fake(key, model, system, messages, tools, cancel):
-        assert key == "sk-ant-test" and "Seçili bina" in system
-        yield "content_block_start", {"index": 0, "content_block": {"type": "text"}}
-        yield "content_block_delta", {"index": 0, "delta": {"type": "text_delta", "text": "**Merhaba** test"}}
-        yield "message_delta", {"delta": {"stop_reason": "end_turn"}}
-    monkeypatch.setattr(agent, "_stream", fake)
     store = Store(":memory:")
     store.seed_demo()
-    store.set_setting("ai_api_key", "sk-ant-test")
     w = MainWindow(store.load_project(store.latest_id()), store)
     chat = w.sub["Sohbet"]
-    chat.send("Merhaba")
-    for _ in range(100):
+    chat.send("Hangi öneriyle başlamalıyım?")
+    for _ in range(300):
         QApplication.processEvents()
         if chat.worker.isFinished():
             break
         time.sleep(0.02)
     QApplication.processEvents()
-    assert w.chat_state.display[-1] == ("assistant", "**Merhaba** test")
-    assert w.chat_state.messages[-1]["role"] == "assistant"
-    # bina değişince geçmiş korunur
-    w.set_project(store.load_project(store.latest_id()))
+    role, text = w.chat_state.display[-1]
+    assert role == "assistant" and "geri ödeme" in text
+    w.set_project(store.load_project(store.latest_id()))   # bina değişince geçmiş korunur
     assert len(w.chat_state.display) == 2
