@@ -31,3 +31,7 @@ Kaynaklar: [Nectar karşılaştırması](https://nectarclimate.com/compare/measu
 
 ## Önerilen sıra
 1 → 3 → 2 → 6 → 4 → 5 → 7 → 8. Gerekçe: önce hesapların güvenilirliği (1), sonra veri girişinin kolaylığı (3), sonra ürünün “tahmin değil sonuç” iddiası (2).
+
+## Durum
+- ✅ 1. Hava normalizasyonu (derece-gün), ✅ 2. Toplu CSV/Excel içe aktarma (fatura PDF/foto okuma henüz yok), ✅ 3. Gerçekleşen tasarruf takibi (M&V).
+- Sıradaki: GES ve tarife optimizasyonu, CRREM benzeri karbon yolu, raporlama paketleri, teşvik bulucu, çok kullanıcı.

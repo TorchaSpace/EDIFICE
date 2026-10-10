@@ -212,7 +212,11 @@ class ChatPage:
         self._busy(True)
         projects = self.load_projects()
         weather = {bid: self.store.load_weather(p.building.lat, p.building.lon) for bid, p in projects.items() if p.building.lat is not None}
-        self.worker = ChatWorker(self.ai, text, self.state, Toolbox(projects, self.project.building_id, weather), forced)
+        tb = Toolbox(projects, self.project.building_id, weather)
+        for bid in projects:
+            months = self.store.load_project_months(bid)
+            tb.completed[bid] = {c: (y, months.get(c, 1)) for c, (s, y) in self.store.load_projects(bid).items() if s == "Tamamlandı"}
+        self.worker = ChatWorker(self.ai, text, self.state, tb, forced)
         self.worker.text.connect(self._on_text)
         self.worker.extras.connect(self._on_extras)
         self.worker.failed.connect(self._on_failed)

@@ -58,6 +58,8 @@ INTENTS: dict[str, list[str]] = {
                  "kaynaklara git", "genel bakışa dön", "tüketim sayfasını aç"],
     "act_scenario": ["senaryoyu uygula", "bu paketi senaryoya koy", "led ve vfd yi seç", "mevcut vs hedefte göster",
                      "senaryo sayfasında aç", "bu önerileri senaryoda seç", "seçili yap"],
+    "mv": ["gerçekleşen tasarruf", "ölçülen tasarruf", "proje işe yaradı mı", "yatırım gerçekten tasarruf sağladı mı", "biten projeler ne kadar kazandırdı",
+           "tahmin ile gerçekleşen", "doğrulanmış tasarruf", "m&v sonucu"],
     "weather": ["hava düzeltmeli tüketim", "iklim etkisi", "derece gün", "hava durumuna göre düzeltilmiş", "sıcak kış yüzünden mi düştü",
                 "gerçek tasarruf mu hava mı", "iklimden arındırılmış", "hava normalizasyonu"],
     "quality": ["veri kalitesi", "verilerim güvenilir mi", "eksik veri var mı", "veri güvenilirliği", "girdiler doğru mu",
@@ -143,7 +145,7 @@ INTENT_LABELS = {
     "carbon": "Karbon", "water": "Su", "cost": "Maliyet", "trend": "Yıllık değişim", "peak": "Pik ay", "anomaly": "Anomali",
     "opportunities": "Öneri listesi", "start": "Nereden başlamalı", "budget": "Bütçeye göre paket", "scenario": "Senaryo (ne olur?)",
     "finance": "Finans (NPV, geri ödeme)", "equipment": "Ekipman", "portfolio": "Portföy", "why": "Neden?", "compare": "Karşılaştırma",
-    "weather": "Hava düzeltmesi", "quality": "Veri kalitesi", "evidence": "Kaynak / kanıt", "act_status": "İşlem: proje durumu", "act_report": "İşlem: rapor", "act_open": "İşlem: sayfa aç",
+    "mv": "Gerçekleşen tasarruf (M&V)", "weather": "Hava düzeltmesi", "quality": "Veri kalitesi", "evidence": "Kaynak / kanıt", "act_status": "İşlem: proje durumu", "act_report": "İşlem: rapor", "act_open": "İşlem: sayfa aç",
     "act_scenario": "İşlem: senaryo seç", "greet": "Selamlama / yardım"}
 
 
@@ -333,6 +335,20 @@ class LocalAssistant:
                 "- Rakamların kaynağı ve kanıt düzeyi, “neden?” soruları\n- Karşılaştırma (iki bina, elektrik–doğalgaz, ay–yıl)\n"
                 "- İşlem: proje durumunu değiştirme, sayfa açma, senaryo seçme, rapor üretme\n\n"
                 "Örnek: “2 milyon ₺ bütçeyle ne yapmalıyım?” Anlamadığım soruları Asistan > Eğitim sekmesinde bana öğretebilirsin.")
+
+    def a_mv(self, q, t, b, c):
+        d = json.loads(t.run("get_mv", {}))
+        if isinstance(d, dict) and "hata" in d:
+            return d["hata"] + " Proje takibinde bir projeyi “Tamamlandı” yapıp bitiş yılı/ayını girin; ölçüm için en az 12 ay öncesi ve 3 ay sonrası tüketim gerekir."
+        lines = []
+        for r in d:
+            if r["olculebildi"]:
+                sig = "anlamlı" if r["anlamli"] else "anlamlı değil (belirsizlik içinde)"
+                lines.append(f"- **{r['proje']}** (bitiş {r['bitis']}): ölçülen **{_n(r['tasarruf_kwh'] / 1000, 1)} MWh** (%{r['tasarruf_yuzde']:.1f}), ±{_n(r['belirsizlik_kwh'] / 1000, 1)} MWh, {sig}"
+                             + (f"; katalog beklentisinin %{r['gerceklesme_yuzde']:.0f}'i" if r["gerceklesme_yuzde"] is not None else "") + (f". {r['not']}" if r["not"] else ""))
+            else:
+                lines.append(f"- **{r['proje']}**: ölçülemedi. {r['not']}")
+        return "Gerçekleşen tasarruf (hava düzeltmeli, proje öncesi modele göre):\n\n" + "\n".join(lines)
 
     def a_weather(self, q, t, b, c):
         d = json.loads(t.run("get_weather_adjusted", {}))

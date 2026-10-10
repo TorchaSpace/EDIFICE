@@ -19,6 +19,11 @@ UTILITY_NAMES = {UtilityType.ELECTRICITY: "Elektrik", UtilityType.GAS: "Doğalga
 MONTHS = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"]
 
 
+def _pct(part: float, whole: float, default: float = 0.0) -> float:
+    """100·part/whole; payda sıfırsa (ör. hiç elektrik/doğalgaz verisi olmayan bina) çökmek yerine default."""
+    return 100.0 * part / whole if whole else default
+
+
 def _page() -> tuple[QScrollArea, QVBoxLayout]:
     inner = QWidget()
     inner.setObjectName("page")
@@ -100,8 +105,11 @@ def _trend_text(pct: float) -> tuple[str, bool]:
 def _clear_layout(lay):
     while lay.count():
         it = lay.takeAt(0)
-        if it.widget():
-            it.widget().deleteLater()
+        w = it.widget()
+        if w is not None:
+            w.hide()
+            w.setParent(None)                   # deleteLater beklerken hayalet çizilmesin
+            w.deleteLater()
         elif it.layout():
             _clear_layout(it.layout())
 
@@ -121,8 +129,8 @@ class OverviewPage:
         specs = [
             ("Toplam enerji", k.total_energy_kwh / 1000, lambda v: f"{fmt(v)} MWh", f"EUI {fmt(k.eui_kwh_m2, 1)}", "energy", G),
             ("Karbon", k.carbon_kg / 1000, lambda v: f"{fmt(v, 1)} tCO₂", f"{fmt(k.carbon_kg_m2, 1)} kg/m²", "carbon", G),
-            ("Elektrik", k.electricity_kwh / 1000, lambda v: f"{fmt(v)} MWh", f"%{fmt(100 * k.electricity_kwh / k.total_energy_kwh)} pay", "electricity", AMBER),
-            ("Doğalgaz", k.gas_kwh / 1000, lambda v: f"{fmt(v)} MWh", f"%{fmt(100 * k.gas_kwh / k.total_energy_kwh)} pay", "gas", INDIGO),
+            ("Elektrik", k.electricity_kwh / 1000, lambda v: f"{fmt(v)} MWh", f"%{fmt(_pct(k.electricity_kwh, k.total_energy_kwh))} pay", "electricity", AMBER),
+            ("Doğalgaz", k.gas_kwh / 1000, lambda v: f"{fmt(v)} MWh", f"%{fmt(_pct(k.gas_kwh, k.total_energy_kwh))} pay", "gas", INDIGO),
             ("Su", k.water_m3, lambda v: f"{fmt(v)} m³", f"{fmt(k.water_m3_m2, 2)} m³/m²", "water", INDIGO),
             ("Yıllık maliyet", k.total_cost / 1e6, lambda v: f"{fmt(v, 2)} M ₺", "enerji + su", "cost", AMBER),
             ("Sağlık skoru", h.total, lambda v: f"{fmt(v)}/100", f"not {h.grade}", "health", score_color(h.total)),
@@ -648,9 +656,9 @@ class ScenarioPage:
 
         self.chart.update_data(
             {"Mevcut": [100] * 5,
-             "Hedef": [100 * t.electricity_kwh / c.electricity_kwh, 100 * t.gas_kwh / c.gas_kwh,
-                       100 * t.total_energy_kwh / c.total_energy_kwh, 100 * t.carbon_kg / c.carbon_kg,
-                       100 * t.total_cost / c.total_cost]})
+             "Hedef": [_pct(t.electricity_kwh, c.electricity_kwh, 100.0), _pct(t.gas_kwh, c.gas_kwh, 100.0),
+                       _pct(t.total_energy_kwh, c.total_energy_kwh, 100.0), _pct(t.carbon_kg, c.carbon_kg, 100.0),
+                       _pct(t.total_cost, c.total_cost, 100.0)]})
 
         codes = self.selected_codes()
         fin = self.project.finance(codes)

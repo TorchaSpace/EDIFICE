@@ -17,7 +17,8 @@ class Toolbox:
 
     def __init__(self, projects: dict[int, Project], current: int | None, weather: dict | None = None):
         self.projects, self.current = projects, current
-        self.weather = weather or {}        # bina kimliği -> aylık derece-gün sözlüğü (önbellekten)
+        self.weather = weather or {}
+        self.completed: dict[int, dict] = {}     # bina -> {öneri kodu: (yıl, ay)} (tamamlanan projeler)        # bina kimliği -> aylık derece-gün sözlüğü (önbellekten)
 
     def _p(self, args: dict) -> tuple[int, Project]:
         bid = args.get("building_id", self.current)
@@ -115,6 +116,20 @@ class Toolbox:
                 "turler": {n: {"kullanilabilir": u.ok, "r2": _r(u.r2, 2), "gozlem": u.n, "not": u.note,
                                "ham_kwh": {str(y): _r(v, 0) for y, v in u.raw.items()},
                                "duzeltilmis_kwh": {str(y): _r(v, 0) for y, v in u.normalized.items()}} for n, u in wn.by_utility.items()}}
+
+    def t_get_mv(self, a):
+        from ..engine.mv import measure
+        bid, p = self._p(a)
+        done = {c: (y, m) for c, (y, m) in (self.completed.get(bid) or {}).items()}
+        if not done:
+            return {"hata": "Bu binada tamamlandı olarak işaretlenmiş proje yok."}
+        out = []
+        for r in measure(p, self.weather.get(bid) or {}, done):
+            out.append({"proje": r.name, "bitis": f"{r.completed[1]}/{r.completed[0]}", "olculebildi": r.ok, "not": r.note,
+                        "oncesi_ay": r.n_pre, "sonrasi_ay": r.n_post, "tasarruf_kwh": _r(r.saved_kwh, 0), "tasarruf_yuzde": _r(r.saved_pct * 100),
+                        "belirsizlik_kwh": _r(r.uncertainty_kwh, 0), "anlamli": r.significant, "katalog_beklentisi_kwh": _r(r.expected_kwh, 0),
+                        "gerceklesme_yuzde": _r(r.realization_pct, 0), "model_guvenilir": r.model_ok, "cv_rmse": _r(r.cv_rmse, 3)})
+        return out
 
     def t_get_data_quality(self, a):
         from ..quality import assess

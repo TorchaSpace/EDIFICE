@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QPainter, QPen
-from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QSizePolicy, QSpinBox, QWidget
+from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QSizePolicy, QSpinBox, QVBoxLayout, QWidget
 
 from ..db import Store
 from ..service import Project
 from .dropdown import PremiumCombo
 from .pages import _page
-from .widgets import AMBER, G, INDIGO, MUTED, SUB, TEXT, Card, Panel, fmt, header, qfont, rgba
+from .widgets import AMBER, G, INDIGO, MUTED, RED, SUB, TEXT, Card, Panel, badge, fmt, header, muted, qfont, rgba
 
 STATUSES = ["Planlanmadı", "Planlandı", "Uygulanıyor", "Tamamlandı"]
 STATUS_COLORS = {"Planlandı": INDIGO, "Uygulanıyor": AMBER, "Tamamlandı": G, "Planlanmadı": MUTED}
@@ -81,6 +81,8 @@ class ProjectsTrackerPage:
         lay.addWidget(header("Proje takibi", "Dönüşüm projeleri",
                              "Önerileri projeye çevirin: durum ve planlanan yılı seçin. Seçimler kaydedilir; Genel Bakış'taki zaman çizelgesini besler."))
         self.saved = store.load_projects(project.building_id) if project.building_id is not None else {}
+        self.saved_months = store.load_project_months(project.building_id) if project.building_id is not None else {}
+        self.dd: dict = {}
         results = [r for r in project.opportunity_results() if r.fit != "none"]
         self.results = {r.opportunity.code: r for r in results}
         self.cards = QGridLayout()
@@ -93,7 +95,7 @@ class ProjectsTrackerPage:
         lay.addLayout(self.cards)
 
         panel = Panel(eyebrow="Projeler", title="Uygun öneriler", subtitle="Ekipmanına göre elenmiş öneriler; “uygun değil” olanlar listelenmez.")
-        self.combos, self.spins = {}, {}
+        self.combos, self.spins, self.mspins = {}, {}, {}
         for r in results:
             code = r.opportunity.code
             status, year = self.saved.get(code, (STATUSES[0], project.year + 1))
@@ -113,19 +115,36 @@ class ProjectsTrackerPage:
             cb.setFixedWidth(150)
             cb.setMinimumHeight(34)
             sp = QSpinBox()
-            sp.setRange(project.year, project.year + 30)
-            sp.setValue(max(year, project.year))
+            sp.setRange(2000, project.year + 30)       # biten projeler geçmişte olabilir (ölçüm için eski veriyle)
+            sp.setValue(max(year, 2000))
             sp.setFixedWidth(90)
             sp.setMinimumHeight(34)
+            ms = QSpinBox()
+            ms.setRange(1, 12)
+            ms.setValue(self.saved_months.get(code, 1))
+            ms.setPrefix("Ay ")
+            ms.setFixedWidth(84)
+            ms.setMinimumHeight(34)
+            ms.setToolTip("Projenin bittiği ay (gerçekleşen tasarruf ölçümü için)")
             cb.currentTextChanged.connect(lambda _t, c=code: self._changed(c))
             sp.valueChanged.connect(lambda _v, c=code: self._changed(c))
-            self.combos[code], self.spins[code] = cb, sp
+            ms.valueChanged.connect(lambda _v, c=code: self._changed(c))
+            self.combos[code], self.spins[code], self.mspins[code] = cb, sp, ms
             h.addWidget(cb)
             h.addWidget(sp)
+            h.addWidget(ms)
             panel.lay.addWidget(row)
         lay.addWidget(panel)
+        self.mv_panel = Panel(eyebrow="Ölçüm ve doğrulama (M&V)", title="Gerçekleşen tasarruf",
+                              subtitle="Biten projelerde, proje öncesi tüketimden kurulan hava duyarlı modelle “proje olmasaydı” tüketimi tahmin edilir; "
+                                       "fark ölçülen tasarruftur. En az 12 ay öncesi ve 3 ay sonrası veri gerekir (eski faturaları içe aktarabilirsiniz).")
+        self.mv_body = QVBoxLayout()
+        self.mv_body.setSpacing(8)
+        self.mv_panel.lay.addLayout(self.mv_body)
+        lay.addWidget(self.mv_panel)
         lay.addStretch()
         self._summary()
+        self.refresh_mv()
 
     def state(self) -> dict[str, tuple[str, int]]:
         return {c: (cb.currentText(), self.spins[c].value()) for c, cb in self.combos.items()}
@@ -137,9 +156,44 @@ class ProjectsTrackerPage:
     def _changed(self, code: str):
         s, y = self.state()[code]
         if self.project.building_id is not None:
-            self.store.save_project(self.project.building_id, code, s, y)
+            self.store.save_project(self.project.building_id, code, s, y, self.mspins[code].value())
         self._summary()
+        self.refresh_mv()
         self.on_change(self.rows())
+
+    def set_weather(self, dd: dict):
+        self.dd = dd or {}
+        self.refresh_mv()
+
+    def refresh_mv(self):
+        from ..engine.mv import measure
+        from .pages import _clear_layout
+        _clear_layout(self.mv_body)
+        done = {c: (y, self.mspins[c].value()) for c, (s, y) in self.state().items() if s == "Tamamlandı"}
+        if not done:
+            self.mv_body.addWidget(muted("Henüz biten proje yok. Bir projeyi “Tamamlandı” yapıp bitiş yılı ve ayını seçin."))
+            return
+        for r in measure(self.project, self.dd, done):
+            line = QVBoxLayout()
+            line.setSpacing(2)
+            top = QHBoxLayout()
+            nm = QLabel(f"<b>{r.name}</b> <span style='color:{MUTED}; font-size:11px'>bitiş {r.completed[1]}/{r.completed[0]}</span>")
+            nm.setStyleSheet("font-size: 13px; background: transparent;")
+            top.addWidget(nm, 1)
+            if r.ok:
+                col = G if r.significant and r.saved_kwh > 0 else AMBER if not r.significant else RED
+                txt = (f"{fmt(r.saved_kwh / 1000, 1)} MWh (%{r.saved_pct * 100:.1f}) ± {fmt(r.uncertainty_kwh / 1000, 1)}"
+                       + ("" if r.significant else " · anlamlı değil"))
+                top.addWidget(badge(txt, col))
+            line.addLayout(top)
+            detail = r.note
+            if r.ok and r.realization_pct is not None:
+                detail = (f"Katalog tahmini {fmt(r.expected_kwh / 1000, 1)} MWh → gerçekleşme %{r.realization_pct:.0f}. " + detail).strip()
+            if detail:
+                line.addWidget(muted(detail))
+            box = QWidget()
+            box.setLayout(line)
+            self.mv_body.addWidget(box)
 
     def _summary(self):
         st = self.state()

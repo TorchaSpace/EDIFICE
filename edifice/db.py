@@ -83,6 +83,9 @@ class Store:
         self.conn.execute("PRAGMA foreign_keys = ON")
         self.conn.executescript(SCHEMA)
         cols = {r[1] for r in self.conn.execute("PRAGMA table_info(buildings)")}
+        pcols = {r[1] for r in self.conn.execute("PRAGMA table_info(projects)")}
+        if "month" not in pcols:
+            self.conn.execute("ALTER TABLE projects ADD COLUMN month INTEGER NOT NULL DEFAULT 1")
         for c in ("lat", "lon"):
             if c not in cols:
                 self.conn.execute(f"ALTER TABLE buildings ADD COLUMN {c} REAL")
@@ -202,9 +205,13 @@ class Store:
         with self.conn:
             self.conn.execute("DELETE FROM ai_examples WHERE id=?", (eid,))
 
-    def save_project(self, bid: int, code: str, status: str, year: int):
+    def save_project(self, bid: int, code: str, status: str, year: int, month: int = 1):
         with self.conn:
-            self.conn.execute("INSERT OR REPLACE INTO projects VALUES (?,?,?,?)", (bid, code, status, year))
+            self.conn.execute("INSERT OR REPLACE INTO projects (building_id, code, status, year, month) VALUES (?,?,?,?,?)",
+                              (bid, code, status, year, month))
+
+    def load_project_months(self, bid: int) -> dict[str, int]:
+        return {c: m for c, m in self.conn.execute("SELECT code, month FROM projects WHERE building_id=?", (bid,))}
 
     def load_projects(self, bid: int) -> dict[str, tuple[str, int]]:
         return {c: (s, y) for c, s, y in self.conn.execute(

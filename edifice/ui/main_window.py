@@ -385,6 +385,9 @@ class MainWindow(QMainWindow):
         ov = self.sub.get("Genel Bakış")
         if ov is not None and hasattr(ov, "set_weather"):
             ov.set_weather(wn, status)
+        tr = self.sub.get("Proje takibi")
+        if tr is not None:
+            tr.set_weather(dd)
 
     def _projects_changed(self, rows):
         ov = self.sub.get("Genel Bakış")
