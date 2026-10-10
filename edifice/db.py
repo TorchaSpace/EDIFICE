@@ -79,6 +79,8 @@ class Store:
         for c in ("lat", "lon"):
             if c not in cols:
                 self.conn.execute(f"ALTER TABLE buildings ADD COLUMN {c} REAL")
+        self.conn.execute("UPDATE buildings SET lat=41.0082, lon=28.9784 WHERE name='Demo Ofis Binası' AND lat IS NULL")
+        self.conn.commit()
         self._migrate_evidence_defaults()
 
     EVIDENCE_VERSION = "3"
@@ -196,4 +198,5 @@ class Store:
     def seed_demo(self) -> int:
         p = Project.mock()
         p.building.name = "Demo Ofis Binası"
+        p.building.lat, p.building.lon = 41.0082, 28.9784
         return self.save_building(p.building, p.readings, p.equipment)

@@ -75,9 +75,10 @@ class PortfolioPage:
             mp.lay.addWidget(LocationMap(pts, on_open), 1)
             lay.addWidget(mp)
         else:
-            hint = QLabel("Haritada görmek için bina düzenleme ekranında enlem ve boylam girin.")
-            hint.setStyleSheet(f"color: {MUTED}; font-size: 12px; background: transparent;")
-            lay.addWidget(hint)
+            mp = Panel(eyebrow="Konum", title="Harita",
+                       subtitle="Henüz konumu girilmiş bina yok. Sol alttaki bina kartından “Bu binayı düzenle” > Genel bilgiler bölümüne "
+                                "enlem ve boylam yazın (ör. 41.0082 / 28.9784); bina haritada görünür.")
+            lay.addWidget(mp)
 
         cards = Panel(eyebrow="Bina listesi", title="Portföydeki binalar",
                       subtitle="Sağlık skoru, enerji sınıfı (tahmini) ve uygun önerilerin tasarruf potansiyeli. Bir binaya tıklayın.")
