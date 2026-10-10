@@ -274,7 +274,7 @@ def _insight_card(color: str, title: str, text: str) -> QWidget:
 
 
 class LocationMap(QWidget):
-    """Canlı harita: OpenStreetMap karoları koyu temaya boyanır; bina noktaları üstte.
+    """Canlı harita: OpenStreetMap karoları (standart renkler); bina noktaları üstte.
     Tekerlek: imleç noktasına yumuşak yakınlaştırma, sürükle: atalet ile kaydırma.
     Karolar diskte önbelleğe alınır; inmeyen karo yerine üst seviye karo bulanık gösterilir.
     İnternet yoksa harita boş kalır, noktalar çizilmeye devam eder."""
@@ -327,7 +327,8 @@ class LocationMap(QWidget):
     def _unworld(self, x: float, y: float, z: float) -> tuple[float, float]:
         import math
         n = self.TILE * 2 ** z
-        return math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * y / n)))), x / n * 360 - 180
+        lat = math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * y / n))))
+        return max(-84.0, min(84.0, lat)), (x / n * 360 - 180 + 180) % 360 - 180
 
     def _xy(self, lat: float, lon: float) -> QPointF:
         cx, cy = self._world(self.clat, self.clon, self.zf)
@@ -353,13 +354,7 @@ class LocationMap(QWidget):
         self._pending.discard(key)
         img = QImage()
         if reply.error() == reply.NetworkError.NoError and img.loadFromData(reply.readAll().data()):
-            g = img.convertToFormat(QImage.Format_Grayscale8)
-            g.invertPixels()
-            out = g.convertToFormat(QImage.Format_ARGB32)
-            q = QPainter(out)
-            q.setCompositionMode(QPainter.CompositionMode_Multiply)
-            q.fillRect(out.rect(), QColor("#4FD8B0"))     # yeşilimsi ton: marka rengiyle uyumlu koyu harita
-            q.end()
+            out = img
             self._tiles[key] = QPixmap.fromImage(out)
             self.update()
         reply.deleteLater()
@@ -412,12 +407,6 @@ class LocationMap(QWidget):
                         self._request((z, tx % n, ty))
                 else:
                     self._request((z, tx % n, ty))      # kenar payı: kaydırırken boşluk görünmesin
-        vg = QRectF(0, 0, w, h)
-        from PySide6.QtGui import QRadialGradient
-        g = QRadialGradient(QPointF(w / 2, h / 2), max(w, h) * 0.65)
-        g.setColorAt(0.6, rgba("#070C12", 0.0))
-        g.setColorAt(1.0, rgba("#070C12", 0.55))
-        p.fillRect(vg, g)
         for i, (_, name, lat, lon, health) in enumerate(self.points):
             pt = self._xy(lat, lon)
             col = score_color(health)
@@ -437,9 +426,10 @@ class LocationMap(QWidget):
                 p.drawRoundedRect(box, 13, 13)
                 p.setPen(QColor("#E8F2FF"))
                 p.drawText(box, Qt.AlignCenter, name)
-        p.setPen(rgba("#E8F2FF", 0.55))
+        p.fillRect(QRectF(0, h - 18, 214, 18), rgba("#FFFFFF", 0.8))
+        p.setPen(QColor("#333333"))
         p.setFont(qfont(10))
-        p.drawText(QPointF(12, h - 8), "© OpenStreetMap katkıda bulunanlar")
+        p.drawText(QPointF(6, h - 5), "© OpenStreetMap katkıda bulunanlar")
         p.end()
 
     # ---- etkileşim
@@ -459,15 +449,22 @@ class LocationMap(QWidget):
         self.update()
 
     def wheelEvent(self, e):
-        step = 1 if e.angleDelta().y() > 0 else -1
-        target = max(2.0, min(17.0, round(self._zanim.endValue() if self._zanim.state() == self._zanim.State.Running else self.zf) + step))
+        """Fare çarkı ve dokunmatik yüzey aynı davranır: delta toplanır, hedef zoma yumuşak geçilir."""
+        dy = e.angleDelta().y()
+        if not dy:
+            e.accept()
+            return
+        base = getattr(self, "_ztarget", self.zf)
+        if self._zanim.state() != self._zanim.State.Running:
+            base = self.zf
+        self._ztarget = max(2.0, min(17.0, base + max(-1.0, min(1.0, dy / 240.0))))
         pos = e.position()
         cx, cy = self._world(self.clat, self.clon, self.zf)
         lat, lon = self._unworld(cx + pos.x() - self.width() / 2, cy + pos.y() - self.height() / 2, self.zf)
         self._anchor = ((lat, lon), pos)
         self._zanim.stop()
         self._zanim.setStartValue(self.zf)
-        self._zanim.setEndValue(float(target))
+        self._zanim.setEndValue(self._ztarget)
         self._zanim.start()
         e.accept()
 
@@ -493,7 +490,9 @@ class LocationMap(QWidget):
         if e.buttons() & Qt.LeftButton and self._last is not None:
             d = e.position() - self._last
             self._last = e.position()
+            import time
             self._vel = d * 0.6 + self._vel * 0.4
+            self._last_t = time.monotonic()
             self._pan(d.x(), d.y())
             return
         i = self._hit(e.position())
@@ -503,11 +502,12 @@ class LocationMap(QWidget):
             self.update()
 
     def mouseReleaseEvent(self, e):
+        import time
         moved = (e.position() - self._press).manhattanLength() if self._press is not None else 99
         self._last = None
         if moved < 5:
             i = self._hit(e.position())
             if i >= 0:
                 self.on_open(self.points[i][0])
-        elif abs(self._vel.x()) + abs(self._vel.y()) > 2:
+        elif abs(self._vel.x()) + abs(self._vel.y()) > 3 and time.monotonic() - getattr(self, "_last_t", 0) < 0.06:
             self._inertia.start()
