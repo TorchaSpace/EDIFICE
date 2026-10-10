@@ -136,9 +136,25 @@ def build_from_inputs(info: dict, grids: dict[int, list[list[str]]], equipment_r
             continue
         equipment.append(Equipment(r.get("category") or EQUIPMENT_CATEGORIES[0], r["name"].strip(), yi,
                                    int(r.get("condition") or 3), (r.get("notes") or "").strip()))
+    lat = lon = None
+    for key, lo, hi, label in (("lat", -90, 90, "Enlem"), ("lon", -180, 180, "Boylam")):
+        raw = str(info.get(key) or "").strip().replace(",", ".")
+        if raw:
+            try:
+                v = float(raw)
+                if not lo <= v <= hi:
+                    raise ValueError
+                if key == "lat":
+                    lat = v
+                else:
+                    lon = v
+            except ValueError:
+                errors.append(f"{label} {lo} ile {hi} arasında bir sayı olmalı (örn. 41.0082)")
+    if (lat is None) != (lon is None) and not errors:
+        errors.append("Konum için enlem ve boylam birlikte girilmeli")
     if errors:
         raise ValidationError(errors)
     building = Building(name=name, address=(info.get("address") or "").strip(),
                         use_type=info.get("use_type") or USE_TYPES[0], floor_area_m2=float(area),
-                        year_built=yb, floors=floors, occupants=int(info.get("occupants") or 0))
+                        year_built=yb, floors=floors, occupants=int(info.get("occupants") or 0), lat=lat, lon=lon)
     return building, readings, equipment

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPointF, Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
@@ -66,6 +66,18 @@ class PortfolioPage:
             c.set_number(v, f, sub)
             grid.addWidget(c, i // 3, i % 3)
         lay.addLayout(grid)
+
+        pts = [(bid, r["project"].building.name, r["project"].building.lat, r["project"].building.lon, r["health"])
+               for bid, r in self.rows if r["project"].building.lat is not None]
+        if pts:
+            mp = Panel(eyebrow="Konum", title="Bina konumları",
+                       subtitle="Girilen enlem/boylama göre; nokta rengi sağlık skoru. Harita altlığı yoktur, ızgara koordinat içindir.")
+            mp.lay.addWidget(LocationMap(pts, on_open), 1)
+            lay.addWidget(mp)
+        else:
+            hint = QLabel("Haritada görmek için bina düzenleme ekranında enlem ve boylam girin.")
+            hint.setStyleSheet(f"color: {MUTED}; font-size: 12px; background: transparent;")
+            lay.addWidget(hint)
 
         cards = Panel(eyebrow="Bina listesi", title="Portföydeki binalar",
                       subtitle="Sağlık skoru, enerji sınıfı (tahmini) ve uygun önerilerin tasarruf potansiyeli. Bir binaya tıklayın.")
@@ -258,3 +270,84 @@ def _insight_card(color: str, title: str, text: str) -> QWidget:
     v.addWidget(t)
     v.addWidget(d)
     return w
+
+
+class LocationMap(QWidget):
+    """Bina konumları: enlem/boylam ızgarası üzerinde nokta grafiği (harita altlığı yok, koordinatlar gerçek).
+    Nokta rengi sağlık skoruna göre; üzerine gelince bina adı görünür."""
+
+    def __init__(self, points: list[tuple[int, str, float, float, float]], on_open):
+        super().__init__()
+        self.points, self.on_open = points, on_open
+        self.setMinimumHeight(300)
+        self.setMouseTracking(True)
+        lats = [p[2] for p in points]
+        lons = [p[3] for p in points]
+        cl, co = (min(lats) + max(lats)) / 2, (min(lons) + max(lons)) / 2
+        self.span = max(max(lats) - min(lats), max(lons) - min(lons), 4.0) * 1.35
+        self.c = (cl, co)
+        self._hover = -1
+
+    def _xy(self, lat: float, lon: float) -> QPointF:
+        w, h = self.width(), self.height()
+        s = min(w, h * 2) / self.span          # px / derece (iki eksen aynı ölçek)
+        return QPointF(w / 2 + (lon - self.c[1]) * s, h / 2 - (lat - self.c[0]) * s * 1.0)
+
+    def paintEvent(self, e):
+        from PySide6.QtGui import QPainter, QPen
+        from .widgets import rgba, qfont
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        step = 1 if self.span < 12 else 2 if self.span < 24 else 5
+        p.setPen(QPen(rgba("#FFFFFF", 0.06), 1))
+        p.setFont(qfont(10))
+        w, h = self.width(), self.height()
+        import math
+        s = min(w, h * 2) / self.span
+        lon0, lon1 = self.c[1] - w / 2 / s, self.c[1] + w / 2 / s
+        lat0, lat1 = self.c[0] - h / 2 / s, self.c[0] + h / 2 / s
+        for lon in range(math.ceil(lon0 / step) * step, int(lon1) + 1, step):
+            x = self._xy(self.c[0], lon).x()
+            p.drawLine(QPointF(x, 0), QPointF(x, h))
+            p.setPen(QPen(rgba("#7A90A8", 0.7)))
+            p.drawText(QPointF(x + 4, h - 6), f"{lon}°E")
+            p.setPen(QPen(rgba("#FFFFFF", 0.06), 1))
+        for lat in range(math.ceil(lat0 / step) * step, int(lat1) + 1, step):
+            y = self._xy(lat, self.c[1]).y()
+            p.drawLine(QPointF(0, y), QPointF(w, y))
+            p.setPen(QPen(rgba("#7A90A8", 0.7)))
+            p.drawText(QPointF(6, y - 4), f"{lat}°N")
+            p.setPen(QPen(rgba("#FFFFFF", 0.06), 1))
+        for i, (_, name, lat, lon, health) in enumerate(self.points):
+            pt = self._xy(lat, lon)
+            col = score_color(health)
+            r = 9 if i == self._hover else 7
+            p.setPen(Qt.NoPen)
+            p.setBrush(rgba(col, 0.22))
+            p.drawEllipse(pt, r + 7, r + 7)
+            p.setBrush(QColor(col))
+            p.drawEllipse(pt, r, r)
+            if i == self._hover:
+                p.setPen(QColor("#E8F2FF"))
+                p.setFont(qfont(12, 700))
+                p.drawText(pt + QPointF(r + 10, 4), name)
+        p.end()
+
+    def _hit(self, pos) -> int:
+        for i, (_, _, lat, lon, _) in enumerate(self.points):
+            q = self._xy(lat, lon)
+            if (q.x() - pos.x()) ** 2 + (q.y() - pos.y()) ** 2 <= 18 ** 2:
+                return i
+        return -1
+
+    def mouseMoveEvent(self, e):
+        i = self._hit(e.position())
+        if i != self._hover:
+            self._hover = i
+            self.setCursor(Qt.PointingHandCursor if i >= 0 else Qt.ArrowCursor)
+            self.update()
+
+    def mousePressEvent(self, e):
+        i = self._hit(e.position())
+        if i >= 0:
+            self.on_open(self.points[i][0])

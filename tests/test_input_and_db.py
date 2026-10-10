@@ -79,3 +79,18 @@ def test_update_building():
     store.update_building(bid, p.building, p.readings[:36], [])
     q = store.load_project(bid)
     assert q.building.name == "Yeni Ad" and len(q.readings) == 36 and q.equipment == []
+
+
+def test_location_roundtrip_and_validation(tmp_path):
+    from edifice.db import Store
+    from edifice.service import Project
+    from edifice.validation import ValidationError, build_from_inputs  # noqa: F401
+    st = Store(str(tmp_path / "t.db"))
+    p = Project.mock()
+    p.building.lat, p.building.lon = 41.0082, 28.9784
+    bid = st.save_building(p.building, p.readings, p.equipment)
+    b = st.load_project(bid).building
+    assert (b.lat, b.lon) == (41.0082, 28.9784)
+    p.building.lat = None
+    bid2 = st.save_building(p.building, p.readings, p.equipment)
+    assert st.load_project(bid2).building.lat is None

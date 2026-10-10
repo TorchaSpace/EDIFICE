@@ -133,6 +133,10 @@ class BuildingDialog(QDialog):
         self.name.setPlaceholderText("Örn. Merkez Ofis Binası")
         self.address = QLineEdit()
         self.address.setPlaceholderText("İl / ilçe / adres")
+        self.lat = QLineEdit()
+        self.lat.setPlaceholderText("Örn. 41.0082")
+        self.lon = QLineEdit()
+        self.lon.setPlaceholderText("Örn. 28.9784")
         self.use_type = PremiumCombo()
         self.use_type.addItems(USE_TYPES)
         self.area = _tune_spin(QDoubleSpinBox())
@@ -147,7 +151,7 @@ class BuildingDialog(QDialog):
         self.floors.setRange(1, 200)
         self.occupants = _tune_spin(QSpinBox())
         self.occupants.setRange(0, 100000)
-        for w in (self.name, self.address, self.use_type):
+        for w in (self.name, self.address, self.use_type, self.lat, self.lon):
             w.setMinimumHeight(40)
 
         general = Panel("Genel bilgiler", "Binayı tanımlayan temel bilgiler")
@@ -157,6 +161,8 @@ class BuildingDialog(QDialog):
         g.addWidget(_field("Bina adı *", self.name, "Raporlarda ve bina listesinde görünecek ad"), 0, 0, 1, 2)
         g.addWidget(_field("Kullanım tipi", self.use_type, "Binanın ana işlevi"), 0, 2)
         g.addWidget(_field("Adres", self.address, "İsteğe bağlı: il, ilçe ve açık adres"), 1, 0, 1, 3)
+        g.addWidget(_field("Enlem", self.lat, "İsteğe bağlı: harita için ondalık derece"), 2, 0)
+        g.addWidget(_field("Boylam", self.lon, "İsteğe bağlı: harita için ondalık derece"), 2, 1)
         for c in range(3):
             g.setColumnStretch(c, 1)
         general.lay.addSpacing(6)
@@ -341,6 +347,8 @@ class BuildingDialog(QDialog):
         b = p.building
         self.name.setText(b.name)
         self.address.setText(b.address)
+        self.lat.setText("" if b.lat is None else str(b.lat))
+        self.lon.setText("" if b.lon is None else str(b.lon))
         self.use_type.setCurrentText(b.use_type)
         self.area.setValue(b.floor_area_m2)
         self.year_built.setValue(b.year_built)
@@ -374,7 +382,8 @@ class BuildingDialog(QDialog):
     def collect(self):
         info = dict(name=self.name.text(), address=self.address.text(), use_type=self.use_type.currentText(),
                     floor_area_m2=self.area.value(), year_built=self.year_built.value(),
-                    floors=self.floors.value(), occupants=self.occupants.value())
+                    floors=self.floors.value(), occupants=self.occupants.value(),
+                    lat=self.lat.text(), lon=self.lon.text())
 
         def grid_text(t: QTableWidget):
             return [[(t.item(r, c).text() if t.item(r, c) else "") for c in range(6)] for r in range(12)]

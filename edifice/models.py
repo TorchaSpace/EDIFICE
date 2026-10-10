@@ -29,6 +29,8 @@ class Building:
     year_built: int
     floors: int
     occupants: int
+    lat: float | None = None
+    lon: float | None = None
 
 
 @dataclass

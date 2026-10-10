@@ -75,6 +75,10 @@ class Store:
         self.conn = sqlite3.connect(path or default_path())
         self.conn.execute("PRAGMA foreign_keys = ON")
         self.conn.executescript(SCHEMA)
+        cols = {r[1] for r in self.conn.execute("PRAGMA table_info(buildings)")}
+        for c in ("lat", "lon"):
+            if c not in cols:
+                self.conn.execute(f"ALTER TABLE buildings ADD COLUMN {c} REAL")
         self._migrate_evidence_defaults()
 
     EVIDENCE_VERSION = "3"
@@ -129,8 +133,8 @@ class Store:
     def update_building(self, bid: int, b: Building, readings: list[UtilityReading], equipment: list[Equipment]):
         with self.conn:
             self.conn.execute(
-                "UPDATE buildings SET name=?,address=?,use_type=?,floor_area_m2=?,year_built=?,floors=?,occupants=? WHERE id=?",
-                (b.name, b.address, b.use_type, b.floor_area_m2, b.year_built, b.floors, b.occupants, bid))
+                "UPDATE buildings SET name=?,address=?,use_type=?,floor_area_m2=?,year_built=?,floors=?,occupants=?,lat=?,lon=? WHERE id=?",
+                (b.name, b.address, b.use_type, b.floor_area_m2, b.year_built, b.floors, b.occupants, b.lat, b.lon, bid))
             self.conn.execute("DELETE FROM readings WHERE building_id=?", (bid,))
             self.conn.execute("DELETE FROM equipment WHERE building_id=?", (bid,))
             self.conn.executemany("INSERT INTO readings VALUES (?,?,?,?,?,?)",
@@ -160,9 +164,9 @@ class Store:
     def save_building(self, b: Building, readings: list[UtilityReading], equipment: list[Equipment]) -> int:
         with self.conn:
             cur = self.conn.execute(
-                "INSERT INTO buildings (name,address,use_type,floor_area_m2,year_built,floors,occupants) "
-                "VALUES (?,?,?,?,?,?,?)",
-                (b.name, b.address, b.use_type, b.floor_area_m2, b.year_built, b.floors, b.occupants))
+                "INSERT INTO buildings (name,address,use_type,floor_area_m2,year_built,floors,occupants,lat,lon) "
+                "VALUES (?,?,?,?,?,?,?,?,?)",
+                (b.name, b.address, b.use_type, b.floor_area_m2, b.year_built, b.floors, b.occupants, b.lat, b.lon))
             bid = cur.lastrowid
             self.conn.executemany(
                 "INSERT INTO readings VALUES (?,?,?,?,?,?)",
@@ -178,7 +182,7 @@ class Store:
 
     def load_project(self, bid: int) -> Project:
         row = self.conn.execute(
-            "SELECT name,address,use_type,floor_area_m2,year_built,floors,occupants FROM buildings WHERE id=?",
+            "SELECT name,address,use_type,floor_area_m2,year_built,floors,occupants,lat,lon FROM buildings WHERE id=?",
             (bid,)).fetchone()
         if row is None:
             raise KeyError(bid)
