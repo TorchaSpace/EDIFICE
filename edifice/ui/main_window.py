@@ -35,9 +35,12 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(1180, 720)
         self.setStyleSheet(get_style())
 
-        self.nav_specs = [("Portföy", "portfolio"), ("Finans", "opportunities"), ("Sürdürülebilirlik", "consumption"), ("Asistan", "method"), ("Genel Bakış", "overview"), ("Tüketim", "consumption"),
-                          ("Öneriler", "opportunities"), ("Mevcut vs Hedef", "scenario"),
-                          ("Ayarlar", "settings"), ("Kaynaklar ve Yöntem", "method")]
+        self.sections = [
+            ("Platform", [("Genel Bakış", "overview"), ("Portföy", "portfolio"), ("Tüketim", "consumption"),
+                          ("Öneriler", "opportunities"), ("Mevcut vs Hedef", "scenario")]),
+            ("Intelligence", [("Finans", "finance"), ("Asistan", "assistant", "OTO"), ("Sürdürülebilirlik", "esg"),
+                              ("Kaynaklar ve Yöntem", "method"), ("Ayarlar", "settings")])]
+        self.nav_specs = [(it[0], it[1]) for _, items in self.sections for it in items]
         self.pages = []
         self.stack = FadeStack()
 
@@ -46,8 +49,7 @@ class MainWindow(QMainWindow):
         side.setContentsMargins(0, 0, 0, 0)
         side.setSpacing(0)
         side.addWidget(Logo())
-        side.addWidget(section_label("Platform"))
-        self.nav = NavBar(self.nav_specs)
+        self.nav = NavBar(self.sections)
         self.buttons = self.nav.buttons
         for i in range(len(self.nav_specs)):
             self.buttons[i].clicked.connect(lambda _=False, idx=i: self.select(idx))
@@ -99,6 +101,7 @@ class MainWindow(QMainWindow):
         tl.setContentsMargins(28, 0, 28, 0)
         tl.setSpacing(14)
         c1, sep, self.crumb = QLabel("Platform"), QLabel("/"), QLabel(self.nav_specs[0][0])
+        self.crumb1 = c1
         c1.setObjectName("crumb")
         sep.setStyleSheet("color: #1E3048; font-size: 11px;")
         self.crumb.setObjectName("crumbnow")
@@ -168,21 +171,22 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(root)
         self.set_project(project)
 
-    def set_project(self, project: Project, select: int = 4, notify: bool = False):
+    def set_project(self, project: Project, select: int = 0, notify: bool = False):
         """Seçili binayı değiştirir: sayfaları yeniden kurar."""
         self.project = project
         while self.stack.count():
             w = self.stack.widget(0)
             self.stack.removeWidget(w)
             w.deleteLater()
-        self.pages = [("Portföy", PortfolioPage(self.store, self.open_building, self.search.text().strip())),
+        self.pages = [("Genel Bakış", OverviewPage(project)),
+                      ("Portföy", PortfolioPage(self.store, self.open_building, self.search.text().strip())),
+                      ("Tüketim", ConsumptionPage(project)), ("Öneriler", OpportunitiesPage(project)),
+                      ("Mevcut vs Hedef", ScenarioPage(project, self.store)),
                       ("Finans", FinancePage(self.store, self.open_building)),
-                      ("Sürdürülebilirlik", EsgPage(self.store, self.open_building)),
                       ("Asistan", AssistantPage(project)),
-                      ("Genel Bakış", OverviewPage(project)), ("Tüketim", ConsumptionPage(project)),
-                      ("Öneriler", OpportunitiesPage(project)), ("Mevcut vs Hedef", ScenarioPage(project, self.store)),
-                      ("Ayarlar", SettingsPage(project, self.store, self._settings_saved)),
-                      ("Kaynaklar ve Yöntem", MethodPage(project))]
+                      ("Sürdürülebilirlik", EsgPage(self.store, self.open_building)),
+                      ("Kaynaklar ve Yöntem", MethodPage(project)),
+                      ("Ayarlar", SettingsPage(project, self.store, self._settings_saved))]
         self.idx = {n: i for i, (n, _) in enumerate(self.pages)}
         for _, page in self.pages:
             self.stack.addWidget(page.widget)
@@ -194,6 +198,7 @@ class MainWindow(QMainWindow):
         self.nav.select(select, animate=False)
         self.stack.setCurrentIndex(select)
         self.crumb.setText(self.pages[select][0])
+        self.crumb1.setText("Platform" if select < 5 else "Intelligence")
         if notify:
             self.pages[self.idx['Ayarlar']][1].saved_message()
 
@@ -267,17 +272,18 @@ class MainWindow(QMainWindow):
         self.live.setText(f"{dot}  {self._short(self.project.building.name)}")
 
     def open_building(self, bid: int):
-        self.set_project(self.store.load_project(bid), select=4)
+        self.set_project(self.store.load_project(bid), select=0)
 
     def _search(self, text: str):
         """Portföy sayfasını arama metnine göre yeniden kurar ve oraya geçer."""
         page = PortfolioPage(self.store, self.open_building, text.strip())
-        old = self.stack.widget(0)
+        i = self.idx["Portföy"]
+        old = self.stack.widget(i)
         self.stack.removeWidget(old)
         old.deleteLater()
-        self.stack.insertWidget(0, page.widget)
-        self.pages[0] = (self.pages[0][0], page)
-        self.select(0)
+        self.stack.insertWidget(i, page.widget)
+        self.pages[i] = (self.pages[i][0], page)
+        self.select(i)
 
     def alerts(self) -> list[tuple[int, str]]:
         """Gerçek veriden uyarılar: düşük sağlık skoru, kötü enerji sınıfı, maliyet artışı."""
@@ -307,6 +313,7 @@ class MainWindow(QMainWindow):
         self.nav.select(index)
         self.stack.setCurrentIndex(index)
         self.crumb.setText(self.pages[index][0])
+        self.crumb1.setText("Platform" if index < 5 else "Intelligence")
 
     def export_report(self):
         codes = self.pages[self.idx['Mevcut vs Hedef']][1].selected_codes()

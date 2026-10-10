@@ -480,6 +480,20 @@ def nav_icon(kind: str) -> QIcon:
             p.drawRoundedRect(QRectF(8.5, 2.5, 8, 14.5), 1.2, 1.2)
             p.drawLine(QPointF(11.5, 7), QPointF(13.5, 7))
             p.drawLine(QPointF(11.5, 10.5), QPointF(13.5, 10.5))
+        elif kind == "finance":
+            p.drawRoundedRect(QRectF(2.5, 4.5, 15, 11), 2.2, 2.2)
+            p.drawLine(QPointF(2.5, 8.5), QPointF(17.5, 8.5))
+            p.drawLine(QPointF(5.5, 12.5), QPointF(8.5, 12.5))
+        elif kind == "assistant":
+            p.drawRoundedRect(QRectF(3, 6, 14, 10), 3, 3)
+            p.drawLine(QPointF(10, 6), QPointF(10, 3))
+            p.drawEllipse(QPointF(7.2, 11), 1.1, 1.1)
+            p.drawEllipse(QPointF(12.8, 11), 1.1, 1.1)
+        elif kind == "esg":
+            p.drawEllipse(QRectF(3, 3, 14, 14))
+            p.drawLine(QPointF(10, 16), QPointF(10, 8))
+            p.drawPolyline([QPointF(10, 11), QPointF(13.5, 7.5)])
+            p.drawPolyline([QPointF(10, 13), QPointF(6.8, 10)])
         elif kind == "consumption":
             for x, h in ((3, 8), (8.5, 15), (14, 11)):
                 p.drawRoundedRect(QRectF(x, 18 - h, 3.5, h), 1, 1)
@@ -506,7 +520,7 @@ def nav_icon(kind: str) -> QIcon:
 
 
 class NavButton(QPushButton):
-    def __init__(self, text: str, kind: str):
+    def __init__(self, text: str, kind: str, badge: str = ""):
         super().__init__("   " + text)
         self.setObjectName("nav")
         self.setCheckable(True)
@@ -514,24 +528,50 @@ class NavButton(QPushButton):
         self.setIcon(nav_icon(kind))
         self.setIconSize(QSize(18, 18))
         self.setCursor(Qt.PointingHandCursor)
+        self._badge = None
+        if badge:
+            self._badge = QLabel(badge, self)
+            self._badge.setStyleSheet(f"color: {G}; background: rgba(13,221,150,0.12); border: 1px solid rgba(13,221,150,0.2);"
+                                      "border-radius: 8px; padding: 0 6px; font-size: 8px; font-weight: 700;")
+            self._badge.adjustSize()
+            self._badge.setFixedHeight(14)
+            self._badge.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        if self._badge is not None:
+            self._badge.move(self.width() - self._badge.width() - 26, (self.height() - self._badge.height()) // 2)
+
+    def paintEvent(self, e):
+        super().paintEvent(e)
+        if self.isChecked():          # Figma: seçili sekmenin sağında küçük yeşil nokta
+            p = QPainter(self)
+            p.setRenderHint(QPainter.Antialiasing)
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor(G))
+            p.drawEllipse(QPointF(self.width() - 14, self.height() / 2), 2.2, 2.2)
 
 
 class NavBar(QWidget):
-    """Sekmeler + seçili sekmeye kayan yeşil gösterge."""
+    """Bölümlü sekmeler (Platform / Intelligence) + seçili sekmeye kayan yeşil gösterge."""
 
-    def __init__(self, items: list[tuple[str, str]]):
+    def __init__(self, sections: list[tuple[str, list[tuple]]]):
         super().__init__()
         self.indicator = QFrame(self)
         self.indicator.setObjectName("navIndicator")
         self.indicator.lower()
         lay = QVBoxLayout(self)
         lay.setContentsMargins(10, 0, 10, 0)
-        lay.setSpacing(4)
+        lay.setSpacing(2)
         self.buttons: list[NavButton] = []
-        for text, kind in items:
-            b = NavButton(text, kind)
-            lay.addWidget(b)
-            self.buttons.append(b)
+        for title, items in sections:
+            lbl = QLabel(title.upper())
+            lbl.setObjectName("section")
+            lay.addWidget(lbl)
+            for item in items:
+                b = NavButton(*item)
+                lay.addWidget(b)
+                self.buttons.append(b)
         self._current = 0
         self._anim = QPropertyAnimation(self.indicator, b"geometry", self)
         self._anim.setDuration(520)
@@ -589,6 +629,7 @@ class Logo(QWidget):
         p.setPen(QColor(G))
         p.setFont(qfont(8, QFont.Bold, spacing=1.3))
         p.drawText(QPointF(22, ty), "GREEN PROPTECH")
+        p.fillRect(QRectF(0, self.height() - 1, self.width(), 1), QColor(255, 255, 255, 15))
 
 
 def get_style() -> str:
