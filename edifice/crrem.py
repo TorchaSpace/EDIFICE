@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from openpyxl import load_workbook
 
@@ -44,7 +45,7 @@ def parse(path: str) -> CrremData:
         wb = load_workbook(path, read_only=True, data_only=True)
     except Exception as e:
         raise CrremError(f"Dosya açılamadı: {e}") from e
-    data = CrremData(source_file=path.rsplit("/", 1)[-1])
+    data = CrremData(source_file=Path(path).name)
     for ws in wb.worksheets:
         for r in ws.iter_rows(min_row=1, max_row=8, values_only=True):
             for c in r:
