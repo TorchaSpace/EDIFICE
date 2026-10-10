@@ -475,6 +475,11 @@ def nav_icon(kind: str) -> QIcon:
         if kind == "overview":
             for x, y in ((2, 2), (11, 2), (2, 11), (11, 11)):
                 p.drawRoundedRect(QRectF(x, y, 7, 7), 1.8, 1.8)
+        elif kind == "portfolio":
+            p.drawRoundedRect(QRectF(2.5, 7, 6, 10), 1.2, 1.2)
+            p.drawRoundedRect(QRectF(8.5, 2.5, 8, 14.5), 1.2, 1.2)
+            p.drawLine(QPointF(11.5, 7), QPointF(13.5, 7))
+            p.drawLine(QPointF(11.5, 10.5), QPointF(13.5, 10.5))
         elif kind == "consumption":
             for x, h in ((3, 8), (8.5, 15), (14, 11)):
                 p.drawRoundedRect(QRectF(x, 18 - h, 3.5, h), 1, 1)
