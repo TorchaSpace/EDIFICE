@@ -18,7 +18,7 @@ from .add_choice import AddChoiceDialog
 from .building_dialog import BuildingDialog
 from .report_pdf import build_pdf
 from .method_page import MethodPage
-from .portfolio import EsgPage, FinancePage, PortfolioPage, summarize
+from .portfolio import AssistantPage, EsgPage, FinancePage, PortfolioPage, summarize
 from .settings_page import SettingsPage
 from .widgets import get_style, FadeStack, Logo, NavBar, section
 
@@ -35,7 +35,7 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(1180, 720)
         self.setStyleSheet(get_style())
 
-        self.nav_specs = [("Portföy", "portfolio"), ("Finans", "opportunities"), ("Sürdürülebilirlik", "consumption"), ("Genel Bakış", "overview"), ("Tüketim", "consumption"),
+        self.nav_specs = [("Portföy", "portfolio"), ("Finans", "opportunities"), ("Sürdürülebilirlik", "consumption"), ("Asistan", "method"), ("Genel Bakış", "overview"), ("Tüketim", "consumption"),
                           ("Öneriler", "opportunities"), ("Mevcut vs Hedef", "scenario"),
                           ("Ayarlar", "settings"), ("Kaynaklar ve Yöntem", "method")]
         self.pages = []
@@ -168,7 +168,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(root)
         self.set_project(project)
 
-    def set_project(self, project: Project, select: int = 3, notify: bool = False):
+    def set_project(self, project: Project, select: int = 4, notify: bool = False):
         """Seçili binayı değiştirir: sayfaları yeniden kurar."""
         self.project = project
         while self.stack.count():
@@ -178,6 +178,7 @@ class MainWindow(QMainWindow):
         self.pages = [("Portföy", PortfolioPage(self.store, self.open_building, self.search.text().strip())),
                       ("Finans", FinancePage(self.store, self.open_building)),
                       ("Sürdürülebilirlik", EsgPage(self.store, self.open_building)),
+                      ("Asistan", AssistantPage(project)),
                       ("Genel Bakış", OverviewPage(project)), ("Tüketim", ConsumptionPage(project)),
                       ("Öneriler", OpportunitiesPage(project)), ("Mevcut vs Hedef", ScenarioPage(project, self.store)),
                       ("Ayarlar", SettingsPage(project, self.store, self._settings_saved)),
@@ -266,7 +267,7 @@ class MainWindow(QMainWindow):
         self.live.setText(f"{dot}  {self._short(self.project.building.name)}")
 
     def open_building(self, bid: int):
-        self.set_project(self.store.load_project(bid), select=3)
+        self.set_project(self.store.load_project(bid), select=4)
 
     def _search(self, text: str):
         """Portföy sayfasını arama metnine göre yeniden kurar ve oraya geçer."""

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from ..db import Store
 from ..engine.rating import CLASS_COLORS
+from ..models import UtilityType
 from ..service import Project
-from .pages import _page
+from .pages import MONTHS, _page
 from .widgets import AMBER, G, INDIGO, MUTED, RED, SUB, Card, Panel, badge, fmt, fmt_years, grade_for, header, score_color
 
 
@@ -192,3 +194,67 @@ class EsgPage:
             p.lay.addWidget(PortfolioPage._row(bid, r, on_open))
         lay.addWidget(p)
         lay.addStretch()
+
+
+def insights(project: Project) -> list[tuple[str, str, str]]:
+    """Seçili bina için kural tabanlı bulgular: (renk, başlık, açıklama). Yalnız gerçek hesaptan türetilir."""
+    out = []
+    h, k = project.health(), project.kpis()
+    name, (pts, w) = min(h.components.items(), key=lambda kv: kv[1][0])
+    out.append((RED if pts < 40 else AMBER, f"En zayıf bileşen: {name}",
+                f"Sağlık skorunun {name.lower()} bileşeni {pts:.0f}/100 (ağırlık %{w * 100:.0f}); toplam skor {h.total:.0f}/100, not {h.grade}."))
+    for key, label in (("energy", "Enerji tüketimi"), ("cost", "Enerji maliyeti"), ("carbon", "Karbon salımı")):
+        v = project.yoy().get(key)
+        if v is not None and abs(v) >= 3:
+            out.append((RED if v > 0 else G, f"{label} geçen yıla göre %{abs(v):.0f} {'arttı' if v > 0 else 'azaldı'}",
+                        f"{project.year} ile {project.year - 1} karşılaştırması."))
+    total = [a + b for a, b in zip(project.monthly(project.year, UtilityType.ELECTRICITY), project.monthly(project.year, UtilityType.GAS))]
+    avg = sum(total) / 12 if total else 0
+    if avg:
+        i = max(range(12), key=lambda j: total[j])
+        if total[i] > 1.4 * avg:
+            out.append((AMBER, f"{MONTHS[i]} ayında tüketim ortalamanın %{(total[i] / avg - 1) * 100:.0f} üstünde",
+                        "Mevsimsel pik olabilir; ısıtma/soğutma çizelgesini kontrol edin."))
+    r = project.rating()
+    out.append((G if r["class"] in "ABC" else AMBER, f"Tahmini enerji sınıfı {r['class']}",
+                f"EUI {r['eui']:.0f} kWh/m²·yıl, kıyas {r['benchmark']:.0f}. Resmî EKB değildir."))
+    best = [x for x in project.opportunity_results() if x.fit != "none"]
+    if best:
+        b = min(best, key=lambda x: x.payback_years)
+        out.append((G, f"En hızlı geri dönen fırsat: {b.opportunity.name}",
+                    f"CAPEX {fmt(b.capex / 1e6, 2)} M ₺, yıllık tasarruf {fmt(b.annual_saving / 1000)} bin ₺, geri ödeme {fmt_years(b.payback_years)}."))
+    return out
+
+
+class AssistantPage:
+    """Seçili bina için otomatik bulgular. Bir dil modeli değil; kurallar gerçek hesap çıktısını okur."""
+
+    def __init__(self, project: Project):
+        self.widget, lay = _page()
+        lay.addWidget(header("Asistan", "Otomatik bulgular",
+                             f"{project.building.name} için hesap motorunun çıkardığı öne çıkan noktalar. "
+                             "Kural tabanlıdır; yalnız bu binanın verisini okur."))
+        p = Panel(eyebrow="EDIFI'CE analiz", title="Öne çıkanlar")
+        for color, title, text in insights(project):
+            p.lay.addWidget(_insight_card(color, title, text))
+        lay.addWidget(p)
+        lay.addStretch()
+
+
+def _insight_card(color: str, title: str, text: str) -> QWidget:
+    c = QColor(color)
+    w = QWidget()
+    w.setObjectName("ins")
+    w.setStyleSheet(f"QWidget#ins {{ background: rgba({c.red()},{c.green()},{c.blue()},0.05);"
+                    f"border: 1px solid rgba({c.red()},{c.green()},{c.blue()},0.16); border-radius: 12px; }}")
+    v = QVBoxLayout(w)
+    v.setContentsMargins(16, 12, 16, 12)
+    v.setSpacing(3)
+    t = QLabel(title)
+    t.setStyleSheet("font-size: 14px; font-weight: 700; background: transparent;")
+    d = QLabel(text)
+    d.setWordWrap(True)
+    d.setStyleSheet(f"color: {SUB}; font-size: 13px; background: transparent;")
+    v.addWidget(t)
+    v.addWidget(d)
+    return w

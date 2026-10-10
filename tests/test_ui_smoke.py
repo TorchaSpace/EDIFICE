@@ -13,7 +13,7 @@ from edifice.ui.main_window import MainWindow
 from edifice.ui.report import build_report
 
 
-W_SCEN, W_AYAR = 6, 7
+W_SCEN, W_AYAR = 7, 8
 
 
 def _app():
