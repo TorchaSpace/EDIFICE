@@ -98,7 +98,8 @@ def _trend_text(pct: float) -> tuple[str, bool]:
 
 
 class OverviewPage:
-    def __init__(self, project: Project, store=None):
+    def __init__(self, project: Project, store=None, on_open=None):
+        self.on_open = on_open or (lambda _b: None)
         self.widget, lay = _page()
         b, k, h = project.building, project.kpis(), project.health()
         yoy = project.yoy()
@@ -126,6 +127,44 @@ class OverviewPage:
                 c.set_trend(txt, good)
             row.addWidget(c, idx // 4, idx % 4)
         lay.addLayout(row)
+
+        # ---- portföy düzeyi (Figma ana ekranı): harita + portföy skoru
+        if store is not None:
+            from .portfolio import LocationMap, summarize
+            prows = [(bid, summarize(store.load_project(bid))) for bid, _ in store.list_buildings()]
+            pts = [(bid, r["project"].building.name, r["project"].building.lat, r["project"].building.lon, r["health"])
+                   for bid, r in prows if r["project"].building.lat is not None]
+            pm = QHBoxLayout()
+            pm.setSpacing(18)
+            mp = Panel(eyebrow="Proje konumları", title="Portföy haritası")
+            mp.setMinimumHeight(420)
+            if pts:
+                mp.lay.addWidget(LocationMap(pts, getattr(self, "on_open", lambda _b: None)), 1)
+            else:
+                mp.lay.addWidget(muted("Konumu girilmiş bina yok. Bina düzenleme ekranında ülke, il ve ilçeyi girin."))
+                mp.lay.addStretch()
+            pm.addWidget(mp, 1)
+            sp = Panel(eyebrow="Bina sağlığı", title="Portföy skoru")
+            sp.setFixedWidth(340)
+            avg = sum(r["health"] for _, r in prows) / len(prows) if prows else 0
+            big = QLabel(f"{avg:.1f}")
+            big.setStyleSheet(f"color: {score_color(avg)}; font-size: 34px; font-weight: 500; font-family: 'DM Mono','SF Mono',Menlo,monospace; background: transparent;")
+            sub = QLabel(f"ortalama / 100 · {len(prows)} bina")
+            sub.setStyleSheet(f"color: {MUTED}; font-size: 11px; background: transparent;")
+            sp.lay.addWidget(big)
+            sp.lay.addWidget(sub)
+            sp.lay.addSpacing(8)
+            for bid, r in sorted(prows, key=lambda x: -x[1]["health"])[:7]:
+                top = QHBoxLayout()
+                nm = QLabel(f"{r['project'].building.name} <span style='color:{MUTED}; font-size:10px'>{r['project'].building.use_type}</span>")
+                nm.setStyleSheet("font-size: 12px; font-weight: 600; background: transparent;")
+                top.addWidget(nm, 1)
+                sp.lay.addLayout(top)
+                sp.lay.addWidget(ScoreBar(r["health"]))
+            sp.lay.addStretch()
+            pm.addWidget(sp)
+            lay.addLayout(pm)
+            self._portfolio_panel = mp
 
         mid = QHBoxLayout()
         mid.setSpacing(18)
@@ -260,6 +299,28 @@ class OverviewPage:
         self.timeline = TimelineChart(rows)
         tl.lay.addWidget(self.timeline)
         lay.addWidget(tl)
+
+        if store is not None:       # Figma: "Recent Projects" — tüm binalardaki takip edilen projeler
+            from .projects_page import STATUS_COLORS
+            allrows = []
+            for bid, bname in store.list_buildings():
+                pr = store.load_project(bid)
+                names = {o.code: o.name for o in pr.opportunities}
+                for code, (st_, yr) in store.load_projects(bid).items():
+                    if st_ != STATUSES[0] and code in names:
+                        allrows.append((bname, names[code], st_, yr))
+            allrows.sort(key=lambda r: (r[3], r[0]))
+            rp = Panel(eyebrow="Projeler", title="Son projeler", subtitle="Tüm binalarda Proje takibi'nde planlanan, uygulanan ve biten projeler.")
+            if allrows:
+                t = _table(["Bina", "Proje", "Durum", "Yıl"], left_cols=2)
+                t.setRowCount(len(allrows))
+                for i, (b_, n_, st_, yr) in enumerate(allrows):
+                    _set_row(t, i, [b_, n_, st_, str(yr)], left_cols=2, colors={2: STATUS_COLORS[st_]}, mono_from=3)
+                _fit_height(t, len(allrows))
+                rp.lay.addWidget(t)
+            else:
+                rp.lay.addWidget(muted("Henüz proje yok. Projeler > Proje takibi'nden bir öneriyi planlayın."))
+            lay.addWidget(rp)
 
 
 class ConsumptionPage:

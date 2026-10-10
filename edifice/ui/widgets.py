@@ -410,6 +410,42 @@ class Gauge(_Animated):
         p.drawText(pill, Qt.AlignCenter, self._grade)
 
 
+class Ring(_Animated):
+    """Figma'daki radyal ilerleme halkası: 0-100 değer, merkezde sayı, altta etiket."""
+
+    def __init__(self, value: float, color: str, label: str, sub: str = ""):
+        super().__init__(max(0.0, min(100.0, value)), 1200)
+        self._color, self._label, self._sub, self._value = color, label, sub, max(0.0, min(100.0, value))
+        self.setMinimumSize(150, 170)
+
+    def paintEvent(self, e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        side = min(self.width() - 20, self.height() - 52)
+        rect = QRectF((self.width() - side) / 2, 8, side, side)
+        w = 10
+        p.setPen(QPen(QColor(255, 255, 255, 16), w, Qt.SolidLine, Qt.RoundCap))
+        p.drawArc(rect, 90 * 16, -360 * 16)
+        col = QColor(self._color)
+        glow = QColor(col)
+        glow.setAlpha(40)
+        span = int(-360 * 16 * self._frac)
+        if span:
+            p.setPen(QPen(glow, w + 7, Qt.SolidLine, Qt.RoundCap))
+            p.drawArc(rect, 90 * 16, span)
+            p.setPen(QPen(col, w, Qt.SolidLine, Qt.RoundCap))
+            p.drawArc(rect, 90 * 16, span)
+        p.setFont(qfont(int(side * 0.22), QFont.Medium, mono=True, spacing=-1))
+        p.setPen(QColor(TEXT))
+        p.drawText(rect, Qt.AlignCenter, f"{self._frac * 100:.0f}%")
+        p.setFont(qfont(12, QFont.Bold))
+        p.drawText(QRectF(0, rect.bottom() + 8, self.width(), 18), Qt.AlignCenter, self._label)
+        if self._sub:
+            p.setFont(qfont(10))
+            p.setPen(QColor(MUTED))
+            p.drawText(QRectF(0, rect.bottom() + 26, self.width(), 16), Qt.AlignCenter, self._sub)
+
+
 class ScoreBar(_Animated):
     """İnce (4px), animasyonlu skor çubuğu; sağda mono puan."""
 

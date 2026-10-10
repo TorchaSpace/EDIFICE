@@ -9,7 +9,7 @@ from ..engine.rating import CLASS_COLORS
 from ..models import UtilityType
 from ..service import Project
 from .pages import MONTHS, _page
-from .widgets import AMBER, G, INDIGO, MUTED, RED, SUB, Card, Panel, badge, fmt, fmt_years, grade_for, header, score_color
+from .widgets import AMBER, G, INDIGO, MUTED, RED, SUB, Card, Panel, badge, fmt, fmt_years, grade_for, header, muted, score_color
 
 
 def summarize(project: Project) -> dict:
@@ -177,35 +177,142 @@ class FinancePage:
 
 
 class EsgPage:
-    """Sürdürülebilirlik: karbon, kişi/m² yoğunluğu, hedef paketle azalım ve mevzuat eşikleri (gerçek hesap)."""
+    """Sürdürülebilirlik: portföy karbonu, hedef yolu, resmî eşikler. Hedef (yıl ve yüzde) kullanıcının kararıdır, varsayılan kendi kararım değildir."""
 
     def __init__(self, store: Store, on_open):
+        from PySide6.QtWidgets import QSpinBox
+        from .pages import bar_chart
+        from .projects_page import STATUSES
+        from .widgets import Ring
+        self.store = store
         self.widget, lay = _page()
         rows = [(bid, summarize(store.load_project(bid))) for bid, _ in store.list_buildings()]
         lay.addWidget(header("Sürdürülebilirlik", "Karbon ve ESG göstergeleri",
                              "Emisyon faktörleri: elektrik 0,469 kgCO₂e/kWh (ETKB 2023), doğalgaz 0,202 (IPCC). Sınıflar tahminidir, resmî EKB değildir."))
-        carbon = sum(r["kpis"].carbon_kg for _, r in rows) / 1000
-        after = 0.0
-        for _, r in rows:
-            codes = r["project"].applicable_codes()
-            sc = r["project"].scenario(codes) if codes else None
-            after += (sc.target.carbon_kg if sc else r["kpis"].carbon_kg) / 1000
-        area = sum(r["project"].building.floor_area_m2 for _, r in rows)
+        if not rows:
+            return
+        base_year = max(r["project"].year for _, r in rows)
+        prev_year = base_year - 1
+        cur = sum(r["kpis"].carbon_kg for _, r in rows) / 1000
+        have_prev = all(r["project"].previous_year() is not None for _, r in rows)
+        baseline = sum(r["project"].kpis_for(prev_year).carbon_kg for _, r in rows) / 1000 if have_prev else cur
+        baseline_year = prev_year if have_prev else base_year
+        full = 0.0          # tüm uygun öneriler uygulanırsa
+        saved_by_year: dict[int, float] = {}
+        for bid, r in rows:
+            p_ = r["project"]
+            res = {x.opportunity.code: x for x in p_.opportunity_results()}
+            codes = p_.applicable_codes()
+            sc = p_.scenario(codes) if codes else None
+            full += (sc.target.carbon_kg if sc else r["kpis"].carbon_kg) / 1000
+            for code, (st_, yr) in store.load_projects(bid).items():
+                if st_ != STATUSES[0] and code in res:
+                    saved_by_year[yr] = saved_by_year.get(yr, 0.0) + res[code].saved_carbon_kg / 1000
+
+        t_year = int(store.get_setting("esg_target_year", "2030"))
+        t_pct = float(store.get_setting("esg_target_pct", "40"))
+        target = baseline * (1 - t_pct / 100)
+
+        def progress(now: float) -> float:
+            return 100 * (baseline - now) / (baseline - target) if baseline > target else 0.0
+
         ok_c = sum(1 for _, r in rows if r["rating"] in ("A", "B", "C"))
-        grid = QGridLayout()
-        grid.setSpacing(16)
-        specs = [("Yıllık karbon", carbon, lambda v: f"{fmt(v, 1)} tCO₂", f"{fmt(carbon * 1000 / area, 1) if area else 0} kg/m²", G),
-                 ("Önerilerle hedef", after, lambda v: f"{fmt(v, 1)} tCO₂", f"%{fmt(100 * (1 - after / carbon), 1) if carbon else 0} azalım", G),
-                 ("Sınıf C ve üstü", ok_c, lambda v: f"{int(v)}/{len(rows)}", "yeni bina eşiği (BEP)", INDIGO if ok_c else AMBER)]
-        for i, (t, v, f, sub, acc) in enumerate(specs):
-            c = Card(t, sub=sub, accent=acc)
-            c.set_number(v, f, sub)
-            grid.addWidget(c, 0, i)
-        lay.addLayout(grid)
-        p = Panel(eyebrow="Bina bazında", title="Karbon sıralaması", subtitle="En yüksek karbon yoğunluğundan düşüğe. Binaya tıklayın.")
+        avg_health = sum(r["health"] for _, r in rows) / len(rows)
+        ring_row = QHBoxLayout()
+        ring_row.setSpacing(16)
+        rp = Panel(eyebrow="Hedefe ilerleme", title="Radyal göstergeler",
+                   subtitle=f"Hedef: {baseline_year} karbonuna göre {t_year}'e kadar %{t_pct:.0f} azalım (aşağıdan değiştirebilirsiniz).")
+        rr = QHBoxLayout()
+        rr.setSpacing(10)
+        for val, col, label, sub in (
+                (progress(cur), G, "Karbon hedefi", f"{baseline:.0f} → {cur:.0f} tCO₂"),
+                (progress(full), INDIGO, "Öneriler uygulanırsa", f"{full:.0f} tCO₂ (hedef {target:.0f})"),
+                (100 * ok_c / len(rows), AMBER, "Sınıf C ve üstü", f"{ok_c}/{len(rows)} bina"),
+                (avg_health, score_color(avg_health), "Ortalama sağlık", f"{avg_health:.0f}/100")):
+            rr.addWidget(Ring(val, col, label, sub))
+        rp.lay.addLayout(rr)
+        lay.addWidget(rp)
+
+        # ---- karbon yolu
+        years = list(range(baseline_year, max(t_year, base_year) + 1))
+        path = [baseline + (target - baseline) * (y - baseline_year) / max(t_year - baseline_year, 1) for y in years]
+        actual = []
+        for y in years:
+            if y == baseline_year:
+                actual.append(baseline)
+            elif y == base_year:
+                actual.append(cur)
+            else:
+                actual.append(0.0)
+        plan, run = [], cur
+        for y in years:
+            if saved_by_year and y > base_year:
+                run -= saved_by_year.get(y, 0.0)
+                plan.append(max(run, 0.0))
+            else:
+                plan.append(0.0)
+        cp = Panel(eyebrow="Karbon yolu", title=f"{baseline_year}–{years[-1]} karbon yolu (tCO₂)",
+                   subtitle="Gerçekleşen yıllar gerçek veriden; “Plan”, Proje takibi'nde tarih verdiğiniz projelerin tasarrufuyla hesaplanır; “Hedef yolu” doğrusal azalımdır.")
+        cp.lay.addWidget(bar_chart([str(y) for y in years], {"Hedef yolu": path, "Gerçekleşen": actual, "Plan": plan},
+                                   scale=1.0, unit="tCO₂", colors=["slate", "green", "indigo"], min_h=240), 1)
+        lay.addWidget(cp)
+
+        # ---- hedef ayarı
+        tp = Panel(eyebrow="Hedef", title="Karbon hedefini belirle", subtitle="Kendi hedefinizi yazın; yukarıdaki grafikler ve halkalar buna göre hesaplanır.")
+        hr = QHBoxLayout()
+        hr.setSpacing(12)
+        ys, ps = QSpinBox(), QSpinBox()
+        ys.setRange(base_year + 1, base_year + 40)
+        ys.setValue(max(t_year, base_year + 1))
+        ys.setSuffix(" yılına kadar")
+        ps.setRange(1, 100)
+        ps.setValue(int(t_pct))
+        ps.setSuffix(" % azalım")
+        for w_ in (ys, ps):
+            w_.setMinimumHeight(36)
+            w_.setFixedWidth(170)
+        save = QPushButton("Kaydet")
+        save.setObjectName("primary")
+        save.setCursor(Qt.PointingHandCursor)
+        save.setMinimumHeight(36)
+
+        def _save():
+            store.set_setting("esg_target_year", str(ys.value()))
+            store.set_setting("esg_target_pct", str(ps.value()))
+            note.setText("Kaydedildi; sayfa yeniden açıldığında hesaplar güncellenir (başka bir sekmeye geçip dönün).")
+        save.clicked.connect(_save)
+        note = QLabel("")
+        note.setStyleSheet(f"color: {SUB}; font-size: 12px; background: transparent;")
+        hr.addWidget(ys)
+        hr.addWidget(ps)
+        hr.addWidget(save)
+        hr.addWidget(note, 1)
+        tp.lay.addSpacing(6)
+        tp.lay.addLayout(hr)
+        lay.addWidget(tp)
+
+        # ---- resmî eşikler (sertifika takibi yerine gerçek mevzuat eşikleri)
+        th = Panel(eyebrow="Mevzuat eşikleri", title="Enerji sınıfı eşikleri",
+                   subtitle="BEP Yönetmeliği: yeni bina D ve altı olamaz (C ve üstü), düşük karbonlu belge ≥ C, NSEB ≥ B. Sınıflar tahminidir.")
+        order = ["A", "B", "C", "D", "E", "F", "G"]
+        for bid, r in sorted(rows, key=lambda x: -order.index(x[1]["rating"])):
+            line = QHBoxLayout()
+            nm = QLabel(r["project"].building.name)
+            nm.setStyleSheet("font-size: 13px; font-weight: 700; background: transparent;")
+            line.addWidget(nm, 1)
+            after = r["project"].rating_after(r["project"].applicable_codes()) if r["project"].applicable_codes() else r["rating"]
+            line.addWidget(badge(f"Şimdi {r['rating']}", CLASS_COLORS[r["rating"]]))
+            line.addWidget(badge(f"Planla {after}", CLASS_COLORS[after]))
+            for label, need in (("C", "C"), ("B", "B")):
+                okk = order.index(after) <= order.index(need)
+                line.addWidget(badge(("✓ " if okk else "✗ ") + f"≥ {label}", G if okk else RED))
+            th.lay.addLayout(line)
+        lay.addWidget(th)
+
+        p2 = Panel(eyebrow="Bina bazında", title="Karbon sıralaması", subtitle="En yüksek karbon yoğunluğundan düşüğe. Binaya tıklayın.")
         for bid, r in sorted(rows, key=lambda x: -x[1]["kpis"].carbon_kg_m2):
-            p.lay.addWidget(PortfolioPage._row(bid, r, on_open))
-        lay.addWidget(p)
+            p2.lay.addWidget(PortfolioPage._row(bid, r, on_open))
+        lay.addWidget(p2)
         lay.addStretch()
 
 
@@ -255,17 +362,71 @@ def insights(project: Project) -> list[tuple[str, str, str]]:
 
 
 class AssistantPage:
-    """Seçili bina için otomatik bulgular. Bir dil modeli değil; kurallar gerçek hesap çıktısını okur."""
+    """Otomatik bulgular: KPI'lar, öncelik rozetli kartlar, gerçek vs optimize tüketim ve bakım tahmini (hepsi hesap motorundan)."""
 
     def __init__(self, project: Project):
+        from datetime import date
+        from ..engine.health import service_life
+        from .pages import area_chart
         self.widget, lay = _page()
-        lay.addWidget(header("Asistan", "Otomatik bulgular",
-                             f"{project.building.name} için hesap motorunun çıkardığı öne çıkan noktalar. "
-                             "Kural tabanlıdır; yalnız bu binanın verisini okur."))
+        lay.addWidget(header("Yapay zeka", "Otomatik bulgular",
+                             f"{project.building.name} için hesap motorunun çıkardığı öne çıkan noktalar. Kural tabanlıdır; yalnız bu binanın verisini okur."))
+        found = insights(project)
+        codes = project.applicable_codes()
+        sc = project.scenario(codes) if codes else None
+        today = date.today().year
+        due = []
+        for e in project.equipment:
+            life = service_life(e.name, project.assumptions.equipment_life_years)
+            left = e.year_installed + life - today
+            if left <= 3 or e.condition <= 2:
+                due.append((e, left))
+        crit = sum(1 for c, _, _ in found if c == RED)
+        grid = QGridLayout()
+        grid.setSpacing(16)
+        specs = [("Aktif bulgu", len(found), lambda v: f"{int(v)}", f"{crit} kritik", G if not crit else AMBER),
+                 ("Öngörülen tasarruf", (sc.annual_saving if sc else 0) / 1e6, lambda v: f"{fmt(v, 2)} M ₺", "uygun önerilerin yıllık toplamı", G),
+                 ("Ekipman riski", len(due), lambda v: f"{int(v)}", f"{len(project.equipment)} ekipmandan ömrü bitmek üzere/zayıf", AMBER),
+                 ("Hedef enerji", (sc.energy_reduction_pct * 100) if sc else 0, lambda v: f"−%{fmt(v, 1)}", "tüm uygun öneriler uygulanırsa", INDIGO)]
+        for i, (t, v, f, sub, acc) in enumerate(specs):
+            c = Card(t, sub=sub, accent=acc)
+            c.set_number(v, f, sub)
+            grid.addWidget(c, 0, i)
+        lay.addLayout(grid)
+
+        row = QHBoxLayout()
+        row.setSpacing(18)
         p = Panel(eyebrow="EDIFI'CE analiz", title="Öne çıkanlar")
-        for color, title, text in insights(project):
+        p.setMinimumWidth(420)
+        for color, title, text in found:
             p.lay.addWidget(_insight_card(color, title, text))
-        lay.addWidget(p)
+        row.addWidget(p, 1)
+        if sc:
+            ratio_e = sc.target.electricity_kwh / sc.current.electricity_kwh if sc.current.electricity_kwh else 1
+            ratio_g = sc.target.gas_kwh / sc.current.gas_kwh if sc.current.gas_kwh else 1
+            el, gs = project.monthly(project.year, UtilityType.ELECTRICITY), project.monthly(project.year, UtilityType.GAS)
+            actual = [a + b for a, b in zip(el, gs)]
+            opt = [a * ratio_e + b * ratio_g for a, b in zip(el, gs)]
+            cp = Panel(eyebrow="Gerçek vs optimize", title=f"Gerçek ve öneriler uygulanmış tüketim · {project.year}", subtitle="MWh · optimize = uygun tüm öneriler (tipik tasarruf)")
+            cp.setMinimumWidth(420)
+            cp.lay.addWidget(area_chart(MONTHS, {"Gerçek": actual, "Optimize": opt}, scale=1000, unit="MWh", colors=["indigo", "green"], min_h=260), 1)
+            row.addWidget(cp, 1)
+        lay.addLayout(row)
+
+        mp = Panel(eyebrow="Bakım tahmini", title="Ekipman değişim zamanı",
+                   subtitle="Kurulum yılı + tipik hizmet ömrü (ASHRAE, ikincil kaynak); durum 1-2 olanlar ayrıca işaretlenir.")
+        if not due:
+            mp.lay.addWidget(muted("Önümüzdeki 3 yılda ömrünü dolduracak ya da durumu zayıf ekipman yok."))
+        for e, left in sorted(due, key=lambda x: x[1]):
+            color = RED if left <= 0 or e.condition <= 2 else AMBER
+            when = "ömrünü doldurdu" if left <= 0 else f"{left} yıl içinde"
+            line = QHBoxLayout()
+            nm = QLabel(f"{e.name} <span style='color:{MUTED}; font-size:11px'>{e.category} · {e.year_installed} · durum {e.condition}/5</span>")
+            nm.setStyleSheet("font-size: 13px; font-weight: 600; background: transparent;")
+            line.addWidget(nm, 1)
+            line.addWidget(badge(("Acil · " if color == RED else "Planla · ") + when, color))
+            mp.lay.addLayout(line)
+        lay.addWidget(mp)
         lay.addStretch()
 
 
@@ -278,12 +439,15 @@ def _insight_card(color: str, title: str, text: str) -> QWidget:
     v = QVBoxLayout(w)
     v.setContentsMargins(16, 12, 16, 12)
     v.setSpacing(3)
+    top = QHBoxLayout()
     t = QLabel(title)
     t.setStyleSheet("font-size: 14px; font-weight: 700; background: transparent;")
+    top.addWidget(t, 1)
+    top.addWidget(badge({RED: "Kritik", AMBER: "Uyarı"}.get(color, "Bilgi"), color))
     d = QLabel(text)
     d.setWordWrap(True)
     d.setStyleSheet(f"color: {SUB}; font-size: 13px; background: transparent;")
-    v.addWidget(t)
+    v.addLayout(top)
     v.addWidget(d)
     return w
 

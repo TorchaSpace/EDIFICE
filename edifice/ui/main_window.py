@@ -182,7 +182,7 @@ class MainWindow(QMainWindow):
             w = self.stack.widget(0)
             self.stack.removeWidget(w)
             w.deleteLater()
-        self.sub = {"Genel Bakış": OverviewPage(project, self.store), "Tüketim": ConsumptionPage(project),
+        self.sub = {"Genel Bakış": OverviewPage(project, self.store, self.open_building), "Tüketim": ConsumptionPage(project),
                     "Öneriler": OpportunitiesPage(project), "Mevcut vs Hedef": ScenarioPage(project, self.store),
                     "Proje takibi": ProjectsTrackerPage(project, self.store, self._projects_changed),
                     "Sohbet": ChatPage(project, self.store, self.chat_state, self._all_projects, self.run_action),

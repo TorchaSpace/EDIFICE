@@ -7,14 +7,14 @@ Kaynak: `Premium SaaS Dashboard Design/src/App.tsx` (10 sayfa). Durum: ✅ var, 
 
 | Figma sayfası | Figma'daki bileşenler | Durum | Eksik olanlar | Veri |
 |---|---|---|---|---|
-| Dashboard | 7 KPI, Avrupa haritası, Portfolio Score, AI Recommendations, Active Renovations, Recent Projects, Partners | 🟡 | Harita Dashboard'da yok (Portföy'de var), portföy skoru göstergesi, "aktif yenilemeler" tablosu, son projeler, ortak kartları | gerçek (bina, proje takibi) |
+| Dashboard | 7 KPI, Avrupa haritası, Portfolio Score, AI Recommendations, Active Renovations, Recent Projects, Partners | ✅/🟡 | Harita, portföy skoru, öneri kartları, zaman çizelgesi ve son projeler eklendi; ortak kartları yok | gerçek (bina, proje takibi) |
 | Portfolio | 4 KPI, bina kartları (görsel, durum rozeti), tablo | 🟡 | Kart ızgarası (şimdi liste), filtre/sıralama, durum rozeti, ort. enerji sınıfı ve skor KPI'ları | gerçek |
 | Projects | 4 KPI (bütçe, harcanan, zamanında, riskli), tüm projeler tablosu, zaman çizelgesi (Gantt) | 🟡 | Bütçe/harcanan/riskli KPI'ları, tablo, gerçek Gantt (şimdi yıl işaretleri), proje başlangıç-bitiş | gerçek (proje takibine tarih/harcama alanı eklenirse) |
 | Finance | 4 KPI, finansman karması (pasta), başvurular, ödeme planı, ROI çizgi grafiği | 🟡 | Pasta grafik, finansman araçları (kredi/hibe) kaydı, ödeme planı, ROI zaman serisi | NPV/IRR gerçek; kredi/hibe kaydı için giriş formu gerekir |
 | Partners | 4 KPI, ortak kartları (puan, ülke, kategori) | ❌ | Tüm sayfa | veri girişi gerekir (firma, iş, teklif) |
-| AI Assistant | 4 KPI, öneri kartları (öncelik rozetli), gerçek vs AI-optimize tüketim grafiği, bakım olayları | 🟡 | Öncelik rozetli öneri kartları, "gerçek vs optimize" aylık grafik (senaryo hedefinden üretilebilir), bakım tahmini (ekipman yaşından üretilebilir) | gerçek |
+| AI Assistant | 4 KPI, öneri kartları (öncelik rozetli), gerçek vs AI-optimize tüketim grafiği, bakım olayları | ✅ | Hepsi eklendi (kural tabanlı bulgular + sohbet + eğitim) | gerçek |
 | Digital Twin | 142 sensörlü bina, canlı sıcaklık/elektrik/su/gaz/CO₂, sensör grafiği | ❌ | Tüm sayfa | BIM + IoT verisi gerekir (MVP dışı) |
-| ESG | 4 KPI, radyal ilerleme halkaları, aylık karbon çizgisi, Karbon Yolu 2020–2030 çubuk grafiği, sertifikalar | 🟡 | Radyal halkalar, 2030 net-sıfır yolu (hedef eğrisi), sertifika takibi | karbon gerçek; hedef yolu ve sertifika için kullanıcı hedef girişi gerekir |
+| ESG | 4 KPI, radyal ilerleme halkaları, aylık karbon çizgisi, Karbon Yolu 2020–2030 çubuk grafiği, sertifikalar | ✅/🟡 | Radyal halkalar, karbon yolu (kullanıcı hedefi), mevzuat eşikleri eklendi; sertifika kaydı (BREEAM/LEED) yok | karbon gerçek; hedef kullanıcıdan |
 | Reports | 4 KPI, rapor kütüphanesi (tür, tarih, indir) | 🟡 | Rapor listesi/geçmişi, rapor türleri (yatırımcı, karbon denetimi), toplu indirme | gerçek (üretilen raporlar kaydedilirse) |
 | Settings | Profil, tercihler, güvenlik, bildirimler, API anahtarları | 🟡 | Profil/kullanıcı, bildirim tercihleri, dil/para birimi, tema; (varsayım düzenleme zaten var) | gerçek |
 
