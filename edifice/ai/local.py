@@ -68,6 +68,7 @@ OPP_WORDS = {"LED": ["led", "aydinlatma", "armatur", "floresan"], "CHILLER": ["c
 STOP = set("nasil ne nedir kadar kac neden hangi var mi mu bu su bir icin ile ve da de en cok daha ben bana sen biz mi ya peki bunu sunu olur olursa yapayim yapmaliyim yapabilirim".split())
 MONTH_NAMES_SHORT = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"]
 ACTION_VERBS = {"sec", "secili", "secin", "koy", "koyun", "ac", "acin", "goster", "ekle", "isaretle", "ayarla", "uygula"}
+OPEN_VERBS = {"ac", "acin", "git", "gidelim", "goster", "gosterin", "don", "gec", "ziyaret"}
 FOLD = str.maketrans("çğıöşüÇĞİÖŞÜâîû", "cgiosuCGIOSUaiu")
 
 
@@ -79,6 +80,26 @@ def norm(text: str) -> str:
 def _grams(t: str) -> Counter:
     t = f" {norm(t)} "
     return Counter(t[i:i + n] for n in (3, 4, 5) for i in range(len(t) - n + 1))
+
+
+def accepts(extra: list[tuple[str, str]], intent: str, text: str) -> bool:
+    """Bozulma koruması: yeni örnek eklenince yerleşik ve öğretilmiş TÜM örnekler hâlâ kendi niyetine düşmeli,
+    yeni örneğin kendisi de hedef niyete düşmeli. Aksi halde örnek reddedilir."""
+    if intent not in INTENTS or not norm(text):
+        return False
+    merged = {k: list(v) for k, v in INTENTS.items()}
+    for i, t in list(extra) + [(intent, text)]:
+        if i in merged:
+            merged[i].append(t)
+    m = IntentModel(merged)
+    return all(m.classify(ex)[0][0] == name for name, exs in merged.items() for ex in exs)
+
+
+def shares_content(a: str, b: str) -> bool:
+    """İki cümle anlamlı bir kelimeyi (ilk 4 harf) paylaşıyor mu? (yeniden sorma tespiti)"""
+    wa = {w[:4] for w in norm(a).split() if w not in STOP and len(w) > 2}
+    wb = {w[:4] for w in norm(b).split() if w not in STOP and len(w) > 2}
+    return bool(wa & wb)
 
 
 class IntentModel:
@@ -113,6 +134,15 @@ class IntentModel:
         return sorted(best.items(), key=lambda kv: -kv[1])
 
 
+INTENT_LABELS = {
+    "overview": "Bina özeti", "problem": "Sorunlar / zayıf noktalar", "health": "Sağlık skoru", "rating": "Enerji sınıfı", "energy": "Enerji tüketimi",
+    "carbon": "Karbon", "water": "Su", "cost": "Maliyet", "trend": "Yıllık değişim", "peak": "Pik ay", "anomaly": "Anomali",
+    "opportunities": "Öneri listesi", "start": "Nereden başlamalı", "budget": "Bütçeye göre paket", "scenario": "Senaryo (ne olur?)",
+    "finance": "Finans (NPV, geri ödeme)", "equipment": "Ekipman", "portfolio": "Portföy", "why": "Neden?", "compare": "Karşılaştırma",
+    "evidence": "Kaynak / kanıt", "act_status": "İşlem: proje durumu", "act_report": "İşlem: rapor", "act_open": "İşlem: sayfa aç",
+    "act_scenario": "İşlem: senaryo seç", "greet": "Selamlama / yardım"}
+
+
 @dataclass
 class Memory:
     """Önceki turdan kalanlar: 'peki 3 milyon olursa?' gibi devam sorularını anlamak için."""
@@ -122,6 +152,10 @@ class Memory:
     actions: list[tuple] = field(default_factory=list)   # arayüzün çalıştıracağı eylemler (durum değiştir, sayfa aç…)
     chart: dict | None = None                             # cevaba eşlik eden mini grafik tanımı
     unknown: str | None = None                            # anlaşılmayan soru (eğitim listesine düşer)
+    answered: str | None = None                           # bu cevabı üreten niyet (👍/👎 ve öğrenme için)
+    suggest: list[str] = field(default_factory=list)      # "şunu mu demek istedin?" niyet adayları
+    learn: list[tuple[str, str]] = field(default_factory=list)   # yeniden sorma sinyalinden çıkan (niyet, soru) örnekleri
+    pending_unknown: str | None = None                    # bir önceki turda anlaşılmayan soru
 
 
 def parse_budget(text: str) -> float | None:
@@ -219,10 +253,11 @@ class LocalAssistant:
         self.model = IntentModel(merged)
 
     def answer(self, question: str, toolbox: Toolbox, mem: Memory) -> str:
-        mem.actions, mem.chart, mem.unknown = [], None, None
+        mem.actions, mem.chart, mem.unknown, mem.suggest, mem.learn, mem.answered = [], None, None, [], [], None
+        pending, mem.pending_unknown = mem.pending_unknown, None
         found = find_buildings(question, toolbox)
         if len(found) >= 2:           # "A ile B'yi karşılaştır"
-            mem.intent = "compare"
+            mem.intent = mem.answered = "compare"
             return self._compare_buildings(toolbox, found)
         bid = find_building(question, toolbox)
         if bid is not None and bid != toolbox.current:
@@ -231,7 +266,7 @@ class LocalAssistant:
             drop = set(norm(toolbox.projects[bid].building.name).split())
             question = " ".join(w for w in norm(question).split() if w not in drop)
             if not [w for w in question.split() if w not in STOP and len(w) > 2]:
-                mem.intent = "overview"
+                mem.intent = mem.answered = "overview"
                 return self.a_overview(question, toolbox, None, [])
         ranked = self.model.classify(question)
         intent, score = ranked[0]
@@ -243,12 +278,18 @@ class LocalAssistant:
             elif codes and mem.intent in ("scenario", "finance", "evidence", "opportunities", "start"):
                 intent = mem.intent         # "ya chiller?"
             else:
-                return self._unknown(question, mem)
+                return self._unknown(question, mem, ranked)
+        if intent == "act_open" and not OPEN_VERBS & set(norm(question).split()):
+            nq = norm(question)       # "sürdürülebilirlik durumu" gibi fiilsiz soru: sayfa açma değil, konunun kendisi
+            intent = next((i for words, i in (("portfoy", "portfolio"), ("finans", "finance"), ("surdurulebilir", "carbon"), ("oneri", "opportunities"),
+                                              ("tuketim", "energy"), ("kaynak", "evidence")) if words in nq), "overview")
         if intent == "act_scenario" and not ACTION_VERBS & set(norm(question).split()):
             intent = "scenario"        # fiil yoksa "led yaparsam ne olur" gibi bir ne-olur sorusudur
         if budget and intent not in ("budget", "scenario"):
             intent = "budget" if "butce" in norm(question) or "param" in norm(question) else intent
-        mem.intent, mem.budget = intent, budget or mem.budget
+        mem.intent, mem.answered, mem.budget = intent, intent, budget or mem.budget
+        if pending and shares_content(pending, question) and intent in INTENTS:
+            mem.learn.append((intent, pending))          # yeniden sorma: ilk soru da bu niyete ait
         mem.codes = codes or mem.codes
         fn = getattr(self, "a_" + intent)
         self._chart, self._actions = None, []
@@ -256,10 +297,24 @@ class LocalAssistant:
         mem.chart, mem.actions = self._chart, self._actions
         return out
 
+    def answer_as(self, intent: str, question: str, toolbox: Toolbox, mem: Memory) -> str:
+        """Kullanıcı bir niyeti seçince (öneri düğmesi/Eğitim) soruyu o niyetle cevaplar."""
+        mem.actions, mem.chart, mem.unknown, mem.suggest, mem.learn = [], None, None, [], []
+        mem.pending_unknown = None
+        budget, codes = parse_budget(question), find_codes(question, toolbox)
+        mem.intent = mem.answered = intent
+        self._chart, self._actions = None, []
+        out = getattr(self, "a_" + intent)(question, toolbox, budget, codes or ([] if intent not in ("scenario", "act_scenario") else mem.codes))
+        mem.chart, mem.actions = self._chart, self._actions
+        return out
+
     # ---- cevaplar
-    def _unknown(self, question: str = "", mem: Memory | None = None) -> str:
+    def _unknown(self, question: str = "", mem: Memory | None = None, ranked=None) -> str:
         if mem is not None:
-            mem.unknown = question
+            mem.unknown, mem.pending_unknown = question, question
+            mem.suggest = [i for i, sc in (ranked or [])[:3] if sc >= 0.15 and i != "greet" and self.model.content_overlap(question, i)][:3]
+            if mem.suggest:
+                return "Tam emin olamadım. Aşağıdakilerden birini mi kastettin? Seçersen bunu öğrenirim."
         return ("Bunu tam anlayamadım. Şunları cevaplayabilirim:\n\n"
                 "- Bina özeti, sağlık skoru, enerji sınıfı\n- Enerji, karbon, su, maliyet ve yıllık değişim\n"
                 "- Pik ay ve tüketim anomalileri\n- Dönüşüm önerileri, nereden başlanacağı, bütçeye göre paket\n"

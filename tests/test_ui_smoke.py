@@ -156,7 +156,7 @@ def test_assistant_chat_answers_locally_and_keeps_history():
             break
         time.sleep(0.02)
     QApplication.processEvents()
-    role, text, _chart = w.chat_state.display[-1]
+    role, text, _chart, _meta = w.chat_state.display[-1]
     assert role == "assistant" and "geri ödeme" in text
     w.set_project(store.load_project(store.latest_id()))   # bina değişince geçmiş korunur
     assert len(w.chat_state.display) == 2
@@ -195,3 +195,38 @@ def test_assistant_actions_charts_and_training_flow():
     assert store.list_unknown() == [] and store.list_examples()
     ask("tesisin ısı pompası var mı")
     assert "Ekipman" in w.chat_state.display[-1][1]          # öğretilen soru artık anlaşılıyor
+
+
+def test_feedback_clarification_guard_and_reset():
+    import time
+    from PySide6.QtWidgets import QApplication
+    from edifice.db import Store
+    from edifice.ui.main_window import MainWindow
+
+    store = Store(":memory:")
+    store.seed_demo()
+    w = MainWindow(store.load_project(store.latest_id()), store)
+    chat, train = w.sub["Sohbet"], w.sub["Eğitim"]
+
+    def ask(q, **kw):
+        chat.send(q, **kw)
+        for _ in range(400):
+            QApplication.processEvents()
+            if chat.worker.isFinished():
+                break
+            time.sleep(0.02)
+        for _ in range(5):
+            QApplication.processEvents()
+    ask("sağlık skorum kaç")
+    meta = w.chat_state.display[-1][3]
+    assert meta["intent"] == "health"
+    chat._feedback(meta, True)                                   # 👍: soru öğrenilir
+    assert ("health", "sağlık skorum kaç") in [(i, t) for _, i, t in store.list_examples()]
+    chat._feedback(dict(meta, question="bir şey"), False)       # 👎: Eğitim listesine düşer
+    assert "bir şey" in [q for _, q in store.list_unknown()]
+    # Eğitim: zararlı örnek reddedilir, sıfırlama çalışır
+    uid = store.list_unknown()[0][0]
+    train.teach(uid, "skorum neden düştü", "equipment")
+    assert "skorum neden düştü" not in [t for _, _, t in store.list_examples()] and train.note
+    train.reset()
+    assert store.list_examples() == []

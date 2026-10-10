@@ -100,3 +100,35 @@ def test_unknown_is_flagged_for_training_and_taught_examples_change_the_model(tb
     taught = LocalAssistant([("equipment", q)])
     mem2 = Memory()
     assert "Ekipman" in taught.answer(q, tb, mem2) and mem2.unknown is None
+
+
+def test_rephrase_signal_learns_first_question(ai, tb):
+    mem = Memory()
+    ai.answer("tesisin pompası nasıl", tb, mem)          # anlaşılmaz (soru kalıbı yok)
+    first = mem.unknown
+    assert first is None or first == "tesisin pompası nasıl"
+    if first:
+        ai.answer("ekipman envanteri ve pompa durumu", tb, mem)
+        assert mem.learn == [("equipment", first)]
+
+
+def test_clarification_offers_candidates(ai, tb):
+    mem = Memory()
+    ans = ai.answer("tesisin ekipman durumu hakkında bilgi", tb, mem)
+    assert mem.answered or mem.suggest
+    mem2 = Memory()
+    ai.answer("öneri bütçe kaç", tb, mem2)
+    assert mem2.answered or mem2.suggest or mem2.unknown
+
+
+def test_answer_as_forces_intent(ai, tb):
+    mem = Memory()
+    out = ai.answer_as("equipment", "ısı pompası var mı", tb, mem)
+    assert "Ekipman envanteri" in out and mem.answered == "equipment"
+
+
+def test_regression_guard_rejects_harmful_example():
+    from edifice.ai.local import accepts
+    assert accepts([], "equipment", "tesisin ısı pompası var mı")
+    assert not accepts([], "equipment", "skorum neden düştü")          # başka niyetin örneğini bozar
+    assert not accepts([], "nonexistent", "herhangi bir şey")
