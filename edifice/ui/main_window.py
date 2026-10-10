@@ -18,7 +18,7 @@ from .add_choice import AddChoiceDialog
 from .building_dialog import BuildingDialog
 from .report_pdf import build_pdf
 from .method_page import MethodPage
-from .portfolio import PortfolioPage, summarize
+from .portfolio import EsgPage, FinancePage, PortfolioPage, summarize
 from .settings_page import SettingsPage
 from .widgets import get_style, FadeStack, Logo, NavBar, section
 
@@ -35,7 +35,7 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(1180, 720)
         self.setStyleSheet(get_style())
 
-        self.nav_specs = [("Portföy", "portfolio"), ("Genel Bakış", "overview"), ("Tüketim", "consumption"),
+        self.nav_specs = [("Portföy", "portfolio"), ("Finans", "opportunities"), ("Sürdürülebilirlik", "consumption"), ("Genel Bakış", "overview"), ("Tüketim", "consumption"),
                           ("Öneriler", "opportunities"), ("Mevcut vs Hedef", "scenario"),
                           ("Ayarlar", "settings"), ("Kaynaklar ve Yöntem", "method")]
         self.pages = []
@@ -168,19 +168,21 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(root)
         self.set_project(project)
 
-    def set_project(self, project: Project, select: int = 1, notify: bool = False):
+    def set_project(self, project: Project, select: int = 3, notify: bool = False):
         """Seçili binayı değiştirir: sayfaları yeniden kurar."""
         self.project = project
         while self.stack.count():
             w = self.stack.widget(0)
             self.stack.removeWidget(w)
             w.deleteLater()
-        names = [n for n, _ in self.nav_specs]
-        self.pages = [(names[0], PortfolioPage(self.store, self.open_building, self.search.text().strip())),
-                      (names[1], OverviewPage(project)), (names[2], ConsumptionPage(project)),
-                      (names[3], OpportunitiesPage(project)), (names[4], ScenarioPage(project, self.store)),
-                      (names[5], SettingsPage(project, self.store, self._settings_saved)),
-                      (names[6], MethodPage(project))]
+        self.pages = [("Portföy", PortfolioPage(self.store, self.open_building, self.search.text().strip())),
+                      ("Finans", FinancePage(self.store, self.open_building)),
+                      ("Sürdürülebilirlik", EsgPage(self.store, self.open_building)),
+                      ("Genel Bakış", OverviewPage(project)), ("Tüketim", ConsumptionPage(project)),
+                      ("Öneriler", OpportunitiesPage(project)), ("Mevcut vs Hedef", ScenarioPage(project, self.store)),
+                      ("Ayarlar", SettingsPage(project, self.store, self._settings_saved)),
+                      ("Kaynaklar ve Yöntem", MethodPage(project))]
+        self.idx = {n: i for i, (n, _) in enumerate(self.pages)}
         for _, page in self.pages:
             self.stack.addWidget(page.widget)
         name = project.building.name
@@ -192,7 +194,7 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentIndex(select)
         self.crumb.setText(self.pages[select][0])
         if notify:
-            self.pages[5][1].saved_message()
+            self.pages[self.idx['Ayarlar']][1].saved_message()
 
     def show_building_menu(self):
         menu = QMenu(self)
@@ -245,7 +247,7 @@ class MainWindow(QMainWindow):
             self.set_project(self.store.load_project(self.project.building_id))
 
     def _settings_saved(self):
-        self.set_project(self.store.load_project(self.project.building_id), select=5, notify=True)
+        self.set_project(self.store.load_project(self.project.building_id), select=self.idx['Ayarlar'], notify=True)
 
     def delete_current(self):
         name = self.project.building.name
@@ -264,7 +266,7 @@ class MainWindow(QMainWindow):
         self.live.setText(f"{dot}  {self._short(self.project.building.name)}")
 
     def open_building(self, bid: int):
-        self.set_project(self.store.load_project(bid), select=1)
+        self.set_project(self.store.load_project(bid), select=3)
 
     def _search(self, text: str):
         """Portföy sayfasını arama metnine göre yeniden kurar ve oraya geçer."""
@@ -306,7 +308,7 @@ class MainWindow(QMainWindow):
         self.crumb.setText(self.pages[index][0])
 
     def export_report(self):
-        codes = self.pages[4][1].selected_codes()
+        codes = self.pages[self.idx['Mevcut vs Hedef']][1].selected_codes()
         default = f"EDIFICE_{self.project.building.name.replace(' ', '_')}_{datetime.now():%Y-%m-%d}.pdf"
         path, _ = QFileDialog.getSaveFileName(self, "Raporu kaydet", default, "PDF (*.pdf)")
         if not path:
