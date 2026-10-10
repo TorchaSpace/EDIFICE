@@ -29,7 +29,7 @@ def test_parse_budget_units():
 
 
 @pytest.mark.parametrize("question,intent", [
-    ("binam nasıl", "overview"), ("sağlık skorum kaç", "health"), ("enerji sınıfım neden böyle", "rating"),
+    ("binam nasıl", "overview"), ("sağlık skorum kaç", "health"), ("enerji sınıfım neden böyle", "why"),
     ("hangi öneriyle başlamalıyım", "start"), ("2 milyon bütçem var ne yapayım", "budget"), ("geçen yıla göre nasıl", "trend"),
     ("hangi ay en yüksek", "peak"), ("tasarruf oranları nereden geliyor", "evidence"), ("karbon ne kadar", "carbon"),
     ("chiller kaç yaşında", "equipment"), ("portföyde en kötü bina hangisi", "portfolio"),
@@ -68,3 +68,35 @@ def test_building_name_switches_context(ai, tb):
 
 def test_out_of_scope_gets_honest_fallback(ai, tb):
     assert "anlayamadım" in ai.answer("bugün hava nasıl", tb, Memory())
+
+
+def test_why_compare_and_actions(ai, tb):
+    mem = Memory()
+    assert "Düşük kalmasının nedenleri" in ai.answer("skorum neden düştü", tb, mem)
+    assert "başta çünkü" in ai.answer("bu öneri neden önde", tb, mem)
+    ans = ai.answer("pilot ofis binası ile plaza kule karşılaştır", tb, mem)
+    assert "| Gösterge |" in ans and "Plaza Kule" in ans
+    assert "doğalgaz" in ai.answer("elektrik mi doğalgaz mı daha çok", tb, mem)
+    ai.answer("geçen yılın ocağı ile bu ocak", tb, mem)
+    assert mem.chart and mem.chart["kind"] == "area"
+    ai.answer("vfd yi planlandı yap 2027", tb, mem)
+    assert mem.actions == [("status", "VFD", "Planlandı", 2027)]
+    ai.answer("led ve vfd yi senaryoda seç", tb, mem)
+    assert mem.actions == [("scenario", ["LED", "VFD"])]
+    ai.answer("led ve vfd yaparsam", tb, mem)          # fiil yok: ne-olur sorusu, eylem değil
+    assert mem.actions == [] and mem.chart and mem.chart["kind"] == "cash"
+    ai.answer("finans sayfasına git", tb, mem)
+    assert mem.actions == [("open", "Finans", None)]
+    ai.answer("raporu oluştur", tb, mem)
+    assert mem.actions == [("report",)]
+
+
+def test_unknown_is_flagged_for_training_and_taught_examples_change_the_model(tb):
+    base = LocalAssistant()
+    mem = Memory()
+    q = "tesisin ısı pompası var mı"
+    base.answer(q, tb, mem)
+    assert mem.unknown == q
+    taught = LocalAssistant([("equipment", q)])
+    mem2 = Memory()
+    assert "Ekipman" in taught.answer(q, tb, mem2) and mem2.unknown is None

@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS opportunities (
 CREATE TABLE IF NOT EXISTS projects (
   building_id INTEGER NOT NULL REFERENCES buildings(id) ON DELETE CASCADE,
   code TEXT NOT NULL, status TEXT NOT NULL, year INTEGER NOT NULL, PRIMARY KEY (building_id, code));
+CREATE TABLE IF NOT EXISTS ai_unknown (id INTEGER PRIMARY KEY AUTOINCREMENT, question TEXT NOT NULL UNIQUE, asked_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS ai_examples (id INTEGER PRIMARY KEY AUTOINCREMENT, intent TEXT NOT NULL, text TEXT NOT NULL UNIQUE);
 CREATE TABLE IF NOT EXISTS scenarios (
   building_id INTEGER PRIMARY KEY REFERENCES buildings(id) ON DELETE CASCADE, codes TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS equipment (
@@ -158,6 +160,29 @@ class Store:
             self.conn.executemany(
                 "INSERT INTO equipment (building_id,category,name,year_installed,condition,notes) VALUES (?,?,?,?,?,?)",
                 [(bid, e.category, e.name, e.year_installed, e.condition, e.notes) for e in equipment])
+
+    # ---- asistan eğitimi
+    def log_unknown(self, question: str):
+        with self.conn:
+            self.conn.execute("INSERT OR IGNORE INTO ai_unknown (question) VALUES (?)", (question.strip(),))
+
+    def list_unknown(self) -> list[tuple[int, str]]:
+        return self.conn.execute("SELECT id, question FROM ai_unknown ORDER BY id DESC").fetchall()
+
+    def delete_unknown(self, uid: int):
+        with self.conn:
+            self.conn.execute("DELETE FROM ai_unknown WHERE id=?", (uid,))
+
+    def add_example(self, intent: str, text: str):
+        with self.conn:
+            self.conn.execute("INSERT OR REPLACE INTO ai_examples (intent, text) VALUES (?, ?)", (intent, text.strip()))
+
+    def list_examples(self) -> list[tuple[int, str, str]]:
+        return self.conn.execute("SELECT id, intent, text FROM ai_examples ORDER BY id DESC").fetchall()
+
+    def delete_example(self, eid: int):
+        with self.conn:
+            self.conn.execute("DELETE FROM ai_examples WHERE id=?", (eid,))
 
     def save_project(self, bid: int, code: str, status: str, year: int):
         with self.conn:

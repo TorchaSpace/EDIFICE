@@ -156,7 +156,42 @@ def test_assistant_chat_answers_locally_and_keeps_history():
             break
         time.sleep(0.02)
     QApplication.processEvents()
-    role, text = w.chat_state.display[-1]
+    role, text, _chart = w.chat_state.display[-1]
     assert role == "assistant" and "geri ödeme" in text
     w.set_project(store.load_project(store.latest_id()))   # bina değişince geçmiş korunur
     assert len(w.chat_state.display) == 2
+
+
+def test_assistant_actions_charts_and_training_flow():
+    import time
+    from PySide6.QtWidgets import QApplication
+    from edifice.db import Store
+    from edifice.ui.main_window import MainWindow
+
+    store = Store(":memory:")
+    store.seed_demo()
+    w = MainWindow(store.load_project(store.latest_id()), store)
+    chat = w.sub["Sohbet"]
+
+    def ask(q):
+        chat.send(q)
+        for _ in range(400):
+            QApplication.processEvents()
+            if chat.worker.isFinished():
+                break
+            time.sleep(0.02)
+        for _ in range(5):
+            QApplication.processEvents()
+    ask("vfd yi planlandı yap 2027")
+    assert store.load_projects(w.project.building_id) == {"VFD": ("Planlandı", 2027)}
+    ask("led ve vfd yi senaryoda seç")
+    assert w.sub["Mevcut vs Hedef"].selected_codes() == ["LED", "VFD"]
+    ask("hangi ay en yüksek")
+    assert w.chat_state.display[-1][2]["kind"] == "area"
+    ask("tesisin ısı pompası var mı")                       # anlaşılmaz -> eğitim listesine düşer
+    unknown = store.list_unknown()
+    assert [q for _, q in unknown] == ["tesisin ısı pompası var mı"]
+    w.sub["Eğitim"].teach(unknown[0][0], unknown[0][1], "equipment")
+    assert store.list_unknown() == [] and store.list_examples()
+    ask("tesisin ısı pompası var mı")
+    assert "Ekipman" in w.chat_state.display[-1][1]          # öğretilen soru artık anlaşılıyor

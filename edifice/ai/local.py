@@ -47,6 +47,17 @@ INTENTS: dict[str, list[str]] = {
                   "cihazlar nasıl", "ekipman yaşı"],
     "portfolio": ["portföy özeti", "tüm binalar", "kaç binam var", "en kötü bina hangisi", "en iyi bina hangisi", "binaları karşılaştır",
                   "hangi bina öncelikli", "binalarım"],
+    "why": ["neden böyle", "niye düştü", "skorum neden düştü", "bu öneri neden önde", "bu sonucu neden verdi", "sebebi ne", "niçin",
+            "neden bu kadar kötü", "puanım neden düşük", "neden ilk sırada", "neden bu sınıf", "hangi etken etkiliyor"],
+    "compare": ["karşılaştır", "ile karşılaştır", "hangisi daha iyi", "aradaki fark nedir", "elektrik mi doğalgaz mı daha çok",
+                "geçen yılın ocağı ile bu ocak", "iki binayı karşılaştır", "hangisi daha fazla", "fark ne kadar"],
+    "act_status": ["vfd yi planlandı yap", "ledi uygulanıyor olarak işaretle", "chiller projesi tamamlandı", "kazanı planla",
+                   "projeyi başlat", "projeyi iptal et", "led projesini bitirdim", "durumunu değiştir"],
+    "act_report": ["raporu oluştur", "pdf rapor al", "rapor indir", "yatırımcı raporu hazırla", "raporu hazırla"],
+    "act_open": ["portföyü aç", "finans sayfasına git", "projeleri göster", "ayarları aç", "sürdürülebilirlik sayfasını göster",
+                 "kaynaklara git", "genel bakışa dön", "tüketim sayfasını aç"],
+    "act_scenario": ["senaryoyu uygula", "bu paketi senaryoya koy", "led ve vfd yi seç", "mevcut vs hedefte göster",
+                     "senaryo sayfasında aç", "bu önerileri senaryoda seç", "seçili yap"],
     "evidence": ["bu oranlar nereden", "kaynak nedir", "neye dayanıyor", "kanıt düzeyi", "tasarruf oranları hangi kaynaklara dayanıyor",
                  "emisyon faktörü kaynağı", "güvenilir mi", "nasıl hesaplıyorsun", "varsayımlar neler", "literatür"],
 }
@@ -55,6 +66,8 @@ OPP_WORDS = {"LED": ["led", "aydinlatma", "armatur", "floresan"], "CHILLER": ["c
              "VFD": ["vfd", "fan", "pompa", "hiz kontrol", "surucu", "inverter"], "ENVELOPE": ["cati", "cephe", "yalitim", "izolasyon", "kabuk"],
              "BOILER": ["kazan", "yogusmali", "isitma"]}
 STOP = set("nasil ne nedir kadar kac neden hangi var mi mu bu su bir icin ile ve da de en cok daha ben bana sen biz mi ya peki bunu sunu olur olursa yapayim yapmaliyim yapabilirim".split())
+MONTH_NAMES_SHORT = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"]
+ACTION_VERBS = {"sec", "secili", "secin", "koy", "koyun", "ac", "acin", "goster", "ekle", "isaretle", "ayarla", "uygula"}
 FOLD = str.maketrans("çğıöşüÇĞİÖŞÜâîû", "cgiosuCGIOSUaiu")
 
 
@@ -106,6 +119,9 @@ class Memory:
     intent: str = ""
     budget: float | None = None
     codes: list[str] = field(default_factory=list)
+    actions: list[tuple] = field(default_factory=list)   # arayüzün çalıştıracağı eylemler (durum değiştir, sayfa aç…)
+    chart: dict | None = None                             # cevaba eşlik eden mini grafik tanımı
+    unknown: str | None = None                            # anlaşılmayan soru (eğitim listesine düşer)
 
 
 def parse_budget(text: str) -> float | None:
@@ -153,13 +169,61 @@ def _n(v, d=0) -> str:
     return f"{v:,.{d}f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
+MONTH_ROOTS = {0: ("ocak", "ocag"), 1: ("suba",), 2: ("mart",), 3: ("nisa",), 4: ("mayi",), 5: ("hazi",), 6: ("temm",), 7: ("agus",),
+               8: ("eylu",), 9: ("ekim",), 10: ("kasi",), 11: ("aral",)}
+MONTH_NAMES = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"]
+STATUS_WORDS = [("Planlanmadı", ("planlanmadi", "iptal", "kaldir")), ("Tamamlandı", ("tamamla", "bitti", "bitir")),
+                ("Uygulanıyor", ("uygulaniyor", "basla", "baslat")), ("Planlandı", ("planla",))]
+NAV_TARGETS = [(("portfoy",), ("Portföy", None)), (("finans",), ("Finans", None)), (("surdurulebilir", "esg"), ("Sürdürülebilirlik", None)),
+               (("senaryo", "mevcut"), ("Projeler", "Mevcut vs Hedef")), (("proje", "takip"), ("Projeler", "Proje takibi")),
+               (("oneri",), ("Projeler", "Öneriler")), (("tuketim",), ("Genel Bakış", "Tüketim")),
+               (("genel bakis", "dashboard", "ozet"), ("Genel Bakış", "Genel Bakış")), (("ayar",), ("Ayarlar", None)),
+               (("kaynak", "yontem"), ("Raporlar", "Kaynaklar ve Yöntem")), (("rapor",), ("Raporlar", "Rapor")),
+               (("asistan", "sohbet"), ("Asistan", "Sohbet"))]
+
+
+def find_months(text: str) -> list[int]:
+    words = norm(text).split()
+    return [i for i, roots in MONTH_ROOTS.items() if any(w.startswith(r) for w in words for r in roots)]
+
+
+def find_status(text: str) -> str | None:
+    t = norm(text)
+    for status, words in STATUS_WORDS:
+        if any(w in t for w in words):
+            return status
+    return None
+
+
+def find_buildings(text: str, toolbox: Toolbox) -> list[int]:
+    t = norm(text)
+    out = []
+    for bid, p in toolbox.projects.items():
+        n = norm(p.building.name)
+        if n and (n in t or any(len(w) > 3 and w in t.split() for w in n.split())):
+            out.append(bid)
+    return out
+
+
 class LocalAssistant:
     THRESHOLD = 0.32
+    _chart: dict | None = None
+    _actions: list = []
 
-    def __init__(self):
-        self.model = IntentModel()
+    def __init__(self, extra: list[tuple[str, str]] | None = None):
+        """extra: kullanıcının öğrettiği (niyet, cümle) çiftleri; yerleşik örneklere eklenerek model yeniden eğitilir."""
+        merged = {k: list(v) for k, v in INTENTS.items()}
+        for intent, text in extra or []:
+            if intent in merged:
+                merged[intent].append(text)
+        self.model = IntentModel(merged)
 
     def answer(self, question: str, toolbox: Toolbox, mem: Memory) -> str:
+        mem.actions, mem.chart, mem.unknown = [], None, None
+        found = find_buildings(question, toolbox)
+        if len(found) >= 2:           # "A ile B'yi karşılaştır"
+            mem.intent = "compare"
+            return self._compare_buildings(toolbox, found)
         bid = find_building(question, toolbox)
         if bid is not None and bid != toolbox.current:
             toolbox = Toolbox(toolbox.projects, bid)
@@ -178,24 +242,31 @@ class LocalAssistant:
                 intent = "budget"           # "peki 3 milyon olursa?"
             elif codes and mem.intent in ("scenario", "finance", "evidence", "opportunities", "start"):
                 intent = mem.intent         # "ya chiller?"
-            elif codes:
-                intent = "scenario"
             else:
-                return self._unknown()
+                return self._unknown(question, mem)
+        if intent == "act_scenario" and not ACTION_VERBS & set(norm(question).split()):
+            intent = "scenario"        # fiil yoksa "led yaparsam ne olur" gibi bir ne-olur sorusudur
         if budget and intent not in ("budget", "scenario"):
             intent = "budget" if "butce" in norm(question) or "param" in norm(question) else intent
         mem.intent, mem.budget = intent, budget or mem.budget
         mem.codes = codes or mem.codes
         fn = getattr(self, "a_" + intent)
-        return fn(question, toolbox, budget, codes or ([] if intent != "scenario" else mem.codes))
+        self._chart, self._actions = None, []
+        out = fn(question, toolbox, budget, codes or ([] if intent not in ("scenario", "act_scenario") else mem.codes))
+        mem.chart, mem.actions = self._chart, self._actions
+        return out
 
     # ---- cevaplar
-    def _unknown(self) -> str:
+    def _unknown(self, question: str = "", mem: Memory | None = None) -> str:
+        if mem is not None:
+            mem.unknown = question
         return ("Bunu tam anlayamadım. Şunları cevaplayabilirim:\n\n"
                 "- Bina özeti, sağlık skoru, enerji sınıfı\n- Enerji, karbon, su, maliyet ve yıllık değişim\n"
                 "- Pik ay ve tüketim anomalileri\n- Dönüşüm önerileri, nereden başlanacağı, bütçeye göre paket\n"
                 "- Senaryo (ör. “LED ve VFD yaparsam”), geri ödeme, NPV, IRR\n- Ekipman envanteri, portföy karşılaştırması\n"
-                "- Rakamların kaynağı ve kanıt düzeyi\n\nÖrnek: “2 milyon ₺ bütçeyle ne yapmalıyım?”")
+                "- Rakamların kaynağı ve kanıt düzeyi, “neden?” soruları\n- Karşılaştırma (iki bina, elektrik–doğalgaz, ay–yıl)\n"
+                "- İşlem: proje durumunu değiştirme, sayfa açma, senaryo seçme, rapor üretme\n\n"
+                "Örnek: “2 milyon ₺ bütçeyle ne yapmalıyım?” Anlamadığım soruları Asistan > Eğitim sekmesinde bana öğretebilirsin.")
 
     def a_greet(self, q, t, b, c):
         return ("Merhaba! Ben EDIFI'CE'in kendi yapay zekasıyım; internet ya da dış servis kullanmadan, bu uygulamadaki hesaplara bakarak "
@@ -240,6 +311,7 @@ class LocalAssistant:
 
     def a_energy(self, q, t, b, c):
         k = self._kpi(t)
+        self._chart = self._monthly_chart(t.projects[t.current])
         return (f"Yıllık toplam enerji **{_n(k['toplam_enerji_kwh'] / 1000)} MWh** (EUI {_n(k['eui_kwh_m2'], 1)} kWh/m²·yıl).\n\n"
                 f"- Elektrik {_n(k['elektrik_kwh'] / 1000)} MWh\n- Doğalgaz {_n(k['dogalgaz_kwh'] / 1000)} MWh")
 
@@ -270,6 +342,8 @@ class LocalAssistant:
         from ..models import UtilityType
         tot = [a + b_ for a, b_ in zip(p.monthly(p.year, UtilityType.ELECTRICITY), p.monthly(p.year, UtilityType.GAS))]
         order = sorted(range(12), key=lambda i: -tot[i])
+        mem_chart = self._monthly_chart(p)
+        self._chart = mem_chart
         return (f"Tüketimin en yüksek olduğu ay **{months[order[0]]}** ({_n(tot[order[0]] / 1000)} MWh); en düşük **{months[order[-1]]}** "
                 f"({_n(tot[order[-1]] / 1000)} MWh). İlk üç ay: {', '.join(months[i] for i in order[:3])}.")
 
@@ -305,6 +379,7 @@ class LocalAssistant:
         if not d["paket"]:
             return f"{_m(b)} bütçeyle net bugünkü değeri pozitif bir paket yok; bütçeyi artırmayı dene."
         names = {r["kod"]: r["ad"] for r in json.loads(t.run("get_opportunities", {}))}
+        self._chart = self._cash_chart(t.projects[t.current], d["paket"])
         return (f"{_m(b)} bütçeyle NPV'yi en yükseğe çıkaran paket:\n\n" + "\n".join(f"- {names.get(k, k)}" for k in d["paket"]) +
                 f"\n\nCAPEX {_m(d['capex_TL'])} · NPV **{_m(d['npv_TL'])}**.")
 
@@ -313,6 +388,7 @@ class LocalAssistant:
             return "Hangi öneriyi uygulamak istiyorsun? Örneğin “LED ve VFD yaparsam ne olur?” ya da “hepsini uygularsam”."
         d = json.loads(t.run("simulate_scenario", {"codes": c}))
         f = d["finans"]
+        self._chart = self._cash_chart(t.projects[t.current], d["secilen"])
         return (f"**{', '.join(d['secilen'])}** uygulanırsa:\n\n- CAPEX {_m(d['capex_TL'])}, yıllık tasarruf {_tl(d['yillik_tasarruf_TL'])}\n"
                 f"- Enerji %{d['enerji_azalimi_yuzde']:.1f}, karbon %{d['karbon_azalimi_yuzde']:.1f} azalır\n"
                 f"- Basit geri ödeme {'-' if d['basit_geri_odeme_yil'] is None else _n(d['basit_geri_odeme_yil'], 1) + ' yıl'}\n"
@@ -361,6 +437,157 @@ class LocalAssistant:
             return ("Kaynak düzeyleri: **birincil** (resmî belge), **özet** (derleme/meta-analiz), **ikincil** (tek çalışma/vaka), **varsayım** "
                     "(doğrulanamadı). Ayrıntı için Raporlar > Kaynaklar ve Yöntem ekranına bak; belirli bir konuyu (ör. “emisyon faktörü”) sorabilirsin.")
         return "Kaynak kaydından ilgili satırlar:\n\n" + "\n".join(f"- {h}" for h in hits[:6])
+
+    # ---- grafik tanımları (arayüz çizer)
+    def _monthly_chart(self, p) -> dict:
+        from ..models import UtilityType
+        now = [a + b for a, b in zip(p.monthly(p.year, UtilityType.ELECTRICITY), p.monthly(p.year, UtilityType.GAS))]
+        groups = {str(p.year): now}
+        if p.previous_year() is not None:
+            groups[str(p.year - 1)] = [a + b for a, b in zip(p.monthly(p.year - 1, UtilityType.ELECTRICITY), p.monthly(p.year - 1, UtilityType.GAS))]
+        return {"kind": "area", "title": "Aylık enerji tüketimi (MWh)", "cats": MONTH_NAMES_SHORT, "groups": groups, "scale": 1000, "unit": "MWh"}
+
+    def _cash_chart(self, p, codes) -> dict | None:
+        if not codes:
+            return None
+        f = p.finance(codes)
+        return {"kind": "cash", "title": f"Kümülatif nakit akışı ({p.assumptions.horizon_years} yıl, M ₺)", "years": f.years, "cum": f.cumulative,
+                "payback": None if f.simple_payback == float("inf") else f.simple_payback}
+
+    # ---- neden?
+    def a_why(self, q, t, b, c):
+        n = norm(q)
+        if "sinif" in n:
+            return self.a_rating(q, t, b, c)
+        if any(w in n for w in ("oner", "sira", "once", "ilk", "onde")):
+            return self._why_top(t)
+        return self._why_health(t)
+
+    def _why_health(self, t) -> str:
+        p = t.projects[t.current]
+        k, h, a = p.kpis(), p.health(), p.assumptions
+        use = p.building.use_type
+        lines = []
+        pts = {n: v[0] for n, v in h.components.items()}
+        if pts["Enerji yoğunluğu"] < 60:
+            lines.append(f"- **Enerji yoğunluğu** ({pts['Enerji yoğunluğu']:.0f}/100): EUI {_n(k.eui_kwh_m2)} kWh/m², kıyas {_n(a.benchmark_for(use))} "
+                         f"(kıyasın %{100 * k.eui_kwh_m2 / a.benchmark_for(use):.0f}'i).")
+        if pts["Karbon yoğunluğu"] < 60:
+            lines.append(f"- **Karbon yoğunluğu** ({pts['Karbon yoğunluğu']:.0f}/100): {_n(k.carbon_kg_m2, 1)} kg/m², kıyas {_n(a.carbon_benchmark_for(use), 1)}.")
+        if pts["Su yoğunluğu"] < 60:
+            lines.append(f"- **Su yoğunluğu** ({pts['Su yoğunluğu']:.0f}/100): {_n(k.water_m3_m2, 2)} m³/m², kıyas {_n(a.benchmark_water_m3_m2, 2)}.")
+        if pts["Ekipman durumu"] < 60:
+            from datetime import date
+            from ..engine.health import service_life
+            rows = sorted(p.equipment, key=lambda e: (e.condition, e.year_installed))[:3]
+            eq = "; ".join(f"{e.name} ({date.today().year - e.year_installed} yaş, durum {e.condition}/5)" for e in rows)
+            lines.append(f"- **Ekipman durumu** ({pts['Ekipman durumu']:.0f}/100): en zayıflar: {eq}.")
+        if not lines:
+            return f"Skor **{h.total:.0f}/100** ve hiçbir bileşen zayıf değil (hepsi 60 üstü); en düşük bileşen {min(pts, key=pts.get)}."
+        return (f"Skor **{h.total:.0f}/100** (not {h.grade}). Düşük kalmasının nedenleri:\n\n" + "\n".join(lines) +
+                "\n\nBileşenlerin ağırlıkları: " + ", ".join(f"{n} %{v[1] * 100:.0f}" for n, v in h.components.items()) + ".")
+
+    def _why_top(self, t) -> str:
+        rows = [r for r in json.loads(t.run("get_opportunities", {})) if r["uygunluk"] != "none" and r["geri_odeme_yil"] is not None]
+        if len(rows) < 2:
+            return self.a_start("", t, None, [])
+        rows.sort(key=lambda r: r["geri_odeme_yil"])
+        a, b2 = rows[0], rows[1]
+        return (f"**{a['ad']}** başta çünkü geri ödemesi en kısa: {_n(a['geri_odeme_yil'], 1)} yıl (ikinci sıradaki {b2['ad']}: {_n(b2['geri_odeme_yil'], 1)} yıl). "
+                f"Yatırımı küçük ({_m(a['capex_TL'])}) ve yıllık tasarrufu {_tl(a['yillik_tasarruf_TL'])}; ekipman uygunluğu: {a['uygunluk']} "
+                f"({a['uygunluk_gerekce'] or 'veriyle uyumlu'}). Tasarruf oranı için kanıt düzeyi **{a['kanit_duzeyi']}**; "
+                f"düşük senaryoda bile {_tl(a['tasarruf_TL_araligi'][0])}/yıl.")
+
+    # ---- karşılaştırma
+    def a_compare(self, q, t, b, c):
+        n = norm(q)
+        months = find_months(q)
+        if months:
+            return self._month_yoy(t, months[0])
+        if "elektrik" in n and "gaz" in n:
+            return self._compare_utilities(t)
+        return ("Neyi karşılaştırayım? Örnekler: “Merkez Ofis ile Plaza Kule'yi karşılaştır”, “elektrik mi doğalgaz mı daha çok”, "
+                "“geçen yılın ocağı ile bu ocak”.")
+
+    def _compare_buildings(self, t, ids) -> str:
+        from .tools import Toolbox as _T
+        rows = []
+        for bid in ids[:3]:
+            d = json.loads(_T(t.projects, bid).run("get_building", {}))
+            rows.append(d)
+        head = "| Gösterge | " + " | ".join(r["ad"] for r in rows) + " |\n|---|" + "---|" * len(rows)
+        def line(label, fn):
+            return f"| {label} | " + " | ".join(fn(r) for r in rows) + " |"
+        body = "\n".join([
+            line("Sağlık skoru", lambda r: f"{r['saglik_skoru']['toplam']:.0f} ({r['saglik_skoru']['not']})"),
+            line("Enerji sınıfı", lambda r: r["enerji_sinifi"]["sinif"]),
+            line("EUI (kWh/m²)", lambda r: _n(r["kpi"]["eui_kwh_m2"])),
+            line("Karbon (tCO₂)", lambda r: _n(r["kpi"]["karbon_kg"] / 1000, 1)),
+            line("Maliyet", lambda r: _m(r["kpi"]["toplam_maliyet_TL"])),
+            line("Alan (m²)", lambda r: _n(r["alan_m2"]))])
+        best = max(rows, key=lambda r: r["saglik_skoru"]["toplam"])
+        return f"{head}\n{body}\n\nSağlık skoru en yüksek olan **{best['ad']}**."
+
+    def _compare_utilities(self, t) -> str:
+        p = t.projects[t.current]
+        k, a = p.kpis(), p.assumptions
+        from ..models import UtilityType
+        ce = k.electricity_kwh * a.emission_factor_kg_per_kwh[UtilityType.ELECTRICITY]
+        cg = k.gas_kwh * a.emission_factor_kg_per_kwh[UtilityType.GAS]
+        tot, ctot = k.electricity_kwh + k.gas_kwh, ce + cg
+        more = "elektrik" if k.electricity_kwh > k.gas_kwh else "doğalgaz"
+        return (f"Enerji olarak **{more}** daha çok: elektrik {_n(k.electricity_kwh / 1000)} MWh (%{100 * k.electricity_kwh / tot:.0f}), "
+                f"doğalgaz {_n(k.gas_kwh / 1000)} MWh (%{100 * k.gas_kwh / tot:.0f}).\n\n"
+                f"Karbonda elektriğin payı %{100 * ce / ctot:.0f}, doğalgazınki %{100 * cg / ctot:.0f} "
+                f"(emisyon faktörleri 0,469 ve 0,202 kgCO₂e/kWh).")
+
+    def _month_yoy(self, t, m: int) -> str:
+        from ..models import UtilityType
+        p = t.projects[t.current]
+        prev = p.previous_year()
+        if prev is None:
+            return "Karşılaştırma için önceki yıla ait veri yok."
+        def val(y, u):
+            return p.monthly(y, u)[m]
+        rows = []
+        for u, label in ((UtilityType.ELECTRICITY, "Elektrik"), (UtilityType.GAS, "Doğalgaz")):
+            a_, b_ = val(p.year, u), val(prev, u)
+            ch = (a_ / b_ - 1) * 100 if b_ else 0
+            rows.append(f"- {label}: {_n(a_ / 1000, 1)} MWh ({prev}: {_n(b_ / 1000, 1)} MWh, %{abs(ch):.1f} {'arttı' if ch > 0 else 'azaldı'})")
+        self._chart = self._monthly_chart(p)
+        return f"**{MONTH_NAMES[m]}** ayı, {p.year} ve {prev} karşılaştırması:\n\n" + "\n".join(rows)
+
+    # ---- eylemler (arayüz uygular)
+    def a_act_status(self, q, t, b, c):
+        status = find_status(q)
+        if not c:
+            return "Hangi projenin durumunu değiştireyim? Örneğin “VFD'yi planlandı yap” ya da “LED projesi tamamlandı”."
+        if not status:
+            return "Hangi duruma alayım: Planlandı, Uygulanıyor, Tamamlandı ya da Planlanmadı?"
+        year = next((int(y) for y in re.findall(r"20\d\d", q)), None)
+        p = t.projects[t.current]
+        names = {o.code: o.name for o in p.opportunities}
+        self._actions = [("status", code, status, year) for code in c]
+        return "Tamam: " + ", ".join(f"**{names[code]}** → **{status}**" for code in c) + (f" ({year})" if year else "") + ". Proje takibine kaydettim."
+
+    def a_act_open(self, q, t, b, c):
+        n = norm(q)
+        for words, target in NAV_TARGETS:
+            if any(w in n for w in words):
+                self._actions = [("open",) + target]
+                return f"**{target[0]}**{' > ' + target[1] if target[1] else ''} sayfasını açıyorum."
+        return "Hangi sayfayı açayım? Örnek: “portföyü aç”, “finans sayfasına git”, “ayarları aç”."
+
+    def a_act_scenario(self, q, t, b, c):
+        if not c:
+            return "Hangi önerileri seçeyim? Örnek: “LED ve VFD'yi senaryoda seç”."
+        self._actions = [("scenario", list(c))]
+        return f"**Mevcut vs Hedef** ekranında {', '.join(c)} seçildi; sonuçları orada görebilirsin."
+
+    def a_act_report(self, q, t, b, c):
+        self._actions = [("report",)]
+        return "Rapor kaydetme penceresini açıyorum (Mevcut vs Hedef'te seçili önerilere göre hazırlanır)."
+
 
 
 def stream_chunks(text: str, size: int = 5):

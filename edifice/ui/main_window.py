@@ -18,7 +18,7 @@ from .add_choice import AddChoiceDialog
 from .building_dialog import BuildingDialog
 from .report_pdf import build_pdf
 from .method_page import MethodPage
-from .assistant_chat import ChatPage, ChatState
+from .assistant_chat import ChatPage, ChatState, TrainingPage
 from .projects_page import ProjectsTrackerPage
 from .tabs_page import ComingSoonPage, ReportPage, TabsPage
 from .portfolio import AssistantPage, EsgPage, FinancePage, PortfolioPage, summarize
@@ -185,10 +185,11 @@ class MainWindow(QMainWindow):
         self.sub = {"Genel Bakış": OverviewPage(project, self.store), "Tüketim": ConsumptionPage(project),
                     "Öneriler": OpportunitiesPage(project), "Mevcut vs Hedef": ScenarioPage(project, self.store),
                     "Proje takibi": ProjectsTrackerPage(project, self.store, self._projects_changed),
-                    "Sohbet": ChatPage(project, self.store, self.chat_state, self._all_projects),
+                    "Sohbet": ChatPage(project, self.store, self.chat_state, self._all_projects, self.run_action),
                     "Kaynaklar ve Yöntem": MethodPage(project),
                     "Ayarlar": SettingsPage(project, self.store, self._settings_saved)}
         sub = self.sub
+        sub["Eğitim"] = TrainingPage(self.store, sub["Sohbet"].reload_ai)
         self.pages = [("Genel Bakış", TabsPage([("Genel Bakış", sub["Genel Bakış"]), ("Tüketim", sub["Tüketim"])])),
                       ("Portföy", PortfolioPage(self.store, self.open_building, self.search.text().strip())),
                       ("Projeler", TabsPage([("Öneriler", sub["Öneriler"]), ("Proje takibi", sub["Proje takibi"]), ("Mevcut vs Hedef", sub["Mevcut vs Hedef"])])),
@@ -197,7 +198,7 @@ class MainWindow(QMainWindow):
                                                   "Uygulayıcı firma ve ortak yönetimi için bina verisinden bağımsız bir ortak/teklif kaydı gerekir. "
                                                   "MVP tek bina analizine odaklandığı için bu modül sonraki fazda eklenecek.")),
                       ("Asistan", TabsPage([("Sohbet", sub["Sohbet"]),
-                                            ("Otomatik bulgular", AssistantPage(project))])),
+                                            ("Eğitim", sub["Eğitim"]), ("Otomatik bulgular", AssistantPage(project))])),
                       ("Digital Twin", ComingSoonPage("Digital Twin", "Digital Twin",
                                                       "Dijital ikiz için BIM modeli ve canlı sensör (IoT/BMS) verisi gerekir; bunlar MVP kapsamı dışında "
                                                       "olduğundan sonraki fazda eklenecek.")),
@@ -288,6 +289,35 @@ class MainWindow(QMainWindow):
         self._dot_on = not self._dot_on
         dot = "●" if self._dot_on else "○"
         self.live.setText(f"{dot}  {self._short(self.project.building.name)}")
+
+    def run_action(self, action: tuple):
+        """Asistanın komutlarını uygular: proje durumu, sayfa açma, senaryo seçme, rapor."""
+        kind = action[0]
+        if kind == "status":
+            _, code, status, year = action
+            tr = self.sub["Proje takibi"]
+            if code in tr.combos:
+                if year:
+                    tr.spins[code].setValue(max(year, tr.spins[code].minimum()))
+                tr.combos[code].setCurrentText(status)
+                tr._changed(code)          # aynı değerde bile kaydet ve zaman çizelgesini güncelle
+        elif kind == "open":
+            self.go(action[1], action[2])
+        elif kind == "scenario":
+            sc = self.sub["Mevcut vs Hedef"]
+            for code, btn in sc.checks.items():
+                btn.setChecked(code in action[1])
+            self.go("Projeler", "Mevcut vs Hedef")
+        elif kind == "report":
+            self.export_report()
+
+    def go(self, page: str, tab: str | None = None):
+        self.select(self.idx[page])
+        if tab:
+            tp = self.pages[self.idx[page]][1]
+            names = list(tp.tabs)
+            if tab in names:
+                tp.group.button(names.index(tab)).click()
 
     def _all_projects(self) -> dict:
         return {bid: self.store.load_project(bid) for bid, _ in self.store.list_buildings()}
