@@ -33,7 +33,8 @@ def parse(data: bytes) -> list[dict]:
         if p.get("name"):
             out.append({"name": p["name"], "state": p.get("state") or "", "city": p.get("city") or "",
                         "country": p.get("country") or "", "type": p.get("type") or "",
-                        "street": p.get("street") or "", "lat": float(lat), "lon": float(lon)})
+                        "street": p.get("street") or "", "district": p.get("district") or "",
+                        "housenumber": p.get("housenumber") or "", "lat": float(lat), "lon": float(lon)})
     return out
 
 

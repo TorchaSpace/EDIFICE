@@ -137,16 +137,22 @@ class BuildingDialog(QDialog):
         self.state = QLineEdit()
         self.district = QLineEdit()
         self.address = QLineEdit()
-        self.address.setPlaceholderText("Mahalle, cadde/sokak, kapı no (isteğe bağlı)")
         self.lat = QLineEdit()
         self.lon = QLineEdit()
         self.p_country = PlaceInput(self.country, ("country",), "country", placeholder="Ülke yazın")
         self.p_state = PlaceInput(self.state, ("state",), "state", [("country", self.p_country)], "İl yazın (ör. Ankara)")
         self.p_district = PlaceInput(self.district, ("city", "district"), "city",
                                      [("country", self.p_country), ("state", self.p_state)], "İlçe yazın (ör. Çankaya)")
+        self.p_address = PlaceInput(self.address, ("street", "house", "locality", "district"), "street",
+                                    [("country", self.p_country), ("state", self.p_state)],
+                                    "Mahalle, cadde/sokak yazın; öneriler seçtiğiniz ilçeye göre gelir",
+                                    context=lambda: ", ".join(x.strip() for x in (self.district.text(), self.state.text(), self.country.text()) if x.strip()))
         self._place_coord: tuple[float, float] | None = None
+        self._precise: tuple[float, float] | None = None
         for pin in (self.p_country, self.p_state, self.p_district):
             pin.picked.connect(self._place_picked)
+        self.p_address.picked.connect(lambda la, lo: setattr(self, "_precise", (la, lo)))
+        self.address.textEdited.connect(lambda *_: setattr(self, "_precise", None))
         self.country.textEdited.connect(self._mark_addr)
         self.state.textEdited.connect(self._mark_addr)
         self.district.textEdited.connect(self._mark_addr)
@@ -177,7 +183,7 @@ class BuildingDialog(QDialog):
         g.addWidget(_field("Ülke", self.country, "Yazdıkça öneri çıkar"), 1, 0)
         g.addWidget(_field("İl", self.state, "Önce ülke, sonra il"), 1, 1)
         g.addWidget(_field("İlçe", self.district, "Seçilen ile göre öneri"), 1, 2)
-        g.addWidget(_field("Açık adres", self.address, "İsteğe bağlı: mahalle, cadde/sokak, kapı no. Konum haritada ilçe/adres olarak bulunur"), 2, 0, 1, 3)
+        g.addWidget(_field("Açık adres", self.address, "İsteğe bağlı: yazdıkça girdiğin ülke, il ve ilçeye göre öneri çıkar"), 2, 0, 1, 3)
         for c in range(3):
             g.setColumnStretch(c, 1)
         general.lay.addSpacing(6)
@@ -416,7 +422,7 @@ class BuildingDialog(QDialog):
     # ---- toplama / kaydetme
     def collect(self):
         if getattr(self, "_addr_edited", False) and not self.lat.text().strip() and self._full_address():
-            hit = lookup_first(self._full_address()) or self._place_coord
+            hit = self._precise or lookup_first(self._full_address()) or self._place_coord
             if hit:
                 self.lat.setText(f"{hit[0]:.6f}")
                 self.lon.setText(f"{hit[1]:.6f}")
