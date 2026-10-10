@@ -15,8 +15,9 @@ def _r(v, d=1):
 class Toolbox:
     """Araçların uygulaması: yalnız bellekteki Project nesnelerini okur (veritabanına dokunmaz, iş parçacığından güvenli)."""
 
-    def __init__(self, projects: dict[int, Project], current: int | None):
+    def __init__(self, projects: dict[int, Project], current: int | None, weather: dict | None = None):
         self.projects, self.current = projects, current
+        self.weather = weather or {}        # bina kimliği -> aylık derece-gün sözlüğü (önbellekten)
 
     def _p(self, args: dict) -> tuple[int, Project]:
         bid = args.get("building_id", self.current)
@@ -98,6 +99,22 @@ class Toolbox:
         u = UtilityType(a["utility"])
         year = a.get("year", p.year)
         return {"yil": year, "birim": "m3" if u == UtilityType.WATER else "kWh", "aylar": [_r(v, 0) for v in p.monthly(year, u)]}
+
+    def t_get_weather_adjusted(self, a):
+        from ..engine.weather_norm import normalize
+        bid, p = self._p(a)
+        dd = self.weather.get(bid)
+        if not dd:
+            return {"hata": "Bu bina için hava verisi yok (konum girilmemiş ya da henüz indirilmemiş)."}
+        wn = normalize(p, dd)
+        if wn is None:
+            return {"hata": "Hava düzeltmesi için yeterli veri yok."}
+        return {"yil": wn.year, "onceki_yil": wn.prev, "guven": wn.confidence, "normal_yil_sayisi": wn.normal_years,
+                "ham_toplam_kwh": _r(wn.raw_total, 0), "duzeltilmis_toplam_kwh": _r(wn.norm_total, 0),
+                "ham_degisim_yuzde": _r(wn.raw_change_pct), "duzeltilmis_degisim_yuzde": _r(wn.norm_change_pct),
+                "turler": {n: {"kullanilabilir": u.ok, "r2": _r(u.r2, 2), "gozlem": u.n, "not": u.note,
+                               "ham_kwh": {str(y): _r(v, 0) for y, v in u.raw.items()},
+                               "duzeltilmis_kwh": {str(y): _r(v, 0) for y, v in u.normalized.items()}} for n, u in wn.by_utility.items()}}
 
     def t_get_data_quality(self, a):
         from ..quality import assess

@@ -18,6 +18,7 @@ from .add_choice import AddChoiceDialog
 from .building_dialog import BuildingDialog
 from .report_pdf import build_pdf
 from .method_page import MethodPage
+from .weather_loader import WeatherLoader
 from .assistant_chat import ChatPage, ChatState, TrainingPage
 from .projects_page import ProjectsTrackerPage
 from .tabs_page import ComingSoonPage, ReportPage, TabsPage
@@ -207,6 +208,7 @@ class MainWindow(QMainWindow):
                                              ("Kaynaklar ve Yöntem", sub["Kaynaklar ve Yöntem"])])),
                       ("Ayarlar", TabsPage([("Ayarlar", sub["Ayarlar"])]))]
         self.idx = {n: i for i, (n, _) in enumerate(self.pages)}
+        self._start_weather(project)
         for _, page in self.pages:
             self.stack.addWidget(page.widget)
         name = project.building.name
@@ -321,6 +323,21 @@ class MainWindow(QMainWindow):
 
     def _all_projects(self) -> dict:
         return {bid: self.store.load_project(bid) for bid, _ in self.store.list_buildings()}
+
+    def _start_weather(self, project):
+        if not hasattr(self, "_weather_loader"):
+            self._weather_loader = WeatherLoader(self)
+            self._weather_loader.done.connect(self._on_weather)
+        self._weather_loader.load(self.store, project)
+
+    def _on_weather(self, bid, dd, status):
+        if bid != self.project.building_id:
+            return                          # kullanıcı bu arada başka binaya geçti
+        from ..engine.weather_norm import normalize
+        wn = normalize(self.project, dd) if dd else None
+        ov = self.sub.get("Genel Bakış")
+        if ov is not None and hasattr(ov, "set_weather"):
+            ov.set_weather(wn, status)
 
     def _projects_changed(self, rows):
         ov = self.sub.get("Genel Bakış")

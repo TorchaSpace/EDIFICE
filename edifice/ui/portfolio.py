@@ -493,7 +493,7 @@ class LocationMap(QWidget):
         lons = [p[3] for p in points]
         self.clat, self.clon = (min(lats) + max(lats)) / 2, (min(lons) + max(lons)) / 2
         span = max(max(lats) - min(lats), max(lons) - min(lons), 0.02)
-        self.zf = float(max(3, min(15, math.log2(360 / (span * 1.7)))))
+        self.zf = float(max(3, min(12, math.log2(360 / (span * 1.7)))))
         self._zanim = QVariantAnimation(self)
         self._zanim.setDuration(320)
         self._zanim.setEasingCurve(QEasingCurve.OutCubic)

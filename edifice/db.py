@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS opportunities (
 CREATE TABLE IF NOT EXISTS projects (
   building_id INTEGER NOT NULL REFERENCES buildings(id) ON DELETE CASCADE,
   code TEXT NOT NULL, status TEXT NOT NULL, year INTEGER NOT NULL, PRIMARY KEY (building_id, code));
+CREATE TABLE IF NOT EXISTS weather (lat REAL NOT NULL, lon REAL NOT NULL, year INTEGER NOT NULL, month INTEGER NOT NULL,
+  hdd REAL, cdd REAL, days INTEGER, PRIMARY KEY (lat, lon, year, month));
 CREATE TABLE IF NOT EXISTS ai_unknown (id INTEGER PRIMARY KEY AUTOINCREMENT, question TEXT NOT NULL UNIQUE, asked_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS ai_examples (id INTEGER PRIMARY KEY AUTOINCREMENT, intent TEXT NOT NULL, text TEXT NOT NULL UNIQUE);
 CREATE TABLE IF NOT EXISTS scenarios (
@@ -160,6 +162,22 @@ class Store:
             self.conn.executemany(
                 "INSERT INTO equipment (building_id,category,name,year_installed,condition,notes) VALUES (?,?,?,?,?,?)",
                 [(bid, e.category, e.name, e.year_installed, e.condition, e.notes) for e in equipment])
+
+    # ---- hava verisi önbelleği (0,1° ızgarasına yuvarlanmış konum)
+    @staticmethod
+    def weather_key(lat: float, lon: float) -> tuple[float, float]:
+        return round(lat, 1), round(lon, 1)
+
+    def save_weather(self, lat: float, lon: float, dd: dict):
+        k = self.weather_key(lat, lon)
+        with self.conn:
+            self.conn.executemany("INSERT OR REPLACE INTO weather VALUES (?,?,?,?,?,?,?)",
+                                  [(k[0], k[1], y, m, h, c, n) for (y, m), (h, c, n) in dd.items()])
+
+    def load_weather(self, lat: float, lon: float) -> dict:
+        k = self.weather_key(lat, lon)
+        return {(y, m): (h, c, n) for y, m, h, c, n in self.conn.execute(
+            "SELECT year, month, hdd, cdd, days FROM weather WHERE lat=? AND lon=?", k)}
 
     # ---- asistan eğitimi
     def log_unknown(self, question: str):

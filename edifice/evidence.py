@@ -15,6 +15,12 @@ KBTU_FT2_TO_KWH_M2 = 3.15459   # 1 kBtu/ft² = 3,15459 kWh/m²
 LEVELS = {"birincil": "Kaynak okundu", "özet": "Özet okundu", "ikincil": "İkincil aktarım", "varsayım": "Varsayım"}
 
 SOURCES: dict[str, dict] = {
+    "OPENMETEO": {"cite": "Open-Meteo Historical Weather API (günlük ortalama sıcaklık, geçmiş hava verisi).",
+                  "url": "https://open-meteo.com/en/docs/historical-weather-api", "level": "ikincil",
+                  "note": "Hava verisi hizmeti belgesi; veri yeniden analiz tabanlıdır, istasyon ölçümü değildir. Ücretsiz kullanım ticari olmayan amaçlıdır; ticari dağıtımda ücretli plan ya da kendi barındırma gerekir."},
+    "IPMVP": {"cite": "Efficiency Valuation Organization (EVO), International Performance Measurement and Verification Protocol (IPMVP).",
+              "url": "https://evo-world.org/en/products-services-mainmenu-en/protocols/ipmvp", "level": "ikincil",
+              "note": "Tüketimi hava gibi etkenlere göre regresyonla düzeltmenin tasarruf doğrulamasında kabul gören yöntem olduğu genel bilgisi; belgenin ayrıntıları bu çalışmada doğrudan okunmadı."},
     "ES2024": dict(
         cite="U.S. EPA ENERGY STAR Portfolio Manager. U.S. Energy Use Intensity by Property Type, Technical Reference, Ağustos 2024.",
         url="https://portfoliomanager.energystar.gov/pdf/reference/US%20National%20Median%20Table.pdf", level="birincil",
@@ -173,6 +179,10 @@ def parameter_rows(a) -> list[tuple]:
         ("Skor", "Health Score yöntemi", "4 bileşen, ağırlıklı ortalama", ["JRC2008"], "özet",
          "Normalizasyon eşikleri ve ağırlıklar uzman kararıdır; skor ağırlık duyarlılığı aralığıyla birlikte gösterilir."),
         ("Skor", "Ekipman ömrü", "Tür başına 15-30 yıl", ["ASHRAE_LIFE"], "ikincil", "Soğutucu, kazan, santral ve pompa için ayrı ömür kullanılır."),
+        ("Hava", "Hava normalizasyonu yöntemi", "aylık tüketim = a + b·HDD + c·CDD (b,c ≥ 0)", ["IPMVP", "OPENMETEO"], "ikincil",
+         "Derece-gün regresyonu; R² < 0,3 ise düzeltme yapılmaz, 0,6 üstü “güvenilir” sayılır (eşikler varsayımdır). Normal yıl: son 10 tam yılın aylık ortalaması."),
+        ("Hava", "Isıtma derece-gün taban sıcaklığı", "15 °C", [], "varsayım", "Günlük ortalama sıcaklığın bu değerin altı ısıtma yükü sayılır; kaynak doğrulanmadı, binaya göre değişir."),
+        ("Hava", "Soğutma derece-gün taban sıcaklığı", "22 °C", [], "varsayım", "Günlük ortalama sıcaklığın bu değerin üstü soğutma yükü sayılır; kaynak doğrulanmadı, binaya göre değişir."),
         ("Finans", "İskonto oranı", f"%{a.discount_rate * 100:.1f} (reel)", ["EU244"], "varsayım",
          "AB metodolojisi reel oran ve en az iki oranla duyarlılık analizi ister (makroekonomik referans reel %3); finansal oranın değeri belirtilmez. Duyarlılık tablosunda %3 ve ±2 puan gösterilir."),
         ("Finans", "Enerji fiyat artışı", f"%{a.energy_escalation * 100:.1f} (reel)", [], "varsayım", "Kaynak yok; duyarlılık tablosunda %0 senaryosu var."),

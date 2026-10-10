@@ -210,7 +210,9 @@ class ChatPage:
             self.state.display.append(("user", text, None, None))
         self.current, self._buf = self._add("…", False), ""
         self._busy(True)
-        self.worker = ChatWorker(self.ai, text, self.state, Toolbox(self.load_projects(), self.project.building_id), forced)
+        projects = self.load_projects()
+        weather = {bid: self.store.load_weather(p.building.lat, p.building.lon) for bid, p in projects.items() if p.building.lat is not None}
+        self.worker = ChatWorker(self.ai, text, self.state, Toolbox(projects, self.project.building_id, weather), forced)
         self.worker.text.connect(self._on_text)
         self.worker.extras.connect(self._on_extras)
         self.worker.failed.connect(self._on_failed)

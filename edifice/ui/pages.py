@@ -97,6 +97,15 @@ def _trend_text(pct: float) -> tuple[str, bool]:
     return f"{arrow} {fmt(abs(pct), 1)}%", pct <= 0  # azalma = iyi
 
 
+def _clear_layout(lay):
+    while lay.count():
+        it = lay.takeAt(0)
+        if it.widget():
+            it.widget().deleteLater()
+        elif it.layout():
+            _clear_layout(it.layout())
+
+
 class OverviewPage:
     def __init__(self, project: Project, store=None, on_open=None):
         self.on_open = on_open or (lambda _b: None)
@@ -159,6 +168,15 @@ class OverviewPage:
         qrow.addLayout(qcol_l, 1)
         qp.lay.addLayout(qrow)
         lay.addWidget(qp)
+
+        # ---- hava düzeltmeli tüketim (veri gelince set_weather doldurur)
+        self.weather_panel = Panel(eyebrow="Hava normalizasyonu", title="Hava düzeltmeli tüketim",
+                                   subtitle="İklim farkını ayıklayınca gerçek değişim: sıcak bir kış tüketimi “kendiliğinden” düşürür.")
+        self.weather_body = QVBoxLayout()
+        self.weather_body.setSpacing(8)
+        self.weather_panel.lay.addLayout(self.weather_body)
+        self.weather_body.addWidget(muted("Hava verisi yükleniyor…"))
+        lay.addWidget(self.weather_panel)
 
         # ---- portföy düzeyi (Figma ana ekranı): harita + portföy skoru
         if store is not None:
@@ -353,6 +371,56 @@ class OverviewPage:
             else:
                 rp.lay.addWidget(muted("Henüz proje yok. Projeler > Proje takibi'nden bir öneriyi planlayın."))
             lay.addWidget(rp)
+
+
+def _overview_set_weather(self, wn, status):
+    fill_weather_panel(self.weather_body, wn, status)
+
+
+OverviewPage.set_weather = _overview_set_weather
+
+
+def fill_weather_panel(body, wn, status: str):
+    """Hava düzeltmeli tüketim panelini doldurur. wn: WeatherNorm | None; status: ok | konum | ağ."""
+    _clear_layout(body)
+    if wn is None:
+        msg = {"konum": "Bina konumu girilmemiş: bina düzenleme ekranında ülke, il ve ilçeyi girin; hava verisi o konumdan indirilir.",
+               "ağ": "Hava verisi indirilemedi (internet gerekir). Bağlanınca bu panel kendiliğinden dolar."}.get(status, "Hava düzeltmesi için yeterli veri yok.")
+        body.addWidget(muted(msg))
+        return
+    conf_col = {"Yüksek": G, "Orta": AMBER, "Düşük": RED, "Yok": SUB}[wn.confidence]
+    top = QHBoxLayout()
+    top.addWidget(badge(f"Güven: {wn.confidence}", conf_col))
+    top.addWidget(muted(f"Normal yıl = son {wn.normal_years} yılın ortalaması · ısıtma/soğutma taban 15/22 °C (varsayım)"))
+    top.addStretch()
+    body.addLayout(top)
+    t = _table(["Enerji türü", f"{wn.year} ham (MWh)", f"{wn.year} düzeltilmiş", "Ham değişim", "Düzeltilmiş değişim", "Model"], left_cols=1)
+    rows = []
+    for name, u in wn.by_utility.items():
+        raw, norm = u.raw.get(wn.year, 0), u.normalized.get(wn.year, 0)
+        if raw <= 0:
+            continue
+        rch = nch = "-"
+        if wn.prev is not None and u.raw.get(wn.prev):
+            rch = f"{(raw / u.raw[wn.prev] - 1) * 100:+.1f}%".replace(".", ",")
+            nch = f"{(norm / u.normalized[wn.prev] - 1) * 100:+.1f}%".replace(".", ",")
+        rows.append((name, fmt(raw / 1000), fmt(norm / 1000) if u.ok else "-", rch, nch if u.ok else "-", (f"R² {u.r2:.2f}" if u.n else "") + (" · " + u.note if u.note else "")))
+    if wn.norm_total and wn.raw_total:
+        rch = nch = "-"
+        if wn.raw_change_pct is not None:
+            rch, nch = f"{wn.raw_change_pct:+.1f}%".replace(".", ","), f"{wn.norm_change_pct:+.1f}%".replace(".", ",")
+        rows.append(("Toplam", fmt(wn.raw_total / 1000), fmt(wn.norm_total / 1000), rch, nch, ""))
+    t.setRowCount(len(rows))
+    for i, r in enumerate(rows):
+        _set_row(t, i, list(r), left_cols=1, colors={4: G} if r[4].startswith("-") and r[4] != "-" else None, mono_from=1)
+    t.setColumnWidth(5, 300)
+    _fit_height(t, max(len(rows), 1))
+    body.addWidget(t)
+    if wn.raw_change_pct is not None and wn.norm_change_pct is not None:
+        gap = wn.norm_change_pct - wn.raw_change_pct
+        if abs(gap) >= 1.0:
+            body.addWidget(muted(f"İklim etkisi: ham değişimin yaklaşık {abs(gap):.1f} puanı havadan geliyor ({'sıcak/ılıman' if gap > 0 else 'soğuk/sert'} bir yıl); "
+                                 f"gerçek verimlilik değişimi düzeltilmiş sütundadır."))
 
 
 class ConsumptionPage:

@@ -58,6 +58,8 @@ INTENTS: dict[str, list[str]] = {
                  "kaynaklara git", "genel bakışa dön", "tüketim sayfasını aç"],
     "act_scenario": ["senaryoyu uygula", "bu paketi senaryoya koy", "led ve vfd yi seç", "mevcut vs hedefte göster",
                      "senaryo sayfasında aç", "bu önerileri senaryoda seç", "seçili yap"],
+    "weather": ["hava düzeltmeli tüketim", "iklim etkisi", "derece gün", "hava durumuna göre düzeltilmiş", "sıcak kış yüzünden mi düştü",
+                "gerçek tasarruf mu hava mı", "iklimden arındırılmış", "hava normalizasyonu"],
     "quality": ["veri kalitesi", "verilerim güvenilir mi", "eksik veri var mı", "veri güvenilirliği", "girdiler doğru mu",
                 "hatalı veri var mı", "veriye güvenebilir miyim", "sonuçlar ne kadar güvenilir"],
     "evidence": ["bu oranlar nereden", "kaynak nedir", "neye dayanıyor", "kanıt düzeyi", "tasarruf oranları hangi kaynaklara dayanıyor",
@@ -141,7 +143,7 @@ INTENT_LABELS = {
     "carbon": "Karbon", "water": "Su", "cost": "Maliyet", "trend": "Yıllık değişim", "peak": "Pik ay", "anomaly": "Anomali",
     "opportunities": "Öneri listesi", "start": "Nereden başlamalı", "budget": "Bütçeye göre paket", "scenario": "Senaryo (ne olur?)",
     "finance": "Finans (NPV, geri ödeme)", "equipment": "Ekipman", "portfolio": "Portföy", "why": "Neden?", "compare": "Karşılaştırma",
-    "quality": "Veri kalitesi", "evidence": "Kaynak / kanıt", "act_status": "İşlem: proje durumu", "act_report": "İşlem: rapor", "act_open": "İşlem: sayfa aç",
+    "weather": "Hava düzeltmesi", "quality": "Veri kalitesi", "evidence": "Kaynak / kanıt", "act_status": "İşlem: proje durumu", "act_report": "İşlem: rapor", "act_open": "İşlem: sayfa aç",
     "act_scenario": "İşlem: senaryo seç", "greet": "Selamlama / yardım"}
 
 
@@ -218,6 +220,11 @@ NAV_TARGETS = [(("portfoy",), ("Portföy", None)), (("finans",), ("Finans", None
                (("asistan", "sohbet"), ("Asistan", "Sohbet"))]
 
 
+def weather_topic(text: str) -> bool:
+    """Soru bina tüketiminin hava düzeltmesiyle mi ilgili? (genel hava durumu sorusu değil)"""
+    return any(w in norm(text) for w in ("duzelt", "iklim", "derece", "normaliz", "kis", "tasarruf", "tuketim", "ısıtma", "isitma"))
+
+
 def find_months(text: str) -> list[int]:
     words = norm(text).split()
     return [i for i, roots in MONTH_ROOTS.items() if any(w.startswith(r) for w in words for r in roots)]
@@ -274,6 +281,8 @@ class LocalAssistant:
         intent, score = ranked[0]
         budget = parse_budget(question)
         codes = find_codes(question, toolbox)
+        if intent == "weather" and not weather_topic(question):
+            score = 0.0            # "bugün hava nasıl" gibi genel hava sorusu bu uygulamanın konusu değil
         if score < self.THRESHOLD or not self.model.content_overlap(question, intent) or (len(ranked) > 1 and score - ranked[1][1] < 0.02 and score < 0.5):
             if budget and mem.intent in ("budget", "scenario", "start"):
                 intent = "budget"           # "peki 3 milyon olursa?"
@@ -314,7 +323,7 @@ class LocalAssistant:
     def _unknown(self, question: str = "", mem: Memory | None = None, ranked=None) -> str:
         if mem is not None:
             mem.unknown, mem.pending_unknown = question, question
-            mem.suggest = [i for i, sc in (ranked or [])[:3] if sc >= 0.15 and i != "greet" and self.model.content_overlap(question, i)][:3]
+            mem.suggest = [i for i, sc in (ranked or [])[:3] if sc >= 0.15 and i != "greet" and self.model.content_overlap(question, i) and (i != "weather" or weather_topic(question))][:3]
             if mem.suggest:
                 return "Tam emin olamadım. Aşağıdakilerden birini mi kastettin? Seçersen bunu öğrenirim."
         return ("Bunu tam anlayamadım. Şunları cevaplayabilirim:\n\n"
@@ -324,6 +333,24 @@ class LocalAssistant:
                 "- Rakamların kaynağı ve kanıt düzeyi, “neden?” soruları\n- Karşılaştırma (iki bina, elektrik–doğalgaz, ay–yıl)\n"
                 "- İşlem: proje durumunu değiştirme, sayfa açma, senaryo seçme, rapor üretme\n\n"
                 "Örnek: “2 milyon ₺ bütçeyle ne yapmalıyım?” Anlamadığım soruları Asistan > Eğitim sekmesinde bana öğretebilirsin.")
+
+    def a_weather(self, q, t, b, c):
+        d = json.loads(t.run("get_weather_adjusted", {}))
+        if "hata" in d:
+            return d["hata"] + " Konumu bina düzenleme ekranından girin; hava verisi ilk açılışta internetten bir kez indirilir."
+        lines = []
+        for name, u in d["turler"].items():
+            if not u["ham_kwh"] or not any(u["ham_kwh"].values()):
+                continue
+            lines.append(f"- **{name}**: " + (f"R² {u['r2']:.2f}, {u['not']}" if u["kullanilabilir"] else f"düzeltilemedi ({u['not']})"))
+        ch_raw, ch_norm = d["ham_degisim_yuzde"], d["duzeltilmis_degisim_yuzde"]
+        head = (f"Hava düzeltmesi güveni **{d['guven']}**. {d['yil']} toplam tüketim ham {_n(d['ham_toplam_kwh'] / 1000)} MWh, "
+                f"son {d['normal_yil_sayisi']} yılın ortalama iklimine göre **{_n(d['duzeltilmis_toplam_kwh'] / 1000)} MWh**.")
+        if ch_raw is not None and ch_norm is not None:
+            head += (f"\n\nGeçen yıla göre değişim: ham **%{ch_raw:+.1f}**, hava düzeltmeli **%{ch_norm:+.1f}**. "
+                     + ("Fark küçük: değişimin çoğu gerçek." if abs(ch_raw - ch_norm) < 1 else
+                        f"Aradaki {abs(ch_raw - ch_norm):.1f} puan iklimden geliyor; gerçek verimlilik değişimi düzeltilmiş rakamdır."))
+        return head + "\n\n" + "\n".join(lines) + "\n\nYöntem: aylık tüketim ~ taban + ısıtma·HDD + soğutma·CDD regresyonu (IPMVP yaklaşımı, kanıt düzeyi ikincil)."
 
     def a_quality(self, q, t, b, c):
         d = json.loads(t.run("get_data_quality", {}))

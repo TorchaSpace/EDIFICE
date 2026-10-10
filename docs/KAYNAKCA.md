@@ -22,6 +22,9 @@ Bu dosya `edifice/evidence.py` kaydından üretilir (`python tools/make_docs.py`
 | Sınıf | Benzer binalara göre yüzdelik | log-normal model, σ=0,35 | Varsayım | ES_SCORE | Medyan = kıyas değeri; dağılım şekli varsayımdır, ENERGY STAR regresyon kullanır. |
 | Skor | Health Score yöntemi | 4 bileşen, ağırlıklı ortalama | Özet okundu | JRC2008 | Normalizasyon eşikleri ve ağırlıklar uzman kararıdır; skor ağırlık duyarlılığı aralığıyla birlikte gösterilir. |
 | Skor | Ekipman ömrü | Tür başına 15-30 yıl | İkincil aktarım | ASHRAE_LIFE | Soğutucu, kazan, santral ve pompa için ayrı ömür kullanılır. |
+| Hava | Hava normalizasyonu yöntemi | aylık tüketim = a + b·HDD + c·CDD (b,c ≥ 0) | İkincil aktarım | IPMVP, OPENMETEO | Derece-gün regresyonu; R² < 0,3 ise düzeltme yapılmaz, 0,6 üstü “güvenilir” sayılır (eşikler varsayımdır). Normal yıl: son 10 tam yılın aylık ortalaması. |
+| Hava | Isıtma derece-gün taban sıcaklığı | 15 °C | Varsayım | - | Günlük ortalama sıcaklığın bu değerin altı ısıtma yükü sayılır; kaynak doğrulanmadı, binaya göre değişir. |
+| Hava | Soğutma derece-gün taban sıcaklığı | 22 °C | Varsayım | - | Günlük ortalama sıcaklığın bu değerin üstü soğutma yükü sayılır; kaynak doğrulanmadı, binaya göre değişir. |
 | Finans | İskonto oranı | %8,0 (reel) | Varsayım | EU244 | AB metodolojisi reel oran ve en az iki oranla duyarlılık analizi ister (makroekonomik referans reel %3); finansal oranın değeri belirtilmez. Duyarlılık tablosunda %3 ve ±2 puan gösterilir. |
 | Finans | Enerji fiyat artışı | %3,0 (reel) | Varsayım | - | Kaynak yok; duyarlılık tablosunda %0 senaryosu var. |
 | Finans | Analiz süresi | 20 yıl | Kaynak okundu | EU244 | AB 244/2012: ticari konut dışı binalar için 20 yıl, konut ve kamu binaları için 30 yıl. |
@@ -39,6 +42,22 @@ Bu dosya `edifice/evidence.py` kaydından üretilir (`python tools/make_docs.py`
 | Yoğuşmalı kazan | %7.0 | %12.0 | %21.0 | İkincil aktarım | MNCEE_BOILER | Nominal verimi %70-82 olan eski kazandan, ölçülen ortalama %88,6'ya (MnCEE, 12 bina) geçişte yakıt tasarrufu 1-η_eski/η_yeni = %7-21 (η=%78 için %12). Gazın ısıtmaya gittiği varsayımı. |
 
 ## Kaynakça
+
+### OPENMETEO (İkincil aktarım)
+
+Open-Meteo Historical Weather API (günlük ortalama sıcaklık, geçmiş hava verisi).
+
+Hava verisi hizmeti belgesi; veri yeniden analiz tabanlıdır, istasyon ölçümü değildir. Ücretsiz kullanım ticari olmayan amaçlıdır; ticari dağıtımda ücretli plan ya da kendi barındırma gerekir.
+
+https://open-meteo.com/en/docs/historical-weather-api
+
+### IPMVP (İkincil aktarım)
+
+Efficiency Valuation Organization (EVO), International Performance Measurement and Verification Protocol (IPMVP).
+
+Tüketimi hava gibi etkenlere göre regresyonla düzeltmenin tasarruf doğrulamasında kabul gören yöntem olduğu genel bilgisi; belgenin ayrıntıları bu çalışmada doğrudan okunmadı.
+
+https://evo-world.org/en/products-services-mainmenu-en/protocols/ipmvp
 
 ### ES2024 (Kaynak okundu)
 
