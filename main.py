@@ -56,6 +56,18 @@ def main():
         from pathlib import Path
         from edifice.excel_io import build_template, read_workbook
         from edifice.ui.report_pdf import build_pdf
+        from PySide6.QtGui import QFontDatabase
+        assert {"Manrope", "DM Mono"} <= set(QFontDatabase.families()), "gömülü yazı tipleri yüklenmedi"
+        import numpy as _np                                   # hava/M&V motoru numpy ister: paketlenmiş uygulamada da çalışmalı
+        from datetime import date as _d, timedelta as _td
+        from edifice import weather as _w
+        from edifice.engine.weather_norm import normalize as _norm
+        from edifice.geocode import parse as _gparse          # QtNetwork/JSON yolları
+        from edifice.solar import parse_pvgis as _pv
+        assert _np.__version__ and _gparse(b"{}") == [] and _pv(b"{}") is None
+        daily = [(_d(2013, 1, 1) + _td(days=i), 14 - 10 * _np.cos(2 * _np.pi * (i % 365 - 15) / 365)) for i in range(365 * 14)]
+        dd = _w.monthly_degree_days(daily)
+        assert _norm(win.project, dd) is not None
         with tempfile.TemporaryDirectory() as d:        # Excel şablonu + içe aktarma + PDF paketli uygulamada da çalışmalı
             xlsx = build_template(str(Path(d) / "t.xlsx"), example=True)
             read_workbook(xlsx)

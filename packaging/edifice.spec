@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(SPECPATH).parent
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 mac, win = sys.platform == "darwin", sys.platform.startswith("win")
 
 EXCLUDES = [  # uygulamanın kullanmadığı büyük Qt modülleri
@@ -15,7 +15,7 @@ EXCLUDES = [  # uygulamanın kullanmadığı büyük Qt modülleri
     "PySide6.QtLocation", "PySide6.QtPositioning", "PySide6.QtSql", "PySide6.QtTest", "PySide6.QtDesigner",
     "PySide6.QtHelp", "PySide6.QtOpenGL", "PySide6.QtSvg", "PySide6.QtSvgWidgets", "PySide6.QtRemoteObjects",
     "PySide6.QtSerialPort", "PySide6.QtSpatialAudio", "PySide6.QtTextToSpeech", "PySide6.QtScxml", "PySide6.QtStateMachine",
-    "tkinter", "matplotlib", "numpy", "pandas", "scipy",
+    "tkinter", "matplotlib", "pandas", "scipy",      # numpy KALMALI: hava/M&V motoru kullanıyor
 ]
 
 a = Analysis([str(ROOT / "main.py")], pathex=[str(ROOT)],
