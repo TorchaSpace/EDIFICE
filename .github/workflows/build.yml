@@ -41,12 +41,24 @@ jobs:
         run: |
           $ver = python -c "import edifice;print(edifice.__version__)"
           Compress-Archive -Path dist/EDIFICE -DestinationPath "dist/EDIFICE-$ver-windows-x64-portable.zip"
+      - name: Single-file exe (no installer, no extra folder)
+        shell: pwsh
+        run: |
+          $ver = python -c "import edifice;print(edifice.__version__)"
+          pyinstaller packaging/edifice_onefile.spec --noconfirm --log-level WARN
+          & "dist/EDIFICE-portable.exe" --selftest
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Move-Item dist/EDIFICE-portable.exe "dist/EDIFICE-$ver-windows-x64.exe"
+        env:
+          QT_QPA_PLATFORM: offscreen
+          EDIFICE_DB: ${{ runner.temp }}/selftest_onefile.db
       - uses: actions/upload-artifact@v4
         with:
           name: windows
           path: |
             dist/EDIFICE-Setup-*.exe
             dist/EDIFICE-*-portable.zip
+            dist/EDIFICE-*-windows-x64.exe
 
   macos:
     runs-on: macos-14   # Apple Silicon (arm64)

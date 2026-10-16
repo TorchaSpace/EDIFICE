@@ -1,6 +1,6 @@
-; Inno Setup betiği: Windows kurulum dosyası (EDIFICE-Setup.exe). Kullanım: iscc /DMyVersion=1.2.0 packaging\\installer.iss
+; Inno Setup betiği: Windows kurulum dosyası (EDIFICE-Setup.exe). Kullanım: iscc /DMyVersion=1.2.1 packaging\\installer.iss
 #ifndef MyVersion
-  #define MyVersion "1.2.0"
+  #define MyVersion "1.2.1"
 #endif
 [Setup]
 AppId={{6E3A1F0B-7C41-4C2D-9B55-ED1F1C3E0001}

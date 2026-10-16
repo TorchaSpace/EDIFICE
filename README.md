@@ -41,7 +41,7 @@ Harita karoları, adres önerileri, geçmiş/canlı hava ve güneş verisi ilk k
 
 ## Kurulum dosyaları (Windows ve Mac)
 - **macOS (Apple Silicon):** `EDIFICE-<sürüm>-macOS-arm64.dmg`: aç, EDIFICE'yi Applications'a sürükle. İmzasız olduğu için ilk açılışta sağ tık > Aç gerekir.
-- **Windows (64 bit):** önerilen `EDIFICE-Setup-<sürüm>.exe` (kurulum sihirbazı). Taşınabilir `...-portable.zip` için zip'i **tamamen ayıklayın** ve klasörün içindeki `EDIFICE.exe`'yi açın; `EDIFICE.exe`'yi tek başına taşımayın (yanındaki `_internal` klasörü olmadan «failed to load python DLL» hatası verir). SmartScreen uyarısında "Ek bilgi > Yine de çalıştır".
+- **Windows (64 bit), en basiti:** `EDIFICE-<sürüm>-windows-x64.exe` tek dosyadır; indirip çift tıklamanız yeter (kurulum/ek klasör yok; ilk açılış birkaç saniye sürer). Alternatif: önerilen `EDIFICE-Setup-<sürüm>.exe` (kurulum sihirbazı). Taşınabilir `...-portable.zip` için zip'i **tamamen ayıklayın** ve klasörün içindeki `EDIFICE.exe`'yi açın; `EDIFICE.exe`'yi tek başına taşımayın (yanındaki `_internal` klasörü olmadan «failed to load python DLL» hatası verir). SmartScreen uyarısında "Ek bilgi > Yine de çalıştır".
 - Üretim: `packaging/build_mac.sh`, `packaging\build_windows.bat`; ya da `v*` etiketi atınca GitHub Actions (`.github/workflows/build.yml`) testleri çalıştırır, paketler ve Release'e yükler.
 
 ## Yazı tipleri
