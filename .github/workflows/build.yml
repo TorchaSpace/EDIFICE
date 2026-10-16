@@ -46,8 +46,8 @@ jobs:
         run: |
           $ver = python -c "import edifice;print(edifice.__version__)"
           pyinstaller packaging/edifice_onefile.spec --noconfirm --log-level WARN
-          & "dist/EDIFICE-portable.exe" --selftest
-          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $p = Start-Process -FilePath "dist/EDIFICE-portable.exe" -ArgumentList "--selftest" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { exit 1 }
           Move-Item dist/EDIFICE-portable.exe "dist/EDIFICE-$ver-windows-x64.exe"
         env:
           QT_QPA_PLATFORM: offscreen
