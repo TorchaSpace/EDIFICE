@@ -18,6 +18,7 @@ from .building_dialog import BuildingDialog
 from .report_pdf import build_pdf
 from .method_page import MethodPage
 from .climate_page import ClimateLoader, ClimatePage
+from .incentives_page import IncentivesPage
 from .price_page import PricePage
 from .solar_page import SolarLoader, SolarPage
 from .weather_loader import WeatherLoader
@@ -203,7 +204,7 @@ class MainWindow(QMainWindow):
         self.pages = [("Genel Bakış", TabsPage([("Genel Bakış", sub["Genel Bakış"]), ("Tüketim", sub["Tüketim"]), ("İklim", sub["İklim"])])),
                       ("Portföy", PortfolioPage(self.store, self.open_building, self.search.text().strip())),
                       ("Projeler", TabsPage([("Öneriler", sub["Öneriler"]), ("Proje takibi", sub["Proje takibi"]), ("Mevcut vs Hedef", sub["Mevcut vs Hedef"])])),
-                      ("Finans", TabsPage([("Portföy finansı", FinancePage(self.store, self.open_building)), ("Güneş enerjisi (GES)", sub["GES"]), ("Birim fiyat analizi", PricePage(project))])),
+                      ("Finans", TabsPage([("Portföy finansı", FinancePage(self.store, self.open_building)), ("Güneş enerjisi (GES)", sub["GES"]), ("Birim fiyat analizi", PricePage(project)), ("Teşvik bulucu", IncentivesPage(project, self.store))])),
                       ("Ortaklar", ComingSoonPage("Ortaklar", "Ortaklar",
                                                   "Uygulayıcı firma ve ortak yönetimi için bina verisinden bağımsız bir ortak/teklif kaydı gerekir. "
                                                   "MVP tek bina analizine odaklandığı için bu modül sonraki fazda eklenecek.")),

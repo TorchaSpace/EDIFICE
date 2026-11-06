@@ -281,3 +281,19 @@ def test_export_packs_write_files(tmp_path, monkeypatch):
         monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, o=out, **k: (str(o), "")))
         w.export_pack(kind)
         assert load_workbook(out).sheetnames
+
+
+def test_incentives_page_opens_and_saves(tmp_path):
+    _app()
+    from edifice.db import Store
+    from edifice.ui.incentives_page import IncentivesPage
+    st = Store(str(tmp_path / "i.db"))
+    bid = st.seed_demo()
+    pr = st.load_project(bid)
+    st.save_scenario(bid, ["LED", "VFD"])
+    pg = IncentivesPage(pr, st)
+    assert pg.rows and "KALKINMA_AJANS" in pg.rows
+    pct, cap, ok = pg.rows["KALKINMA_AJANS"]
+    pct.setValue(20)
+    ok.setChecked(True)
+    assert st.load_incentive_terms()["KALKINMA_AJANS"].grant_pct == 0.2

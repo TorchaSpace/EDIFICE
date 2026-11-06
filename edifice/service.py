@@ -106,6 +106,15 @@ class Project:
         s = self.scenario(codes, mode)
         return analyze(s.capex, s.annual_saving, assumptions or self.assumptions)
 
+    def finance_with_grants(self, codes: list[str], terms: dict, include_solar: bool = False):
+        """Kullanıcının girdiği hibe oranlarıyla düşülmüş CAPEX üzerinden finans. -> (FinanceResult, GrantResult, [Match])"""
+        from .engine.incentives import apply_grants, find_matches
+        s = self.scenario(codes)
+        capex_by = {o.code: o.capex_per_m2 * self.building.floor_area_m2 for o in s.selected}
+        matches = find_matches(list(capex_by) + (["GES"] if include_solar else []), self.building.use_type)
+        g = apply_grants(capex_by, matches, terms)
+        return analyze(g.capex_after, s.annual_saving, self.assumptions), g, matches
+
     def sensitivity(self, codes: list[str]) -> list[tuple[str, FinanceResult]]:
         """Duyarlılık analizi (AB 244/2012 metodolojisinin istediği gibi): tasarruf aralığı, iskonto, fiyat artışı, tasarruf kaybı."""
         from dataclasses import replace

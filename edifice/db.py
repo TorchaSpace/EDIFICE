@@ -42,6 +42,8 @@ CREATE TABLE IF NOT EXISTS ai_unknown (id INTEGER PRIMARY KEY AUTOINCREMENT, que
 CREATE TABLE IF NOT EXISTS ai_examples (id INTEGER PRIMARY KEY AUTOINCREMENT, intent TEXT NOT NULL, text TEXT NOT NULL UNIQUE);
 CREATE TABLE IF NOT EXISTS scenarios (
   building_id INTEGER PRIMARY KEY REFERENCES buildings(id) ON DELETE CASCADE, codes TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS incentive_terms (
+  program TEXT PRIMARY KEY, grant_pct REAL NOT NULL DEFAULT 0, cap REAL, verified INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS equipment (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   building_id INTEGER NOT NULL REFERENCES buildings(id) ON DELETE CASCADE,
@@ -290,6 +292,14 @@ class Store:
     def load_projects(self, bid: int) -> dict[str, tuple[str, int]]:
         return {c: (s, y) for c, s, y in self.conn.execute(
             "SELECT code,status,year FROM projects WHERE building_id=?", (bid,))}
+
+    def save_incentive_terms(self, program: str, grant_pct: float, cap: float | None, verified: bool):
+        with self.conn:
+            self.conn.execute("INSERT OR REPLACE INTO incentive_terms VALUES (?,?,?,?)", (program, grant_pct, cap, int(verified)))
+
+    def load_incentive_terms(self) -> dict:
+        from .engine.incentives import Terms
+        return {p: Terms(g, c, bool(v)) for p, g, c, v in self.conn.execute("SELECT program,grant_pct,cap,verified FROM incentive_terms")}
 
     def save_scenario(self, bid: int, codes: list[str]):
         with self.conn:
