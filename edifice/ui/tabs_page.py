@@ -5,7 +5,7 @@ from PySide6.QtWidgets import QButtonGroup, QHBoxLayout, QLabel, QPushButton, QV
 
 from ..models import UtilityType  # noqa: F401  (yer tutucu sayfalar için gerekmiyor, import döngüsünü önler)
 from .pages import _page
-from .widgets import SUB, FadeStack, Panel, header
+from .widgets import SUB, FadeStack, Panel, header, muted
 
 
 class TabsPage:
@@ -62,7 +62,7 @@ class ComingSoonPage:
 class ReportPage:
     """Raporlar: seçili bina için PDF raporu üretir."""
 
-    def __init__(self, project, on_export, on_pack=None):
+    def __init__(self, project, on_export, on_pack=None, store=None):
         self.widget, lay = _page()
         lay.addWidget(header("Raporlar", "Yatırımcı raporu", f"{project.building.name} için tek sayfalık PDF"))
         p = Panel(eyebrow="PDF", title="Raporu oluştur",
@@ -96,4 +96,33 @@ class ReportPage:
         packs.lay.addSpacing(6)
         packs.lay.addLayout(pr)
         lay.addWidget(packs)
+        self.store, self.project = store, project
+        if store is not None:
+            self.hist = Panel(eyebrow="Geçmiş", title="Üretilen raporlar", subtitle="Bu bilgisayarda oluşturduğunuz raporların kaydı; dosyaya tıklayarak açabilirsiniz.")
+            lay.addWidget(self.hist)
+            self.refresh_history()
         lay.addStretch()
+
+
+    def refresh_history(self):
+        """Rapor geçmişi: bu bina ve portföy raporları, yeniden eskiye. Dosya taşınmışsa «bulunamadı» yazar."""
+        import os
+        from PySide6.QtCore import QUrl
+        from PySide6.QtGui import QDesktopServices
+        from PySide6.QtWidgets import QPushButton
+        lay = self.hist.lay
+        while lay.count() > 3:
+            it = lay.takeAt(3)
+            if it.widget():
+                it.widget().deleteLater()
+        rows = [r for r in self.store.list_records("report_log") if r["building_id"] in (None, self.project.building_id)][:12]
+        if not rows:
+            lay.addWidget(muted("Henüz rapor üretilmedi."))
+        for r in rows:
+            exists = os.path.exists(r["path"] or "")
+            b = QPushButton(f"{r['created_at'][:16]}   {r['kind']}   {os.path.basename(r['path'] or '')}" + ("" if exists else "   (dosya bulunamadı)"))
+            b.setObjectName("export")
+            b.setEnabled(exists)
+            b.setStyleSheet("text-align: left; padding: 8px 12px;")
+            b.clicked.connect(lambda _=False, p=r["path"]: QDesktopServices.openUrl(QUrl.fromLocalFile(p)))
+            lay.addWidget(b)

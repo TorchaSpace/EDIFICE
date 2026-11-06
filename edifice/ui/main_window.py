@@ -19,6 +19,7 @@ from .report_pdf import build_pdf
 from .method_page import MethodPage
 from .climate_page import ClimateLoader, ClimatePage
 from .incentives_page import IncentivesPage
+from .records_pages import CertificatesPage, FinancingPage, PartnersPage
 from .load_page import LoadPage
 from .price_page import PricePage
 from .solar_page import SolarLoader, SolarPage
@@ -202,20 +203,19 @@ class MainWindow(QMainWindow):
         sub["Eğitim"] = TrainingPage(self.store, sub["Sohbet"].reload_ai)
         sub["GES"] = SolarPage(project, self.store)
         sub["İklim"] = ClimatePage(project, self.store, self._refresh_climate)
+        self.report_page = ReportPage(project, self.export_report, self.export_pack, self.store)
         self.pages = [("Genel Bakış", TabsPage([("Genel Bakış", sub["Genel Bakış"]), ("Tüketim", sub["Tüketim"]), ("İklim", sub["İklim"])])),
                       ("Portföy", PortfolioPage(self.store, self.open_building, self.search.text().strip())),
                       ("Projeler", TabsPage([("Öneriler", sub["Öneriler"]), ("Proje takibi", sub["Proje takibi"]), ("Mevcut vs Hedef", sub["Mevcut vs Hedef"])])),
-                      ("Finans", TabsPage([("Portföy finansı", FinancePage(self.store, self.open_building)), ("Güneş enerjisi (GES)", sub["GES"]), ("Birim fiyat analizi", PricePage(project)), ("Yük profili ve tarife", LoadPage(project, self.store)), ("Teşvik bulucu", IncentivesPage(project, self.store))])),
-                      ("Ortaklar", ComingSoonPage("Ortaklar", "Ortaklar",
-                                                  "Uygulayıcı firma ve ortak yönetimi için bina verisinden bağımsız bir ortak/teklif kaydı gerekir. "
-                                                  "MVP tek bina analizine odaklandığı için bu modül sonraki fazda eklenecek.")),
+                      ("Finans", TabsPage([("Portföy finansı", FinancePage(self.store, self.open_building)), ("Güneş enerjisi (GES)", sub["GES"]), ("Birim fiyat analizi", PricePage(project)), ("Yük profili ve tarife", LoadPage(project, self.store)), ("Teşvik bulucu", IncentivesPage(project, self.store)), ("Finansman karması", FinancingPage(project, self.store))])),
+                      ("Ortaklar", TabsPage([("Ortaklar", PartnersPage(self.store))])),
                       ("Asistan", TabsPage([("Sohbet", sub["Sohbet"]),
                                             ("Eğitim", sub["Eğitim"]), ("Otomatik bulgular", AssistantPage(project))])),
                       ("Digital Twin", ComingSoonPage("Digital Twin", "Digital Twin",
                                                       "Dijital ikiz için BIM modeli ve canlı sensör (IoT/BMS) verisi gerekir; bunlar MVP kapsamı dışında "
                                                       "olduğundan sonraki fazda eklenecek.")),
-                      ("Sürdürülebilirlik", EsgPage(self.store, self.open_building)),
-                      ("Raporlar", TabsPage([("Rapor", ReportPage(project, self.export_report, self.export_pack)),
+                      ("Sürdürülebilirlik", TabsPage([("Karbon ve hedefler", EsgPage(self.store, self.open_building)), ("Sertifikalar", CertificatesPage(project, self.store))])),
+                      ("Raporlar", TabsPage([("Rapor", self.report_page),
                                              ("Kaynaklar ve Yöntem", sub["Kaynaklar ve Yöntem"])])),
                       ("Ayarlar", TabsPage([("Ayarlar", sub["Ayarlar"])]))]
         self.idx = {n: i for i, (n, _) in enumerate(self.pages)}
@@ -551,6 +551,9 @@ class MainWindow(QMainWindow):
             rx.build_portfolio_workbook(list(self._all_projects().values()), path)
         else:
             fn(self.project, path)
+        self.store.add_record("report_log", {"building_id": None if kind == "portfoy" else self.project.building_id,
+                                             "kind": {"esg": "ESG veri paketi", "ekb": "EKB hazırlık sayfası", "portfoy": "Portföy özeti"}[kind], "path": path})
+        self.report_page.refresh_history()
         QDesktopServices.openUrl(QUrl.fromLocalFile(path))
 
     def export_report(self):
@@ -560,6 +563,7 @@ class MainWindow(QMainWindow):
         if not path:
             return
         build_pdf(self.project, codes, path)
+        self.store.add_record("report_log", {"building_id": self.project.building_id, "kind": "PDF yatırımcı raporu", "path": path})
         QDesktopServices.openUrl(QUrl.fromLocalFile(path))
 
 
