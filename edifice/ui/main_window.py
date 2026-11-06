@@ -244,6 +244,7 @@ class MainWindow(QMainWindow):
         if self.project.building_id is not None:
             menu.addAction("⇪  Tüketimi içe aktar (CSV / Excel)…").triggered.connect(self.import_consumption)
             menu.addAction("⇩  Örnek CSV indir").triggered.connect(self.download_sample_csv)
+            menu.addAction("🧾  Faturadan oku (PDF / fotoğraf)…").triggered.connect(self.import_invoices)
         if self.project.building_id is not None:
             menu.addAction("✎  Bu binayı düzenle").triggered.connect(self.edit_building)
         if self.store.count() > 1 and self.project.building_id is not None:
@@ -318,6 +319,48 @@ class MainWindow(QMainWindow):
             + (("\n\nUyarılar:\n•  " + "\n•  ".join(shown) + more) if shown else "") + "\n\nİçe aktarılsın mı?")
         box.setStandardButtons(QMessageBox.Yes | QMessageBox.Cancel)
         box.button(QMessageBox.Yes).setText("İçe aktar")
+        box.button(QMessageBox.Cancel).setText("Vazgeç")
+        if box.exec() != QMessageBox.Yes:
+            return
+        self.store.update_building(self.project.building_id, self.project.building, merged, self.project.equipment)
+        self.set_project(self.store.load_project(self.project.building_id))
+
+    def import_invoices(self):
+        """Fatura PDF/fotoğraflarını okur -> dosya dosya ne okunduğunu gösterir -> onayla -> birleştirir."""
+        from ..bulk_import import merge_readings
+        from ..invoice import read_invoices
+        from ..models import UTILITY_UNITS
+        from ..quality import assess
+        paths, _ = QFileDialog.getOpenFileNames(self, "Fatura dosyalarını seç", "", "Fatura (*.pdf *.png *.jpg *.jpeg *.tif *.tiff)")
+        if not paths:
+            return
+        readings, items = read_invoices(paths, self.project.assumptions.default_tariffs)
+        box = QMessageBox(self)
+        box.setWindowTitle("Faturadan oku")
+        lines = []
+        for it in items:
+            if it.complete:
+                cost = f"{it.cost:,.0f} ₺".replace(",", ".") if it.cost is not None else "tutar yok (tarifeyle tahmin)"
+                lines.append(f"✓ {it.source}: {it.month}/{it.year} {it.utility.value} {it.consumption:,.0f} {UTILITY_UNITS[it.utility]}, {cost}".replace(",", "."))
+            else:
+                lines.append(f"✗ {it.source}: okunamadı")
+            lines += [f"      – {w}" for w in it.warnings[:3]]
+        if not readings:
+            box.setIcon(QMessageBox.Warning)
+            box.setText("Faturalardan kayıt okunamadı")
+            box.setInformativeText("\n".join(lines[:16]) + "\n\nİpucu: metin katmanlı PDF en iyi sonucu verir; fotoğraf için Tesseract OCR kurulu olmalı.")
+            box.exec()
+            return
+        merged, added, replaced = merge_readings(self.project.readings, readings)
+        before = assess(self.project)
+        after = assess(Project(self.project.building, merged, self.project.equipment, [], self.project.assumptions))
+        box.setIcon(QMessageBox.Question)
+        box.setText(f"{len(readings)} fatura kaydı okundu")
+        box.setInformativeText("\n".join(lines[:16]) + f"\n\nYeni: {added} · değişecek: {replaced}\n"
+                               f"Veri güvenilirliği: {before.score:.0f} ({before.level}) → {after.score:.0f} ({after.level})\n"
+                               "Rakamları faturayla karşılaştırın. Eklensin mi?")
+        box.setStandardButtons(QMessageBox.Yes | QMessageBox.Cancel)
+        box.button(QMessageBox.Yes).setText("Ekle")
         box.button(QMessageBox.Cancel).setText("Vazgeç")
         if box.exec() != QMessageBox.Yes:
             return
