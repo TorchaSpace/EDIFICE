@@ -11,7 +11,7 @@ import io
 import re
 import statistics
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from .. import bulk_import as bi
 

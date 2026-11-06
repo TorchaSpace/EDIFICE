@@ -8,7 +8,7 @@ from ..db import Store
 from ..service import Project
 from .pages import _page
 from .records import RecordsPanel
-from .widgets import AMBER, G, INDIGO, MUTED, RED, SUB, TEXT, Card, Panel, fmt, header, muted, qfont, rgba
+from .widgets import AMBER, G, INDIGO, RED, SUB, TEXT, Card, Panel, fmt, header, muted, qfont
 
 PARTNER_CATS = ["Enerji hizmetleri (ESCO)", "HVAC", "Aydınlatma", "Yalıtım / cephe", "GES", "Otomasyon / BMS", "Danışmanlık / etüt", "Finansman", "Diğer"]
 CERT_SCHEMES = ["Enerji Kimlik Belgesi (EKB)", "BREEAM", "LEED", "DGNB", "Yeşil Bina (Türkiye)", "ISO 50001", "ISO 14001", "Diğer"]

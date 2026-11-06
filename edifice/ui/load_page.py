@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QDoubleSpinBox, QFileDialog, QHBoxLayout, QLabel, QMessageBox, QPushButton
+from PySide6.QtWidgets import QDoubleSpinBox, QFileDialog, QHBoxLayout, QMessageBox, QPushButton
 
 from ..db import Store
 from ..engine.loadprofile import BANDS, DEFAULT_RATIOS, analyze, compare_tariffs, parse_interval_file
