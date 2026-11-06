@@ -109,3 +109,52 @@ def test_ui_panel_imports_and_reports_stranding(tmp_path, monkeypatch):
 def json_sel(st, bid):
     import json
     return json.loads(st.get_setting(f"crrem_sel_{bid}"))
+
+
+def test_tolerant_sheet_names_and_codes(tmp_path):
+    wb = Workbook()
+    for name, metric in (("Energy intensity", "kWh-Int"), ("CO2 pathway", "GHG-Int")):
+        s = wb.create_sheet(name)
+        s.append([])
+        s.append(["year", "GR.OFF." + metric, "BG.HOT"])
+        for y in range(2020, 2051):
+            s.append([y, 100.0 - (y - 2020), 80.0])
+    wb.save(tmp_path / "t.xlsx")
+    d = parse(str(tmp_path / "t.xlsx"))
+    assert d.countries == ["BG", "GR"] and set(d.types) == {"HOT", "OFF"}
+    assert d.pathways["kwh"][("GR", "OFF")][2030] == 90.0 and ("BG", "HOT") in d.pathways["ghg"]
+
+
+def test_summary_proxies_and_find_candidates(tmp_path):
+    from edifice.crrem import find_candidates, suggest_proxies, summary
+    d = parse(synthetic_workbook(str(tmp_path / "CRREM_Global_Pathways_v2.xlsx")))
+    sm = summary(d)
+    assert sm["years"] == (2020, 2050) and sm["countries"] == 2 and sm["has_turkey"] is False and sm["version"].startswith("Version")
+    assert suggest_proxies(["DE", "ES", "GR"]) == ["GR", "ES"] and suggest_proxies(["DE"]) == []
+    (tmp_path / "baska.xlsx").write_text("x")
+    (tmp_path / "~$crrem.xlsx").write_text("x")
+    assert find_candidates([str(tmp_path)]) == [str(tmp_path / "CRREM_Global_Pathways_v2.xlsx")]
+    assert find_candidates([str(tmp_path / "yok")]) == []
+
+
+def test_drop_event_imports(tmp_path, monkeypatch):
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtCore import QMimeData, QUrl
+    from PySide6.QtWidgets import QApplication, QMessageBox
+    from edifice.ui.crrem_panel import CrremPanel
+    QApplication.instance() or QApplication([])
+    st = Store(":memory:")
+    panel = CrremPanel(st, [], {}, {}, 2025)
+    monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: None))
+    path = synthetic_workbook(str(tmp_path / "crrem.xlsx"))
+    panel.import_path(path)
+    assert st.crrem_meta()["file"] == "crrem.xlsx"
+    st.clear_crrem()
+    mime = QMimeData()
+    mime.setUrls([QUrl.fromLocalFile(path)])
+    class E:
+        def mimeData(self): return mime
+        def acceptProposedAction(self): pass
+    panel.dropEvent(E())
+    assert st.crrem_meta() is not None

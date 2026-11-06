@@ -5,7 +5,7 @@ import json
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QCheckBox, QFileDialog, QHBoxLayout, QLabel, QMessageBox, QPushButton, QVBoxLayout, QWidget
 
-from ..crrem import CrremError, parse
+from ..crrem import CrremError, find_candidates, parse, suggest_proxies, summary
 from ..engine.stranding import analyze
 from ..models import UtilityType
 from .dropdown import PremiumCombo
@@ -26,6 +26,7 @@ class CrremPanel(Panel):
                          subtitle="CRREM verisi bu uygulamada YOKTUR ve dağıtılmaz: lisans koşulları gereği dosyayı crrem.org'dan kendiniz indirip içe aktarırsınız; "
                                   "veri yalnız bu bilgisayarda kalır, kendi kararlarınızda kullanılır.")
         self.store, self.rows, self.kg, self.kwh, self.base_year = store, rows, per_building_kg, per_building_kwh, base_year
+        self.setAcceptDrops(True)
         self.body = QVBoxLayout()
         self.body.setSpacing(10)
         self.lay.addLayout(self.body)
@@ -51,6 +52,13 @@ class CrremPanel(Panel):
         imp.setMinimumHeight(34)
         imp.clicked.connect(self.import_file)
         top.addWidget(imp)
+        if not meta:
+            auto = QPushButton("İndirilenlerde otomatik bul")
+            auto.setObjectName("export")
+            auto.setCursor(Qt.PointingHandCursor)
+            auto.setMinimumHeight(34)
+            auto.clicked.connect(self.find_downloaded)
+            top.addWidget(auto)
         if meta:
             rm = QPushButton("Kaldır")
             rm.setObjectName("export")
@@ -67,7 +75,7 @@ class CrremPanel(Panel):
         self.body.addWidget(links)
         if not meta:
             self.body.addWidget(muted(
-                "1) Yukarıdaki sayfadan «CRREM Global Pathways» Excel dosyasını indirin (kayıt formu ve kullanım koşulları sizinle). "
+                "(Dosyayı bu panelin üzerine sürükleyip bırakabilirsiniz.)  1) Yukarıdaki sayfadan «CRREM Global Pathways» Excel dosyasını indirin (kayıt formu ve kullanım koşulları sizinle). "
                 "2) «İçe aktar»a basın. Not: CRREM'in bildiğimiz sürümlerinde Türkiye (TR) yoktur; vekil ülke seçmek sizin kararınızdır ve sonuçta belirtilir."))
             self._chart_box = None
             return
@@ -181,16 +189,46 @@ class CrremPanel(Panel):
 
     def import_file(self):
         path, _ = QFileDialog.getOpenFileName(self, "CRREM yol dosyasını seç", "", "Excel (*.xlsx *.xlsm)")
-        if not path:
+        if path:
+            self.import_path(path)
+
+    def find_downloaded(self):
+        """İndirilenler/Masaüstü içinde «crrem» adlı en yeni Excel'i bulup içe aktarır."""
+        found = find_candidates()
+        if not found:
+            QMessageBox.information(self, "CRREM dosyası bulunamadı",
+                                    "İndirilenler ve Masaüstü klasörlerinde adında «crrem» geçen Excel dosyası yok. "
+                                    "Dosyayı crrem.org'dan indirin ya da «içe aktar» ile elle seçin.")
             return
+        self.import_path(found[0])
+
+    def import_path(self, path: str):
         try:
             data = parse(path)
         except CrremError as e:
             QMessageBox.warning(self, "CRREM dosyası okunamadı", str(e))
             return
         n = self.store.import_crrem(data)
-        msg = f"{len(data.countries)} ülke/şehir kodu, {len(data.types)} mülk türü, {n} değer içe aktarıldı."
-        if "TR" not in data.countries and "TUR" not in data.countries:
-            msg += "\n\nBu dosyada Türkiye yok; vekil ülke seçimi sizin kararınızdır."
+        sm = summary(data)
+        msg = f"{sm['countries']} ülke/şehir kodu, {len(sm['types'])} mülk türü, {n} değer içe aktarıldı."
+        if sm["years"]:
+            msg += f"\nYıllar: {sm['years'][0]}–{sm['years'][1]}"
+        if sm["version"]:
+            msg += f" · {sm['version']}"
+        if not sm["has_turkey"]:
+            prox = suggest_proxies(data.countries)
+            msg += ("\n\nBu dosyada Türkiye yok; vekil ülke seçimi sizin kararınızdır."
+                    + (f" Coğrafi olarak yakın olabilecekler (yalnız ipucu): {', '.join(prox)}." if prox else ""))
         QMessageBox.information(self, "CRREM yolları içe aktarıldı", msg)
         self.rebuild()
+
+    # ---- sürükle-bırak
+    def dragEnterEvent(self, e):
+        if e.mimeData().hasUrls() and any(u.toLocalFile().lower().endswith((".xlsx", ".xlsm")) for u in e.mimeData().urls()):
+            e.acceptProposedAction()
+
+    def dropEvent(self, e):
+        for u in e.mimeData().urls():
+            if u.toLocalFile().lower().endswith((".xlsx", ".xlsm")):
+                self.import_path(u.toLocalFile())
+                break
