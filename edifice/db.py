@@ -42,6 +42,9 @@ CREATE TABLE IF NOT EXISTS ai_unknown (id INTEGER PRIMARY KEY AUTOINCREMENT, que
 CREATE TABLE IF NOT EXISTS ai_examples (id INTEGER PRIMARY KEY AUTOINCREMENT, intent TEXT NOT NULL, text TEXT NOT NULL UNIQUE);
 CREATE TABLE IF NOT EXISTS scenarios (
   building_id INTEGER PRIMARY KEY REFERENCES buildings(id) ON DELETE CASCADE, codes TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS interval_data (
+  building_id INTEGER NOT NULL REFERENCES buildings(id) ON DELETE CASCADE, ts TEXT NOT NULL, kw REAL NOT NULL,
+  PRIMARY KEY (building_id, ts));
 CREATE TABLE IF NOT EXISTS incentive_terms (
   program TEXT PRIMARY KEY, grant_pct REAL NOT NULL DEFAULT 0, cap REAL, verified INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS equipment (
@@ -292,6 +295,25 @@ class Store:
     def load_projects(self, bid: int) -> dict[str, tuple[str, int]]:
         return {c: (s, y) for c, s, y in self.conn.execute(
             "SELECT code,status,year FROM projects WHERE building_id=?", (bid,))}
+
+    def save_interval(self, bid: int, series) -> int:
+        """Aralıklı yükü (kW) bina için yazar; aynı zaman damgaları değişir. Adım süresi `settings`te tutulur."""
+        with self.conn:
+            self.conn.executemany("INSERT OR REPLACE INTO interval_data VALUES (?,?,?)",
+                                  [(bid, dt.isoformat(sep=" "), kw) for dt, kw in series.points])
+            self.conn.execute("INSERT OR REPLACE INTO settings VALUES (?, ?)", (f"interval_step_{bid}", repr(series.step_hours)))
+        return len(series.points)
+
+    def load_interval(self, bid: int):
+        from datetime import datetime as _dt
+        from .engine.loadprofile import Series
+        rows = self.conn.execute("SELECT ts,kw FROM interval_data WHERE building_id=? ORDER BY ts", (bid,)).fetchall()
+        step = float(self.get_setting(f"interval_step_{bid}", "1.0"))
+        return Series([(_dt.fromisoformat(t), k) for t, k in rows], step)
+
+    def clear_interval(self, bid: int):
+        with self.conn:
+            self.conn.execute("DELETE FROM interval_data WHERE building_id=?", (bid,))
 
     def save_incentive_terms(self, program: str, grant_pct: float, cap: float | None, verified: bool):
         with self.conn:
