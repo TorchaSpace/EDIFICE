@@ -12,7 +12,7 @@ from ..models import UtilityType
 from ..service import Project
 from .charts import AreaChart, BarChart, CashFlowChart, ClassScale, PercentileBar
 from .forms import SmoothSelectTable
-from .widgets import (AMBER, G, GRADE_COLORS, INDIGO, MUTED, RED, SUB, Card, Gauge, Panel, ScoreBar, badge, fmt,
+from .widgets import (SmoothScrollArea, AMBER, G, GRADE_COLORS, INDIGO, MUTED, RED, SUB, Card, Gauge, Panel, ScoreBar, badge, fmt,
                       fmt_years, header, muted, qfont, score_color, section)
 
 UTILITY_NAMES = {UtilityType.ELECTRICITY: "Elektrik", UtilityType.GAS: "Doğalgaz", UtilityType.WATER: "Su"}
@@ -30,7 +30,7 @@ def _page() -> tuple[QScrollArea, QVBoxLayout]:
     lay = QVBoxLayout(inner)
     lay.setContentsMargins(32, 26, 32, 36)
     lay.setSpacing(18)
-    area = QScrollArea()
+    area = SmoothScrollArea()
     area.setWidgetResizable(True)
     area.setWidget(inner)
     area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)

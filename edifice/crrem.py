@@ -34,9 +34,21 @@ class CrremData:
 
 
 def _header_row(rows):
-    for i, r in enumerate(rows[:12]):
-        if r and r[0] == "Year":
+    for i, r in enumerate(rows[:30]):
+        if r and isinstance(r[0], str) and r[0].strip().lower() == "year":
             return i
+    return None
+
+
+_CODE = re.compile(r"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]+)?\.[A-Za-z0-9_-]+(?:\..+)?$")        # ÜLKE.TÜR[.ölçüt]
+
+
+def _metric_of(sheet_name: str) -> str | None:
+    n = sheet_name.lower()
+    if "ghg" in n or "co2" in n or "carbon" in n:
+        return "ghg"
+    if "kwh" in n or "energy" in n or "eui" in n:
+        return "kwh"
     return None
 
 
@@ -56,7 +68,7 @@ def parse(path: str) -> CrremData:
         if "grid" in name:
             _parse_grid(rows, data)
             continue
-        metric = "ghg" if "ghg" in name else "kwh" if "kwh" in name else None
+        metric = _metric_of(name)
         if metric is None:
             continue
         hi = _header_row(rows)
@@ -68,8 +80,9 @@ def parse(path: str) -> CrremData:
                 continue
             year = int(r[0])
             for j, code in enumerate(header):
-                if j == 0 or not isinstance(code, str) or code.count(".") < 2:
+                if j == 0 or not isinstance(code, str) or not _CODE.match(code.strip()):
                     continue
+                code = code.strip()
                 v = r[j] if j < len(r) else None
                 if isinstance(v, (int, float)):
                     country, ptype = code.split(".")[0], code.split(".")[1]
@@ -92,3 +105,36 @@ def _parse_grid(rows, data: CrremData):
             for j, code in enumerate(header):
                 if j and code and j < len(r) and isinstance(r[j], (int, float)):
                     data.grid.setdefault(code, {})[int(r[0])] = float(r[j])
+
+
+# ---- kolaylık: özet, otomatik bulma, vekil ülke önerisi ----------------------------------------
+
+PROXY_PREFERENCE = ("GR", "BG", "RO", "IT", "ES", "CY", "PT", "HU", "HR")      # Türkiye'ye coğrafi/iklim olarak yakın olabilecekler; yalnız ipucu
+
+
+def summary(data: CrremData) -> dict:
+    """İçe aktarılan dosyanın kısa özeti: sürüm, yıl aralığı, ülke/tür sayısı, Türkiye var mı."""
+    years = sorted({y for d in data.pathways.values() for ys in d.values() for y in ys})
+    return {"version": data.version, "years": (years[0], years[-1]) if years else None, "countries": len(data.countries),
+            "types": data.types, "has_turkey": any(c in data.countries for c in ("TR", "TUR")), "grid_countries": len(data.grid)}
+
+
+def suggest_proxies(countries: list[str]) -> list[str]:
+    """Dosyada bulunan, Türkiye'ye yakın olabilecek ülke kodları (yalnız öneri: vekil seçimi kullanıcının kararıdır, Türkiye yolu DEĞİLDİR)."""
+    have = set(countries)
+    return [c for c in PROXY_PREFERENCE if c in have]
+
+
+def find_candidates(dirs: list[str] | None = None, limit: int = 5) -> list[str]:
+    """İndirilenler (ve verilen klasörler) içinde CRREM'e benzeyen Excel dosyaları, yenisi önce. Dosyalar açılıp doğrulanmaz."""
+    import os
+    dirs = dirs or [str(Path.home() / "Downloads"), str(Path.home() / "Desktop"), str(Path.home() / "Masaüstü"), str(Path.home() / "İndirilenler")]
+    found = []
+    for d in dirs:
+        try:
+            for f in Path(d).iterdir():
+                if f.suffix.lower() in (".xlsx", ".xlsm") and "crrem" in f.name.lower() and not f.name.startswith("~$"):
+                    found.append((os.path.getmtime(f), str(f)))
+        except OSError:
+            continue
+    return [p for _, p in sorted(found, reverse=True)[:limit]]

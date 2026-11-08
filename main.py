@@ -10,6 +10,13 @@ from edifice.ui.main_window import MainWindow
 def main():
     selftest = "--selftest" in sys.argv
     app = QApplication(sys.argv)
+    app.setOrganizationName("EDIFICE")
+    app.setApplicationName("EDIFICE")
+    # Qt'nin kendi metinleri (Evet/Hayır, Tamam/İptal, dosya penceresi) Türkçe olsun
+    from PySide6.QtCore import QLibraryInfo, QLocale, QTranslator
+    tr = QTranslator(app)
+    if tr.load(QLocale(QLocale.Turkish), "qtbase", "_", QLibraryInfo.path(QLibraryInfo.TranslationsPath)):
+        app.installTranslator(tr)
     from pathlib import Path
     from PySide6.QtGui import QFontDatabase
     import edifice
@@ -46,7 +53,10 @@ def main():
         QMessageBox.information(None, "EDIFI'CE", note)
     if store.count() == 0:
         store.seed_demo()
-    win = MainWindow(store.load_project(store.latest_id()), store)
+    start = None if selftest else MainWindow.saved_building_id(store)     # en son çalışılan bina
+    win = MainWindow(store.load_project(start if start is not None else store.latest_id()), store)
+    if not selftest:
+        win.restore_session()                                              # son sayfa/sekme ve pencere boyutu
     win.show()
     if selftest:   # paketleme sonrası hızlı sağlık kontrolü: pencere kurulur, tüm sayfalar açılır, çıkılır
         for i in range(len(win.pages)):

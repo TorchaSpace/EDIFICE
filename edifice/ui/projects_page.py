@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QPainter, QPen
-from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QSizePolicy, QSpinBox, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QDoubleSpinBox, QGridLayout, QHBoxLayout, QLabel, QSizePolicy, QSpinBox, QVBoxLayout, QWidget
 
 from ..db import Store
 from ..service import Project
@@ -90,12 +90,14 @@ class ProjectsTrackerPage:
         self.c_plan = Card("Planlanan CAPEX", accent=INDIGO)
         self.c_done = Card("Uygulanan / biten CAPEX", accent=AMBER)
         self.c_save = Card("Biten projelerin tasarrufu", accent=G)
-        for i, c in enumerate((self.c_plan, self.c_done, self.c_save)):
+        self.c_spent = Card("Harcanan", accent=INDIGO)
+        for i, c in enumerate((self.c_plan, self.c_done, self.c_save, self.c_spent)):
             self.cards.addWidget(c, 0, i)
         lay.addLayout(self.cards)
 
         panel = Panel(eyebrow="Projeler", title="Uygun öneriler", subtitle="Ekipmanına göre elenmiş öneriler; “uygun değil” olanlar listelenmez.")
-        self.combos, self.spins, self.mspins = {}, {}, {}
+        self.combos, self.spins, self.mspins, self.spent = {}, {}, {}, {}
+        saved_spent = store.load_project_spent(project.building_id) if project.building_id is not None else {}
         for r in results:
             code = r.opportunity.code
             status, year = self.saved.get(code, (STATUSES[0], project.year + 1))
@@ -126,6 +128,17 @@ class ProjectsTrackerPage:
             ms.setFixedWidth(84)
             ms.setMinimumHeight(34)
             ms.setToolTip("Projenin bittiği ay (gerçekleşen tasarruf ölçümü için)")
+            sd = QDoubleSpinBox()
+            sd.setRange(0, 1e9)
+            sd.setDecimals(0)
+            sd.setSingleStep(10000)
+            sd.setSuffix(" ₺ harcandı")
+            sd.setValue(saved_spent.get(code, 0.0))
+            sd.setFixedWidth(150)
+            sd.setMinimumHeight(34)
+            sd.setToolTip("Bu projeye şimdiye kadar harcanan tutar (bütçe = öneri CAPEX'i)")
+            sd.valueChanged.connect(lambda _v, c=code: self._changed(c))
+            self.spent[code] = sd
             cb.currentTextChanged.connect(lambda _t, c=code: self._changed(c))
             sp.valueChanged.connect(lambda _v, c=code: self._changed(c))
             ms.valueChanged.connect(lambda _v, c=code: self._changed(c))
@@ -133,6 +146,7 @@ class ProjectsTrackerPage:
             h.addWidget(cb)
             h.addWidget(sp)
             h.addWidget(ms)
+            h.addWidget(sd)
             panel.lay.addWidget(row)
         lay.addWidget(panel)
         self.mv_panel = Panel(eyebrow="Ölçüm ve doğrulama (M&V)", title="Gerçekleşen tasarruf",
@@ -157,6 +171,7 @@ class ProjectsTrackerPage:
         s, y = self.state()[code]
         if self.project.building_id is not None:
             self.store.save_project(self.project.building_id, code, s, y, self.mspins[code].value())
+            self.store.save_project_spent(self.project.building_id, code, self.spent[code].value())
         self._summary()
         self.refresh_mv()
         self.on_change(self.rows())
@@ -203,3 +218,7 @@ class ProjectsTrackerPage:
         self.c_plan.set_number(plan / 1e6, lambda v: f"{fmt(v, 2)} M ₺", "Planlandı + Uygulanıyor + Tamamlandı", live=True)
         self.c_done.set_number(done / 1e6, lambda v: f"{fmt(v, 2)} M ₺", "Uygulanıyor + Tamamlandı", live=True)
         self.c_save.set_number(save / 1e6, lambda v: f"{fmt(v, 2)} M ₺/yıl", "yalnız Tamamlandı", live=True)
+        spent = sum(sd.value() for sd in self.spent.values())
+        over = [self.results[c].opportunity.name for c, (s, _) in st.items() if s in ("Uygulanıyor", "Tamamlandı") and self.spent[c].value() > self.results[c].capex * 1.0]
+        self.c_spent.set_number(spent / 1e6, lambda v: f"{fmt(v, 2)} M ₺",
+                                (f"{len(over)} proje bütçeyi aştı: {', '.join(over)}" if over else "bütçe aşımı yok"), live=True)

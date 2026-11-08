@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from PySide6.QtCore import QTimer, QUrl, Qt
-from PySide6.QtGui import QDesktopServices, QFontMetrics
-from PySide6.QtWidgets import (QFileDialog, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMenu, QMessageBox,
+from contextlib import contextmanager
+from pathlib import Path
+
+from PySide6.QtCore import QSettings, QTimer, QUrl, Qt
+from PySide6.QtGui import QDesktopServices, QFontMetrics, QKeySequence, QShortcut
+from PySide6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMenu, QMessageBox,
                                QPushButton, QVBoxLayout, QWidget)
 
 from ..db import Store
@@ -18,6 +21,9 @@ from .building_dialog import BuildingDialog
 from .report_pdf import build_pdf
 from .method_page import MethodPage
 from .climate_page import ClimateLoader, ClimatePage
+from .incentives_page import IncentivesPage
+from .records_pages import CertificatesPage, FinancingPage, PartnersPage
+from .load_page import LoadPage
 from .price_page import PricePage
 from .solar_page import SolarLoader, SolarPage
 from .weather_loader import WeatherLoader
@@ -26,7 +32,17 @@ from .projects_page import ProjectsTrackerPage
 from .tabs_page import ComingSoonPage, ReportPage, TabsPage
 from .portfolio import AssistantPage, EsgPage, FinancePage, PortfolioPage, summarize
 from .settings_page import SettingsPage
-from .widgets import get_style, FadeStack, Logo, NavBar
+from .palette import Command, CommandPalette, ShortcutsDialog
+from .widgets import get_style, FadeStack, Logo, NavBar, Toast, WheelGuard
+
+# Komut paletinde sayfaları eş anlamlılarıyla da bulabilmek için (ör. "güneş" yazınca GES sekmesi gelir)
+KEYWORDS = {"Genel Bakış": "özet dashboard kpi sağlık skoru enerji sınıfı", "Tüketim": "elektrik doğalgaz su fatura aylık",
+            "İklim": "hava sıcaklık tahmin", "Portföy": "binalar harita liste", "Öneriler": "dönüşüm tasarruf led yalıtım",
+            "Proje takibi": "gantt durum tamamlandı gerçekleşen tasarruf m&v", "Mevcut vs Hedef": "senaryo bütçe npv",
+            "Güneş enerjisi (GES)": "güneş solar panel pv çatı", "Birim fiyat analizi": "kwh fiyat tarife",
+            "Yük profili ve tarife": "saatlik sayaç pik t1 t2 t3", "Teşvik bulucu": "hibe kredi destek",
+            "Finansman karması": "kredi özkaynak", "Sohbet": "yapay zeka soru", "Karbon ve hedefler": "esg crrem emisyon",
+            "Rapor": "pdf excel esg ekb", "Kaynaklar ve Yöntem": "kaynakça formül varsayım", "Ayarlar": "varsayım tarife emisyon yedek"}
 
 TR_MONTHS = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"]
 
@@ -115,21 +131,38 @@ class MainWindow(QMainWindow):
         tl.addWidget(c1)
         tl.addWidget(sep)
         tl.addWidget(self.crumb)
+        self.crumb_tab = QLabel("")                        # alt sekme: "Projeler / Öneriler"
+        self.crumb_tab.setObjectName("crumb")
+        tl.addWidget(self.crumb_tab)
         tl.addStretch()
         self.wx = QLabel("")
         self.wx.setObjectName("datepill")
         self.wx.setFixedHeight(28)
         self.wx.hide()
         tl.addWidget(self.wx)
+        self.quick = QPushButton(f"⌕  Hızlı git   {self._keys('Ctrl+K')}")
+        self.quick.setFixedHeight(32)
+        self.quick.setCursor(Qt.PointingHandCursor)
+        self.quick.setToolTip("Sayfa, sekme, bina ya da eylem adını yazıp Enter'a basın")
+        self.quick.setStyleSheet("QPushButton { background: rgba(255,255,255,0.04); color: #A3B6C9; border: 1px solid rgba(255,255,255,0.08);"
+                                 "border-radius: 16px; padding: 0 14px; font-size: 12px; }"
+                                 "QPushButton:hover { color: #E8F2FF; border: 1px solid rgba(13,221,150,0.35); }")
+        self.quick.clicked.connect(lambda: self.open_palette())
+        tl.addWidget(self.quick)
         self.search = QLineEdit()
         self.search.setObjectName("search")
-        self.search.setPlaceholderText("Bina ara…")
+        self.search.setPlaceholderText(f"Bina ara…   {self._keys('Ctrl+F')}")
         self.search.setClearButtonEnabled(True)
-        self.search.setFixedSize(220, 32)
+        self.search.setFixedSize(190, 32)
         self.search.setStyleSheet("QLineEdit#search { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);"
                                   "border-radius: 16px; padding: 0 14px; font-size: 12px; }"
                                   "QLineEdit#search:focus { border: 1px solid rgba(13,221,150,0.45); }")
-        self.search.textChanged.connect(self._search)
+        self._search_timer = QTimer(self)                 # her tuşta portföyü yeniden kurmak yerine yazmaya ara verince ara
+        self._search_timer.setSingleShot(True)
+        self._search_timer.setInterval(220)
+        self._search_timer.timeout.connect(lambda: self._search(self.search.text()))
+        self.search.textChanged.connect(lambda _t: self._search_timer.start())
+        self.search.returnPressed.connect(lambda: (self._search_timer.stop(), self._search(self.search.text())))
         tl.addWidget(self.search)
         self.bell = QPushButton("🔔")
         self.bell.setFixedSize(32, 32)
@@ -137,29 +170,35 @@ class MainWindow(QMainWindow):
         self.bell.setStyleSheet("QPushButton { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);"
                                 "border-radius: 16px; font-size: 13px; } QPushButton:hover { background: rgba(255,255,255,0.08); }")
         self.bell.clicked.connect(self.show_alerts)
+        self.bell.setToolTip("Uyarılar")
         tl.addWidget(self.bell)
         self.live = QLabel(f"●  {project.building.name}")
         self.live.setObjectName("livepill")
         self.live.setFixedHeight(28)
         tl.addWidget(self.live)
-        now = datetime.now()
-        date = QLabel(f"{now.day} {TR_MONTHS[now.month - 1]} {now.year} · {now:%H:%M}")
-        date.setObjectName("datepill")
-        date.setFixedHeight(28)
-        tl.addWidget(date)
+        self.date = QLabel("")
+        self.date.setObjectName("datepill")
+        self.date.setFixedHeight(28)
+        self._tick_clock()
+        tl.addWidget(self.date)
         export = QPushButton("↓ Rapor")
         export.setObjectName("export")
         export.setFixedHeight(32)
         export.setCursor(Qt.PointingHandCursor)
         export.clicked.connect(self.export_report)
+        export.setToolTip(f"Seçili öneri paketiyle PDF yatırımcı raporu  ({self._keys('Ctrl+P')})")
         add_btn = QPushButton("+ Bina Ekle")
         add_btn.setObjectName("primary")
         add_btn.setFixedHeight(32)
         add_btn.setCursor(Qt.PointingHandCursor)
         add_btn.clicked.connect(self.add_building)
+        add_btn.setToolTip(f"Formla ya da Excel şablonuyla yeni bina  ({self._keys('Ctrl+N')})")
         add_btn.setStyleSheet("padding: 6px 16px;")
         tl.addWidget(export)
         tl.addWidget(add_btn)
+        self._clock = QTimer(self)                        # üst çubuktaki saat dakikada bir güncellensin
+        self._clock.timeout.connect(self._tick_clock)
+        self._clock.start(20 * 1000)
         self._blink = QTimer(self)
         self._blink.timeout.connect(self._toggle_dot)
         self._blink.start(1000)
@@ -181,10 +220,28 @@ class MainWindow(QMainWindow):
         lay.addWidget(side_w)
         lay.addWidget(main, 1)
         self.setCentralWidget(root)
-        self.set_project(project)
+        self.toast = Toast(main)
+        WheelGuard.install()
+        self._history: list[tuple[int, str | None]] = []
+        self._future: list[tuple[int, str | None]] = []
+        self._persist = False
+        self.cur = 0
+        self.set_project(project, select=0)
+        self._install_shortcuts()
 
-    def set_project(self, project: Project, select: int = 0, notify: bool = False):
-        """Seçili binayı değiştirir: sayfaları yeniden kurar."""
+    def set_project(self, project: Project, select: int | None = None, notify: bool = False, tab: str | None = None):
+        """Seçili binayı değiştirir: sayfaları yeniden kurar. select verilmezse kullanıcı bulunduğu sayfa ve sekmede kalır
+        (bina değiştirmek, düzenlemek ya da içe aktarmak onu Genel Bakış'a fırlatmaz)."""
+        if select is None:
+            select = getattr(self, "cur", 0)
+            if tab is None and self.pages:
+                tab = self._tab_of(select)
+        with busy():
+            self._set_project(project, select, tab)
+        if notify:
+            self.sub['Ayarlar'].saved_message()
+
+    def _set_project(self, project: Project, select: int, tab: str | None):
         self.project = project
         while self.stack.count():
             w = self.stack.widget(0)
@@ -200,20 +257,19 @@ class MainWindow(QMainWindow):
         sub["Eğitim"] = TrainingPage(self.store, sub["Sohbet"].reload_ai)
         sub["GES"] = SolarPage(project, self.store)
         sub["İklim"] = ClimatePage(project, self.store, self._refresh_climate)
+        self.report_page = ReportPage(project, self.export_report, self.export_pack, self.store)
         self.pages = [("Genel Bakış", TabsPage([("Genel Bakış", sub["Genel Bakış"]), ("Tüketim", sub["Tüketim"]), ("İklim", sub["İklim"])])),
                       ("Portföy", PortfolioPage(self.store, self.open_building, self.search.text().strip())),
                       ("Projeler", TabsPage([("Öneriler", sub["Öneriler"]), ("Proje takibi", sub["Proje takibi"]), ("Mevcut vs Hedef", sub["Mevcut vs Hedef"])])),
-                      ("Finans", TabsPage([("Portföy finansı", FinancePage(self.store, self.open_building)), ("Güneş enerjisi (GES)", sub["GES"]), ("Birim fiyat analizi", PricePage(project))])),
-                      ("Ortaklar", ComingSoonPage("Ortaklar", "Ortaklar",
-                                                  "Uygulayıcı firma ve ortak yönetimi için bina verisinden bağımsız bir ortak/teklif kaydı gerekir. "
-                                                  "MVP tek bina analizine odaklandığı için bu modül sonraki fazda eklenecek.")),
+                      ("Finans", TabsPage([("Portföy finansı", FinancePage(self.store, self.open_building)), ("Güneş enerjisi (GES)", sub["GES"]), ("Birim fiyat analizi", PricePage(project)), ("Yük profili ve tarife", LoadPage(project, self.store)), ("Teşvik bulucu", IncentivesPage(project, self.store)), ("Finansman karması", FinancingPage(project, self.store))])),
+                      ("Ortaklar", TabsPage([("Ortaklar", PartnersPage(self.store))])),
                       ("Asistan", TabsPage([("Sohbet", sub["Sohbet"]),
                                             ("Eğitim", sub["Eğitim"]), ("Otomatik bulgular", AssistantPage(project))])),
                       ("Digital Twin", ComingSoonPage("Digital Twin", "Digital Twin",
                                                       "Dijital ikiz için BIM modeli ve canlı sensör (IoT/BMS) verisi gerekir; bunlar MVP kapsamı dışında "
                                                       "olduğundan sonraki fazda eklenecek.")),
-                      ("Sürdürülebilirlik", EsgPage(self.store, self.open_building)),
-                      ("Raporlar", TabsPage([("Rapor", ReportPage(project, self.export_report, self.export_pack)),
+                      ("Sürdürülebilirlik", TabsPage([("Karbon ve hedefler", EsgPage(self.store, self.open_building)), ("Sertifikalar", CertificatesPage(project, self.store))])),
+                      ("Raporlar", TabsPage([("Rapor", self.report_page),
                                              ("Kaynaklar ve Yöntem", sub["Kaynaklar ve Yöntem"])])),
                       ("Ayarlar", TabsPage([("Ayarlar", sub["Ayarlar"])]))]
         self.idx = {n: i for i, (n, _) in enumerate(self.pages)}
@@ -222,6 +278,12 @@ class MainWindow(QMainWindow):
         self._refresh_climate()
         for _, page in self.pages:
             self.stack.addWidget(page.widget)
+            if isinstance(page, TabsPage):
+                page.on_change = lambda _name, pg=page: self._tab_changed(pg)
+        if tab:
+            tp = self.pages[select][1]
+            if isinstance(tp, TabsPage):
+                tp.select(tab)
         name = project.building.name
         self.n1.setText(QFontMetrics(self.n1.font()).elidedText(name, Qt.ElideRight, 120))
         self.n1.setToolTip(name)
@@ -229,10 +291,8 @@ class MainWindow(QMainWindow):
         self.live.setText(f"●  {self._short(name)}")
         self.nav.select(select, animate=False)
         self.stack.setCurrentIndex(select)
-        self.crumb.setText(self.pages[select][0])
-        self.crumb1.setText("Platform" if select < 5 else "Intelligence")
-        if notify:
-            self.sub['Ayarlar'].saved_message()
+        self.cur = select
+        self._update_crumb()
 
     def show_building_menu(self):
         menu = QMenu(self)
@@ -244,6 +304,7 @@ class MainWindow(QMainWindow):
         if self.project.building_id is not None:
             menu.addAction("⇪  Tüketimi içe aktar (CSV / Excel)…").triggered.connect(self.import_consumption)
             menu.addAction("⇩  Örnek CSV indir").triggered.connect(self.download_sample_csv)
+            menu.addAction("🧾  Faturadan oku (PDF / fotoğraf)…").triggered.connect(self.import_invoices)
         if self.project.building_id is not None:
             menu.addAction("✎  Bu binayı düzenle").triggered.connect(self.edit_building)
         if self.store.count() > 1 and self.project.building_id is not None:
@@ -268,7 +329,8 @@ class MainWindow(QMainWindow):
         if dlg.exec() == BuildingDialog.Accepted and dlg.result_data:
             building, readings, equipment = dlg.result_data
             bid = self.store.save_building(building, readings, equipment)
-            self.set_project(self.store.load_project(bid))
+            self.set_project(self.store.load_project(bid), select=0)
+            self.notify(f"«{building.name}» eklendi ve açıldı")
 
     def _show_excel_errors(self, errors: list[str]):
         box = QMessageBox(self)
@@ -323,6 +385,50 @@ class MainWindow(QMainWindow):
             return
         self.store.update_building(self.project.building_id, self.project.building, merged, self.project.equipment)
         self.set_project(self.store.load_project(self.project.building_id))
+        self.notify(f"{added + replaced} tüketim kaydı içe aktarıldı (yeni {added}, güncellenen {replaced})")
+
+    def import_invoices(self):
+        """Fatura PDF/fotoğraflarını okur -> dosya dosya ne okunduğunu gösterir -> onayla -> birleştirir."""
+        from ..bulk_import import merge_readings
+        from ..invoice import read_invoices
+        from ..models import UTILITY_UNITS
+        from ..quality import assess
+        paths, _ = QFileDialog.getOpenFileNames(self, "Fatura dosyalarını seç", "", "Fatura (*.pdf *.png *.jpg *.jpeg *.tif *.tiff)")
+        if not paths:
+            return
+        readings, items = read_invoices(paths, self.project.assumptions.default_tariffs)
+        box = QMessageBox(self)
+        box.setWindowTitle("Faturadan oku")
+        lines = []
+        for it in items:
+            if it.complete:
+                cost = f"{it.cost:,.0f} ₺".replace(",", ".") if it.cost is not None else "tutar yok (tarifeyle tahmin)"
+                lines.append(f"✓ {it.source}: {it.month}/{it.year} {it.utility.value} {it.consumption:,.0f} {UTILITY_UNITS[it.utility]}, {cost}".replace(",", "."))
+            else:
+                lines.append(f"✗ {it.source}: okunamadı")
+            lines += [f"      – {w}" for w in it.warnings[:3]]
+        if not readings:
+            box.setIcon(QMessageBox.Warning)
+            box.setText("Faturalardan kayıt okunamadı")
+            box.setInformativeText("\n".join(lines[:16]) + "\n\nİpucu: metin katmanlı PDF en iyi sonucu verir; fotoğraf için Tesseract OCR kurulu olmalı.")
+            box.exec()
+            return
+        merged, added, replaced = merge_readings(self.project.readings, readings)
+        before = assess(self.project)
+        after = assess(Project(self.project.building, merged, self.project.equipment, [], self.project.assumptions))
+        box.setIcon(QMessageBox.Question)
+        box.setText(f"{len(readings)} fatura kaydı okundu")
+        box.setInformativeText("\n".join(lines[:16]) + f"\n\nYeni: {added} · değişecek: {replaced}\n"
+                               f"Veri güvenilirliği: {before.score:.0f} ({before.level}) → {after.score:.0f} ({after.level})\n"
+                               "Rakamları faturayla karşılaştırın. Eklensin mi?")
+        box.setStandardButtons(QMessageBox.Yes | QMessageBox.Cancel)
+        box.button(QMessageBox.Yes).setText("Ekle")
+        box.button(QMessageBox.Cancel).setText("Vazgeç")
+        if box.exec() != QMessageBox.Yes:
+            return
+        self.store.update_building(self.project.building_id, self.project.building, merged, self.project.equipment)
+        self.set_project(self.store.load_project(self.project.building_id))
+        self.notify(f"Faturalardan {added + replaced} kayıt eklendi")
 
     def edit_building(self):
         dlg = BuildingDialog(self, project=self.project, tariffs=self.project.assumptions.default_tariffs)
@@ -330,16 +436,28 @@ class MainWindow(QMainWindow):
             building, readings, equipment = dlg.result_data
             self.store.update_building(self.project.building_id, building, readings, equipment)
             self.set_project(self.store.load_project(self.project.building_id))
+            self.notify("Bina bilgileri kaydedildi, tüm hesaplar güncellendi")
 
     def _settings_saved(self):
         self.set_project(self.store.load_project(self.project.building_id), select=self.idx['Ayarlar'], notify=True)
 
     def delete_current(self):
         name = self.project.building.name
-        if QMessageBox.question(self, "Binayı sil", f"'{name}' ve tüm verileri silinsin mi?") != QMessageBox.Yes:
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Warning)
+        box.setWindowTitle("Binayı sil")
+        box.setText(f"«{name}» silinsin mi?")
+        box.setInformativeText("Binanın tüketim, ekipman, proje ve senaryo kayıtları da silinir. Bu işlem geri alınamaz "
+                               "(günlük otomatik yedekten geri dönülebilir).")
+        yes = box.addButton("Sil", QMessageBox.DestructiveRole)
+        no = box.addButton("Vazgeç", QMessageBox.RejectRole)
+        box.setDefaultButton(no)
+        box.exec()
+        if box.clickedButton() is not yes:
             return
         self.store.delete_building(self.project.building_id)
-        self.set_project(self.store.load_project(self.store.latest_id()))
+        self.set_project(self.store.load_project(self.store.latest_id()), select=0)
+        self.notify(f"«{name}» silindi", kind="info")
 
     @staticmethod
     def _short(name: str, n: int = 28) -> str:
@@ -452,15 +570,188 @@ class MainWindow(QMainWindow):
         self.set_project(self.store.load_project(bid), select=0)
 
     def _search(self, text: str):
-        """Portföy sayfasını arama metnine göre yeniden kurar ve oraya geçer."""
-        page = PortfolioPage(self.store, self.open_building, text.strip())
+        """Portföy sayfasını arama metnine göre yeniden kurar. Yazınca Portföy'e geçer; arama temizlenince
+        kullanıcıyı başka sayfaya sürüklemez."""
+        text = text.strip()
+        if text == getattr(self, "_last_search", ""):
+            return
+        self._last_search = text
+        page = PortfolioPage(self.store, self.open_building, text)
         i = self.idx["Portföy"]
         old = self.stack.widget(i)
         self.stack.removeWidget(old)
         old.deleteLater()
         self.stack.insertWidget(i, page.widget)
         self.pages[i] = (self.pages[i][0], page)
-        self.select(i)
+        if text or self.cur == i:
+            if self.cur == i:
+                self.stack.setCurrentWidget(page.widget)
+            else:
+                self.select(i)
+
+    # ---- akıcılık yardımcıları: kısayollar, komut paleti, geri/ileri, bildirim, oturum hafızası -------------
+
+    @staticmethod
+    def _keys(seq) -> str:
+        """Kısayolu işletim sisteminin diliyle gösterir (macOS'ta ⌘K, Windows'ta Ctrl+K)."""
+        ks = QKeySequence(seq) if not isinstance(seq, QKeySequence) else seq
+        return ks.toString(QKeySequence.NativeText)
+
+    def _tick_clock(self):
+        now = datetime.now()
+        self.date.setText(f"{now.day} {TR_MONTHS[now.month - 1]} {now.year} · {now:%H:%M}")
+
+    def _tab_of(self, index: int) -> str | None:
+        if not self.pages or index >= len(self.pages):
+            return None
+        tp = self.pages[index][1]
+        return tp.current() if isinstance(tp, TabsPage) and len(tp.names) > 1 else None
+
+    def _tab_changed(self, page):
+        if self.pages and self.pages[self.cur][1] is page:
+            self._update_crumb()
+
+    def _update_crumb(self):
+        name = self.pages[self.cur][0]
+        self.crumb.setText(name)
+        self.crumb1.setText("Platform" if self.cur < 5 else "Intelligence")
+        tab = self._tab_of(self.cur)
+        self.crumb_tab.setText(f"/   {tab}" if tab and tab != name else "")
+        self.setWindowTitle(f"EDIFI'CE · {name}" + (f" · {tab}" if tab and tab != name else ""))
+
+    def notify(self, text: str, kind: str = "ok", action=None):
+        self.toast.show_message(text, kind, action)
+
+    def _shortcut(self, seq, fn):
+        sc = QShortcut(QKeySequence(seq), self)
+        sc.setContext(Qt.WindowShortcut)
+        sc.activated.connect(fn)
+        return sc
+
+    def _install_shortcuts(self):
+        for i in range(min(10, len(self.nav_specs))):
+            key = f"Ctrl+{(i + 1) % 10}"
+            self._shortcut(key, lambda idx=i: self.select(idx))
+            self.buttons[i].setToolTip(f"{self.nav_specs[i][0]}  ({self._keys(key)})")
+        self._shortcut("Ctrl+K", self.open_palette)
+        self._shortcut("Ctrl+F", self.focus_search)
+        self._shortcut("Ctrl+N", self.add_building)
+        self._shortcut("Ctrl+P", self.export_report)
+        self._shortcut("Ctrl+B", self.show_building_menu)
+        self._shortcut("Ctrl+E", lambda: self.project.building_id is not None and self.edit_building())
+        self._shortcut("Ctrl+I", lambda: self.project.building_id is not None and self.import_consumption())
+        self._shortcut("F1", self.show_shortcuts)
+        self._shortcut("Ctrl+/", self.show_shortcuts)
+        for seq, d in ((QKeySequence.NextChild, 1), ("Ctrl+PgDown", 1), (QKeySequence.PreviousChild, -1), ("Ctrl+PgUp", -1)):
+            self._shortcut(seq, lambda d=d: self.step_tab(d))
+        for seq, fn in ((QKeySequence.Back, self.back), ("Alt+Left", self.back), (QKeySequence.Forward, self.forward),
+                        ("Alt+Right", self.forward)):
+            self._shortcut(seq, fn)
+        esc = QShortcut(QKeySequence("Esc"), self.search)
+        esc.setContext(Qt.WidgetShortcut)
+        esc.activated.connect(lambda: (self.search.clear(), self.stack.setFocus()))
+
+    def focus_search(self):
+        self.search.setFocus()
+        self.search.selectAll()
+
+    def step_tab(self, delta: int):
+        tp = self.pages[self.cur][1]
+        if isinstance(tp, TabsPage):
+            tp.step(delta)
+
+    def _goto(self, index: int, tab: str | None):
+        self.select(index, record=False)
+        if tab:
+            tp = self.pages[index][1]
+            if isinstance(tp, TabsPage):
+                tp.select(tab)
+
+    def back(self):
+        if self._history:
+            self._future.append((self.cur, self._tab_of(self.cur)))
+            self._goto(*self._history.pop())
+
+    def forward(self):
+        if self._future:
+            self._history.append((self.cur, self._tab_of(self.cur)))
+            self._goto(*self._future.pop())
+
+    def commands(self) -> list[Command]:
+        cmds: list[Command] = []
+        for i, (name, page) in enumerate(self.pages):
+            sc = self._keys(f"Ctrl+{(i + 1) % 10}") if i < 10 else ""
+            cmds.append(Command(name, "Sayfa", lambda i=i: self.select(i), KEYWORDS.get(name, ""), sc))
+            if isinstance(page, TabsPage) and len(page.names) > 1:
+                for t in page.names:
+                    if t != name:
+                        cmds.append(Command(f"{name}  ›  {t}", "Sekme", lambda n=name, t=t: self.go(n, t), KEYWORDS.get(t, "")))
+        has_id = self.project.building_id is not None
+        acts = [("PDF raporu oluştur", self.export_report, "rapor indir yatırımcı", "Ctrl+P"),
+                ("Yeni bina ekle", self.add_building, "bina oluştur form excel şablon", "Ctrl+N"),
+                ("Bina ara", self.focus_search, "filtre", "Ctrl+F"),
+                ("Uyarıları göster", self.show_alerts, "bildirim alarm", ""),
+                ("ESG veri paketi (Excel)", lambda: self.export_pack("esg"), "rapor excel kapsam", ""),
+                ("EKB hazırlık sayfası (Excel)", lambda: self.export_pack("ekb"), "enerji kimlik belgesi", ""),
+                ("Portföy özeti (Excel)", lambda: self.export_pack("portfoy"), "tüm binalar rapor", ""),
+                ("Klavye kısayolları", self.show_shortcuts, "yardım tuş", "F1")]
+        if has_id:
+            acts[2:2] = [("Bu binayı düzenle", self.edit_building, "bilgi tüketim ekipman değiştir", "Ctrl+E"),
+                         ("Tüketimi içe aktar (CSV / Excel)", self.import_consumption, "fatura döküm yükle", "Ctrl+I"),
+                         ("Faturadan oku (PDF / fotoğraf)", self.import_invoices, "ocr fatura", ""),
+                         ("Örnek CSV indir", self.download_sample_csv, "şablon biçim", "")]
+        for title, fn, kw, sc in acts:
+            cmds.append(Command(title, "Eylem", fn, kw, self._keys(sc) if sc else ""))
+        for bid, bname in self.store.list_buildings():
+            if bid != self.project.building_id:
+                cmds.append(Command(f"Binaya geç: {bname}", "Bina", lambda b=bid: self.set_project(self.store.load_project(b)), bname))
+        return cmds
+
+    def open_palette(self):
+        CommandPalette(self, self.commands()).exec()
+
+    def show_shortcuts(self):
+        ShortcutsDialog(self, self._keys).exec()
+
+    # ---- oturum hafızası: son bina, sayfa, sekme ve pencere boyutu bir sonraki açılışta geri gelir ----
+
+    @staticmethod
+    def _settings() -> QSettings:
+        return QSettings("EDIFICE", "EDIFICE")
+
+    @classmethod
+    def saved_building_id(cls, store) -> int | None:
+        try:
+            bid = int(cls._settings().value("session/building", -1))
+        except (TypeError, ValueError):
+            return None
+        return bid if any(b == bid for b, _ in store.list_buildings()) else None
+
+    def restore_session(self):
+        """Yalnız gerçek uygulama açılışında (main.py) çağrılır; testler kullanıcı ayarlarına dokunmaz."""
+        st = self._settings()
+        geo = st.value("session/geometry")
+        if geo is not None:
+            self.restoreGeometry(geo)
+        page = st.value("session/page", "")
+        if page in self.idx:
+            self._goto(self.idx[page], st.value("session/tab") or None)
+        self._persist = True
+
+    def save_session(self):
+        st = self._settings()
+        st.setValue("session/building", self.project.building_id if self.project.building_id is not None else -1)
+        st.setValue("session/page", self.pages[self.cur][0])
+        st.setValue("session/tab", self._tab_of(self.cur) or "")
+        st.setValue("session/geometry", self.saveGeometry())
+
+    def closeEvent(self, e):
+        if self._persist:
+            try:
+                self.save_session()
+            except Exception:
+                pass
+        super().closeEvent(e)
 
     def alerts(self) -> list[tuple[int, str]]:
         """Gerçek veriden uyarılar: düşük sağlık skoru, kötü enerji sınıfı, maliyet artışı."""
@@ -486,11 +777,15 @@ class MainWindow(QMainWindow):
             menu.addAction(text).triggered.connect(lambda _=False, i=bid: self.open_building(i))
         menu.exec(self.bell.mapToGlobal(self.bell.rect().bottomLeft()))
 
-    def select(self, index: int):
+    def select(self, index: int, record: bool = True):
+        if record and index != self.cur:
+            self._history.append((self.cur, self._tab_of(self.cur)))
+            del self._history[:-30]
+            self._future.clear()
         self.nav.select(index)
         self.stack.setCurrentIndex(index)
-        self.crumb.setText(self.pages[index][0])
-        self.crumb1.setText("Platform" if index < 5 else "Intelligence")
+        self.cur = index
+        self._update_crumb()
 
     def export_pack(self, kind: str):
         """Excel raporlama paketi: esg (seçili bina), ekb (seçili bina), portfoy (tüm binalar)."""
@@ -502,11 +797,16 @@ class MainWindow(QMainWindow):
         path, _ = QFileDialog.getSaveFileName(self, "Excel paketini kaydet", default, "Excel (*.xlsx)")
         if not path:
             return
-        if kind == "portfoy":
-            rx.build_portfolio_workbook(list(self._all_projects().values()), path)
-        else:
-            fn(self.project, path)
+        with busy():
+            if kind == "portfoy":
+                rx.build_portfolio_workbook(list(self._all_projects().values()), path)
+            else:
+                fn(self.project, path)
+        self.store.add_record("report_log", {"building_id": None if kind == "portfoy" else self.project.building_id,
+                                             "kind": {"esg": "ESG veri paketi", "ekb": "EKB hazırlık sayfası", "portfoy": "Portföy özeti"}[kind], "path": path})
+        self.report_page.refresh_history()
         QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+        self.notify(f"{Path(path).name} kaydedildi", action=("Klasörü aç", lambda: _open_folder(path)))
 
     def export_report(self):
         codes = self.sub['Mevcut vs Hedef'].selected_codes()
@@ -514,8 +814,28 @@ class MainWindow(QMainWindow):
         path, _ = QFileDialog.getSaveFileName(self, "Raporu kaydet", default, "PDF (*.pdf)")
         if not path:
             return
-        build_pdf(self.project, codes, path)
+        with busy():
+            build_pdf(self.project, codes, path)
+        self.store.add_record("report_log", {"building_id": self.project.building_id, "kind": "PDF yatırımcı raporu", "path": path})
+        self.report_page.refresh_history()
         QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+        n = len(codes)
+        self.notify(f"PDF raporu kaydedildi ({n} öneriyle)" if n else "PDF raporu kaydedildi (öneri seçilmedi: yalnız mevcut durum)",
+                    action=("Klasörü aç", lambda: _open_folder(path)))
+
+
+@contextmanager
+def busy():
+    """Uzun süren işlerde (bina değişimi, PDF/Excel üretimi) bekleme imleci: uygulama donmuş gibi görünmesin."""
+    QApplication.setOverrideCursor(Qt.WaitCursor)
+    try:
+        yield
+    finally:
+        QApplication.restoreOverrideCursor()
+
+
+def _open_folder(path: str):
+    QDesktopServices.openUrl(QUrl.fromLocalFile(str(Path(path).parent)))
 
 
 def section_label(text: str) -> QLabel:

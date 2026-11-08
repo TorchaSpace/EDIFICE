@@ -42,6 +42,21 @@ CREATE TABLE IF NOT EXISTS ai_unknown (id INTEGER PRIMARY KEY AUTOINCREMENT, que
 CREATE TABLE IF NOT EXISTS ai_examples (id INTEGER PRIMARY KEY AUTOINCREMENT, intent TEXT NOT NULL, text TEXT NOT NULL UNIQUE);
 CREATE TABLE IF NOT EXISTS scenarios (
   building_id INTEGER PRIMARY KEY REFERENCES buildings(id) ON DELETE CASCADE, codes TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS partners (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, country TEXT, category TEXT, rating REAL, contact TEXT, note TEXT);
+CREATE TABLE IF NOT EXISTS certificates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, building_id INTEGER NOT NULL REFERENCES buildings(id) ON DELETE CASCADE,
+  scheme TEXT NOT NULL, level TEXT, issued TEXT, expires TEXT, note TEXT);
+CREATE TABLE IF NOT EXISTS finance_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, building_id INTEGER NOT NULL REFERENCES buildings(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL, name TEXT, amount REAL, rate_pct REAL, term_years REAL, status TEXT);
+CREATE TABLE IF NOT EXISTS report_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, building_id INTEGER, kind TEXT NOT NULL, path TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS interval_data (
+  building_id INTEGER NOT NULL REFERENCES buildings(id) ON DELETE CASCADE, ts TEXT NOT NULL, kw REAL NOT NULL,
+  PRIMARY KEY (building_id, ts));
+CREATE TABLE IF NOT EXISTS incentive_terms (
+  program TEXT PRIMARY KEY, grant_pct REAL NOT NULL DEFAULT 0, cap REAL, verified INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS equipment (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   building_id INTEGER NOT NULL REFERENCES buildings(id) ON DELETE CASCADE,
@@ -93,6 +108,8 @@ class Store:
         self.conn.executescript(SCHEMA)
         cols = {r[1] for r in self.conn.execute("PRAGMA table_info(buildings)")}
         pcols = {r[1] for r in self.conn.execute("PRAGMA table_info(projects)")}
+        if "spent" not in pcols:
+            self.conn.execute("ALTER TABLE projects ADD COLUMN spent REAL NOT NULL DEFAULT 0")
         if "month" not in pcols:
             self.conn.execute("ALTER TABLE projects ADD COLUMN month INTEGER NOT NULL DEFAULT 1")
         for c in ("lat", "lon"):
@@ -281,7 +298,8 @@ class Store:
 
     def save_project(self, bid: int, code: str, status: str, year: int, month: int = 1):
         with self.conn:
-            self.conn.execute("INSERT OR REPLACE INTO projects (building_id, code, status, year, month) VALUES (?,?,?,?,?)",
+            self.conn.execute("INSERT INTO projects (building_id, code, status, year, month) VALUES (?,?,?,?,?) "
+                              "ON CONFLICT(building_id, code) DO UPDATE SET status=excluded.status, year=excluded.year, month=excluded.month",
                               (bid, code, status, year, month))
 
     def load_project_months(self, bid: int) -> dict[str, int]:
@@ -290,6 +308,67 @@ class Store:
     def load_projects(self, bid: int) -> dict[str, tuple[str, int]]:
         return {c: (s, y) for c, s, y in self.conn.execute(
             "SELECT code,status,year FROM projects WHERE building_id=?", (bid,))}
+
+    # ---- basit kayıt tabloları (Ortaklar, Sertifikalar, Finansman, Rapor geçmişi). Tablo/sütun adları beyaz listeden gelir.
+    RECORDS = {"partners": ("name", "country", "category", "rating", "contact", "note"),
+               "certificates": ("building_id", "scheme", "level", "issued", "expires", "note"),
+               "finance_items": ("building_id", "kind", "name", "amount", "rate_pct", "term_years", "status"),
+               "report_log": ("building_id", "kind", "path")}
+
+    def add_record(self, table: str, values: dict) -> int:
+        cols = self.RECORDS[table]
+        with self.conn:
+            cur = self.conn.execute(f"INSERT INTO {table} ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})", [values.get(c) for c in cols])
+        return cur.lastrowid
+
+    def list_records(self, table: str, building_id: int | None = None) -> list[dict]:
+        cols = ("id",) + self.RECORDS[table] + (("created_at",) if table == "report_log" else ())
+        where, args = ("WHERE building_id=?", (building_id,)) if building_id is not None and "building_id" in cols else ("", ())
+        rows = self.conn.execute(f"SELECT {','.join(cols)} FROM {table} {where} ORDER BY id DESC", args).fetchall()
+        return [dict(zip(cols, r)) for r in rows]
+
+    def delete_record(self, table: str, rid: int):
+        if table not in self.RECORDS:
+            raise KeyError(table)
+        with self.conn:
+            self.conn.execute(f"DELETE FROM {table} WHERE id=?", (rid,))
+
+    def save_project_spent(self, bid: int, code: str, spent: float):
+        with self.conn:
+            cur = self.conn.execute("UPDATE projects SET spent=? WHERE building_id=? AND code=?", (spent, bid, code))
+            if not cur.rowcount:      # proje henüz kaydedilmemişse harcama için satır aç (durum: Planlanmadı)
+                self.conn.execute("INSERT INTO projects (building_id, code, status, year, month, spent) VALUES (?,?,?,?,1,?)",
+                                  (bid, code, "Planlanmadı", 2000, spent))
+
+    def load_project_spent(self, bid: int) -> dict[str, float]:
+        return {c: s for c, s in self.conn.execute("SELECT code,spent FROM projects WHERE building_id=?", (bid,))}
+
+    def save_interval(self, bid: int, series) -> int:
+        """Aralıklı yükü (kW) bina için yazar; aynı zaman damgaları değişir. Adım süresi `settings`te tutulur."""
+        with self.conn:
+            self.conn.executemany("INSERT OR REPLACE INTO interval_data VALUES (?,?,?)",
+                                  [(bid, dt.isoformat(sep=" "), kw) for dt, kw in series.points])
+            self.conn.execute("INSERT OR REPLACE INTO settings VALUES (?, ?)", (f"interval_step_{bid}", repr(series.step_hours)))
+        return len(series.points)
+
+    def load_interval(self, bid: int):
+        from datetime import datetime as _dt
+        from .engine.loadprofile import Series
+        rows = self.conn.execute("SELECT ts,kw FROM interval_data WHERE building_id=? ORDER BY ts", (bid,)).fetchall()
+        step = float(self.get_setting(f"interval_step_{bid}", "1.0"))
+        return Series([(_dt.fromisoformat(t), k) for t, k in rows], step)
+
+    def clear_interval(self, bid: int):
+        with self.conn:
+            self.conn.execute("DELETE FROM interval_data WHERE building_id=?", (bid,))
+
+    def save_incentive_terms(self, program: str, grant_pct: float, cap: float | None, verified: bool):
+        with self.conn:
+            self.conn.execute("INSERT OR REPLACE INTO incentive_terms VALUES (?,?,?,?)", (program, grant_pct, cap, int(verified)))
+
+    def load_incentive_terms(self) -> dict:
+        from .engine.incentives import Terms
+        return {p: Terms(g, c, bool(v)) for p, g, c, v in self.conn.execute("SELECT program,grant_pct,cap,verified FROM incentive_terms")}
 
     def save_scenario(self, bid: int, codes: list[str]):
         with self.conn:
