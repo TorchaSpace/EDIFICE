@@ -132,3 +132,94 @@ def test_regression_guard_rejects_harmful_example():
     assert accepts([], "equipment", "tesisin ısı pompası var mı")
     assert not accepts([], "equipment", "skorum neden düştü")          # başka niyetin örneğini bozar
     assert not accepts([], "nonexistent", "herhangi bir şey")
+
+
+def test_building_facts_month_and_payback_filter(ai, tb):
+    mem = Memory()
+    assert "6.000 m²" in ai.answer("bina kaç m2", tb, mem)
+    assert "kişi" in ai.answer("kaç kişi çalışıyor", tb, mem)
+    assert "Haziran" in ai.answer("haziran ayında ne kadar elektrik harcadık", tb, mem)
+    ans = ai.answer("geri ödeme 5 yıldan kısa olanlar", tb, mem)
+    assert "5 yıldan kısa" in ans and "VFD" in ans and "Chiller" not in ans
+
+
+def test_misroutes_fixed(ai, tb):
+    mem = Memory()
+    assert "tam anlayamadım" in ai.answer("ısı pompası mantıklı mı", tb, mem)     # GES sanılmasın
+    ai.answer("kazanı değiştirmeye değer mi", tb, mem)
+    assert mem.actions == [] and mem.answered == "finance"                         # durum değiştirme eylemi üretmesin
+    assert "Rica ederim" in ai.answer("teşekkürler", tb, mem)
+
+
+def test_goal_solver_finds_cheapest_package_and_admits_unreachable(ai, tb):
+    p = tb.projects[1]
+    mem = Memory()
+    ans = ai.answer("enerji tüketimini %10 düşürmek istiyorum", tb, mem)
+    assert mem.answered == "goal" and "en düşük CAPEX" in ans
+    from itertools import combinations
+    codes = p.applicable_codes()
+    cheapest = min(p.scenario(list(c)).capex for r in range(1, len(codes) + 1) for c in combinations(codes, r)
+                   if p.scenario(list(c)).energy_reduction_pct >= 0.10)
+    assert f"CAPEX {cheapest / 1e6:,.2f}".replace(".", ",") in ans
+    assert "ulaşılamıyor" in ai.answer("karbonu %80 azalt", tb, mem)
+    assert mem.answered == "goal"
+    assert "C'ye" in ai.answer("sınıfımı C yapmak için ne gerekir", tb, mem)
+
+
+def test_compound_questions_are_split_but_entity_lists_are_not(ai, tb):
+    mem = Memory()
+    ans = ai.answer("sağlık skorum kaç? bir de karbon ne kadar", tb, mem)
+    assert "**1)" in ans and "**2)" in ans and "tCO₂" in ans and "/100" in ans
+    ans = ai.answer("led ve vfd yaparsam ne olur", tb, mem)       # varlık listesi: bölünmemeli
+    assert "**1)" not in ans and "LED" in ans and "VFD" in ans
+
+
+def test_goal_followup_building_followup_and_synonyms(ai, tb):
+    mem = Memory()
+    ai.answer("karbonu yüzde 10 azaltmak için ne yapmalıyım", tb, mem)
+    assert "karbonu %15 azaltma" in ai.answer("peki %15 olursa", tb, mem)
+    assert "Gerekçe" in ai.answer("enerji tüketimini %10 düşürmek istiyorum", tb, mem)
+    ai.answer("doğalgaz tüketimi ne kadar", tb, mem)
+    assert mem.answered == "energy"
+    ai.answer("peki Plaza Kule için", tb, mem)
+    assert mem.answered == "energy"                                # önceki soru yeni bina için tekrarlandı
+    ai.answer("elektrik masrafım ne kadar", tb, mem)
+    assert mem.answered == "cost"                                  # eş anlamlı: masraf -> maliyet
+
+
+def test_proactive_findings(ai, tb):
+    mem = Memory()
+    ans = ai.answer("dikkat etmem gereken bir şey var mı", tb, mem)
+    assert mem.answered == "proactive" and "Yaşlı ve zayıf ekipman" in ans
+
+
+@pytest.mark.parametrize("q,needles", [
+    ("kışın doğalgaz ne kadar tüketiyoruz", ["Doğalgaz", "kış", "MWh"]),
+    ("en yüksek elektrik hangi ay", ["Temmuz", "en yüksek"]),
+    ("son 3 ay maliyet geçen yıla göre", ["son 3 ay", "2024", "₺"]),
+    ("ocaktan marta kadar elektrik", ["Ocak, Şubat, Mart"]),
+    ("yaz aylarında ortalama elektrik", ["aylık ortalama", "yaz"]),
+    ("2024 yılında doğalgaz", ["2024"]),
+    ("en düşük su tüketimi hangi ay", ["en düşük", "m³"]),
+])
+def test_query_layer_slots(ai, tb, q, needles):
+    mem = Memory()
+    ans = ai.answer(q, tb, mem)
+    assert mem.answered == "query" and all(x in ans for x in needles), ans
+
+
+def test_query_values_match_data_and_unknown_explains_understanding(ai, tb):
+    from edifice.models import UtilityType as U
+    p = tb.projects[1]
+    jun_aug = sum(p.monthly(p.year, U.ELECTRICITY)[i] for i in (5, 6, 7))
+    ans = ai.answer("haziran temmuz ağustos elektrik", tb, Memory())
+    assert f"{jun_aug / 1000:,.1f}".replace(",", "X").replace(".", ",").replace("X", ".") in ans
+    assert "Şunu anladım" in ai.answer("ağustos kırmızı", tb, Memory()) or "anlayamadım" in ai.answer("ağustos kırmızı", tb, Memory())
+
+
+def test_opportunity_detail_range_and_false_premise(ai, tb):
+    mem = Memory()
+    ans = ai.answer("chiller için en kötü senaryo ne", tb, mem)
+    assert mem.answered == "opp_detail" and "Düşük" in ans and "Yüksek" in ans and "NPV" in ans
+    ans = ai.answer("chiller neden uygun değil", tb, mem)
+    assert "aslında" in ans and "Gerekçe" in ans
