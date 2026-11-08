@@ -191,3 +191,35 @@ def test_proactive_findings(ai, tb):
     mem = Memory()
     ans = ai.answer("dikkat etmem gereken bir şey var mı", tb, mem)
     assert mem.answered == "proactive" and "Yaşlı ve zayıf ekipman" in ans
+
+
+@pytest.mark.parametrize("q,needles", [
+    ("kışın doğalgaz ne kadar tüketiyoruz", ["Doğalgaz", "kış", "MWh"]),
+    ("en yüksek elektrik hangi ay", ["Temmuz", "en yüksek"]),
+    ("son 3 ay maliyet geçen yıla göre", ["son 3 ay", "2024", "₺"]),
+    ("ocaktan marta kadar elektrik", ["Ocak, Şubat, Mart"]),
+    ("yaz aylarında ortalama elektrik", ["aylık ortalama", "yaz"]),
+    ("2024 yılında doğalgaz", ["2024"]),
+    ("en düşük su tüketimi hangi ay", ["en düşük", "m³"]),
+])
+def test_query_layer_slots(ai, tb, q, needles):
+    mem = Memory()
+    ans = ai.answer(q, tb, mem)
+    assert mem.answered == "query" and all(x in ans for x in needles), ans
+
+
+def test_query_values_match_data_and_unknown_explains_understanding(ai, tb):
+    from edifice.models import UtilityType as U
+    p = tb.projects[1]
+    jun_aug = sum(p.monthly(p.year, U.ELECTRICITY)[i] for i in (5, 6, 7))
+    ans = ai.answer("haziran temmuz ağustos elektrik", tb, Memory())
+    assert f"{jun_aug / 1000:,.1f}".replace(",", "X").replace(".", ",").replace("X", ".") in ans
+    assert "Şunu anladım" in ai.answer("ağustos kırmızı", tb, Memory()) or "anlayamadım" in ai.answer("ağustos kırmızı", tb, Memory())
+
+
+def test_opportunity_detail_range_and_false_premise(ai, tb):
+    mem = Memory()
+    ans = ai.answer("chiller için en kötü senaryo ne", tb, mem)
+    assert mem.answered == "opp_detail" and "Düşük" in ans and "Yüksek" in ans and "NPV" in ans
+    ans = ai.answer("chiller neden uygun değil", tb, mem)
+    assert "aslında" in ans and "Gerekçe" in ans

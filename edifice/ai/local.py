@@ -179,7 +179,7 @@ INTENT_LABELS = {
     "opportunities": "Öneri listesi", "start": "Nereden başlamalı", "budget": "Bütçeye göre paket", "scenario": "Senaryo (ne olur?)",
     "finance": "Finans (NPV, geri ödeme)", "equipment": "Ekipman", "portfolio": "Portföy", "why": "Neden?", "compare": "Karşılaştırma",
     "climate": "Anlık hava ve haftalık öngörü", "solar": "Güneş enerjisi (GES)", "price": "Birim fiyat analizi", "mv": "Gerçekleşen tasarruf (M&V)", "weather": "Hava düzeltmesi", "quality": "Veri kalitesi", "evidence": "Kaynak / kanıt", "act_status": "İşlem: proje durumu", "act_report": "İşlem: rapor", "act_open": "İşlem: sayfa aç",
-    "act_scenario": "İşlem: senaryo seç", "greet": "Selamlama / yardım", "proactive": "Bulgular / uyarılar", "goal": "Hedef planlama", "facts": "Bina bilgileri", "thanks": "Teşekkür"}
+    "act_scenario": "İşlem: senaryo seç", "greet": "Selamlama / yardım", "proactive": "Bulgular / uyarılar", "opp_detail": "Öneri ayrıntısı", "query": "Tüketim sorgusu", "goal": "Hedef planlama", "facts": "Bina bilgileri", "thanks": "Teşekkür"}
 
 
 @dataclass
@@ -256,6 +256,47 @@ NAV_TARGETS = [(("portfoy",), ("Portföy", None)), (("finans",), ("Finans", None
                (("asistan", "sohbet"), ("Asistan", "Sohbet"))]
 
 
+SEASONS = {"kis": [11, 0, 1], "yaz": [5, 6, 7], "ilkbahar": [2, 3, 4], "bahar": [2, 3, 4], "sonbahar": [8, 9, 10], "guz": [8, 9, 10]}
+METRICS = [("karbon", ("karbon", "emisyon", "co2", "sera")), ("maliyet", ("maliyet", "fatura", "odeme", "odedik", "odeyecegiz", "para", "tl", "lira", "ucret", "masraf", "gider")),
+           ("su", ("su", "metrekup", "m3")), ("dogalgaz", ("dogalgaz", "gaz", "isitma")), ("elektrik", ("elektrik", "kwh", "aydinlatma")),
+           ("enerji", ("enerji", "tuketim", "tuketiyoruz", "harcadik", "harcama"))]
+AGG_MAX = ("en yuksek", "en cok", "en fazla", "pik", "zirve", "en buyuk")
+AGG_MIN = ("en dusuk", "en az", "en kucuk", "en ucuz")
+AGG_AVG = ("ortalama", "aylik ortalama", "ortalamasi")
+COMPARE_WORDS = ("gecen yil", "onceki yil", "bir onceki", "gecen sene", "yila gore", "yila kiyasla", "artti mi", "azaldi mi", "arttimi", "degisim", "fark")
+
+
+def parse_query(text: str) -> dict:
+    """Soruyu dilimlere ayırır: metrik (elektrik/gaz/su/enerji/karbon/maliyet), dönem (ay, mevsim, 'son N ay', çeyrek, yarıyıl),
+    toplama (toplam/ortalama/en yüksek/en düşük) ve kıyas (geçen yıla göre). Boş dilimler None kalır."""
+    n = " " + norm(text) + " "
+    n = n.replace("geri odeme", " geriodeme ")        # "geri ödeme süresi" bir maliyet sorgusu değil
+    words = n.split()
+    metric = next((m for m, keys in METRICS if any((f" {k} " in n) if len(k) <= 3 else any(w.startswith(k) for w in words) for k in keys)), None)
+    months = find_months(text)
+    rng = re.search(r"(\w+?)(?:dan|den|tan|ten)\s+(\w+?)(?:a|e|ya|ye)?\s+(?:kadar|arasi)|(\w+)\s+(?:ile|-)\s+(\w+)\s+arasi", n)
+    if rng and len(months) >= 2:
+        a_, b_ = months[0], months[1]
+        months = list(range(a_, b_ + 1)) if a_ <= b_ else list(range(a_, 12)) + list(range(0, b_ + 1))
+    period = "ay" if months else None
+    for key, idx in SEASONS.items():
+        if re.search(rf"\b{key}(?:in|lari|leri|lar|ler|da|de)?\b", n) and not months:
+            months, period = idx, {"kis": "kış", "guz": "sonbahar", "bahar": "ilkbahar"}.get(key, key)
+    last = re.search(r"son\s+(\d+)\s+ay", n)
+    if last and not months:
+        k = min(12, int(last.group(1)))
+        months, period = list(range(12 - k, 12)), f"son {k} ay"
+    if not months:
+        for pat, idx, lab in ((r"ilk ceyrek|1\. ceyrek", [0, 1, 2], "1. çeyrek"), (r"ikinci ceyrek|2\. ceyrek", [3, 4, 5], "2. çeyrek"),
+                              (r"ucuncu ceyrek|3\. ceyrek", [6, 7, 8], "3. çeyrek"), (r"dorduncu ceyrek|son ceyrek|4\. ceyrek", [9, 10, 11], "4. çeyrek"),
+                              (r"ilk yari|ilk 6 ay", list(range(6)), "ilk yarıyıl"), (r"ikinci yari|son yari", list(range(6, 12)), "ikinci yarıyıl")):
+            if re.search(pat, n):
+                months, period = idx, lab
+    agg = "max" if any(a in n for a in AGG_MAX) else "min" if any(a in n for a in AGG_MIN) else "avg" if any(a in n for a in AGG_AVG) else "sum"
+    year = next((int(y) for y in re.findall(r"\b(20\d\d)\b", n)), None)
+    return {"metric": metric, "months": months, "period": period, "agg": agg, "compare": any(c in n for c in COMPARE_WORDS), "year": year}
+
+
 def weather_topic(text: str) -> bool:
     """Soru bina tüketiminin hava düzeltmesiyle mi ilgili? (genel hava durumu sorusu değil)"""
     return any(w in norm(text) for w in ("duzelt", "iklim", "derece", "normaliz", "kis", "tasarruf", "tuketim", "ısıtma", "isitma"))
@@ -318,6 +359,20 @@ class LocalAssistant:
                 out = getattr(self, "a_" + prev)(question, toolbox, mem.budget, mem.codes if prev in ("scenario", "finance") else [])
                 mem.chart, mem.actions = self._chart, self._actions
                 return out
+        if codes_pre := find_codes(question, toolbox):
+            det = self.a_opp_detail(question, toolbox, codes_pre)
+            if det:
+                mem.intent = mem.answered = "opp_detail"
+                mem.codes = codes_pre
+                return det
+        qd = parse_query(question)
+        if self.query_applies(qd) and not parse_budget(question) and not find_codes(question, toolbox) and not (OPEN_VERBS | ACTION_VERBS) & set(norm(question).split()) \
+                and not any(w in norm(question) for w in ("neden", "niye", "nasil hesap", "kaynak", "oneri", "senaryo", "hedef", "sinif", "skor")):
+            mem.intent = mem.answered = "query"
+            self._chart, self._actions = None, []
+            out = self.a_query(question, toolbox, qd)
+            mem.chart, mem.actions = self._chart, self._actions
+            return out
         ranked = self.model.classify(question)
         intent, score = ranked[0]
         budget = parse_budget(question)
@@ -400,13 +455,136 @@ class LocalAssistant:
         return out
 
     # ---- cevaplar
+    # ---- sorgu katmanı: metrik x dönem x toplama x kıyas
+    def _series(self, p, year: int, metric: str) -> tuple[list[float], str]:
+        from ..models import UtilityType as U
+        if metric == "karbon":
+            return p.monthly_carbon(year), "kgCO₂"
+        if metric == "maliyet":
+            return p.monthly_cost(year), "₺"
+        if metric == "su":
+            return p.monthly(year, U.WATER), "m³"
+        if metric == "elektrik":
+            return p.monthly(year, U.ELECTRICITY), "kWh"
+        if metric == "dogalgaz":
+            return p.monthly(year, U.GAS), "kWh"
+        return [a + b for a, b in zip(p.monthly(year, U.ELECTRICITY), p.monthly(year, U.GAS))], "kWh"
+
+    @staticmethod
+    def _fmt(v: float, unit: str) -> str:
+        if unit == "₺":
+            return _tl(v)
+        if unit == "kgCO₂":
+            return f"{_n(v / 1000, 1)} tCO₂" if abs(v) >= 1000 else f"{_n(v)} kgCO₂"
+        if unit == "m³":
+            return f"{_n(v)} m³"
+        return f"{_n(v / 1000, 1)} MWh" if abs(v) >= 1000 else f"{_n(v)} kWh"
+
+    LABELS = {"karbon": "Karbon", "maliyet": "Enerji maliyeti", "su": "Su", "elektrik": "Elektrik", "dogalgaz": "Doğalgaz", "enerji": "Toplam enerji"}
+
+    def query_applies(self, qd: dict) -> bool:
+        """Sorgu katmanı yalnız somut bir dilim varsa devreye girer: dönem, ya da en yüksek/en düşük/ortalama, ya da kıyas + metrik."""
+        return bool(qd["metric"]) and bool(qd["months"] or qd["agg"] != "sum" or qd["compare"] or qd["year"])
+
+    def a_opp_detail(self, q, t, codes: list[str]) -> str | None:
+        """Tek bir önerinin ayrıntısı: uygunluk gerekçesi ve düşük/tipik/yüksek tasarruf senaryosu. İlgili kelime yoksa None (normal akış sürer)."""
+        n = norm(q)
+        fit = any(w in n for w in ("uygun", "gerekce", "onerilm", "neden yok", "neden cikmadi"))
+        rng = any(w in n for w in ("en kotu", "kotumser", "iyimser", "en iyi senaryo", "dusuk senaryo", "yuksek senaryo", "aralik", "belirsiz", "risk", "ya tutmazsa"))
+        if not (fit or rng):
+            return None
+        p = t.projects[t.current]
+        rows = {r["kod"]: r for r in json.loads(t.run("get_opportunities", {}))}
+        out = []
+        for code in codes[:2]:
+            r = rows.get(code)
+            if r is None:
+                continue
+            blocks = [f"**{r['ad']}**"]
+            if fit:
+                lab = {"high": "yüksek öncelik", "medium": "orta öncelik", "low": "düşük öncelik", "none": "uygun değil", "unknown": "veri yok"}.get(r["uygunluk"], r["uygunluk"])
+                if "degil" in n and r["uygunluk"] != "none":
+                    blocks.append("Bu öneri aslında **uygun** görünüyor; ekipman kaydı onu destekliyor.")
+                blocks.append(f"Uygunluk: **{lab}**. Gerekçe: {r['uygunluk_gerekce'] or 'ekipman kayıtlarına göre ek bir not yok'}.")
+            if rng or fit:
+                rows_ = []
+                for mode, name in (("low", "Düşük"), ("typ", "Tipik"), ("high", "Yüksek")):
+                    try:
+                        s_, f_ = p.scenario([code], mode), p.finance([code], mode)
+                    except Exception:
+                        continue
+                    rows_.append(f"- {name}: tasarruf {_tl(s_.annual_saving)}/yıl, geri ödeme {'-' if s_.payback_years is None else _n(s_.payback_years, 1) + ' yıl'}, NPV {_m(f_.npv)}")
+                if rows_:
+                    verdict = ""
+                    lo = p.finance([code], "low").npv if rows_ else 0
+                    verdict = ("En kötü senaryoda bile NPV pozitif: yatırım tasarruf oranı belirsizliğine dayanıklı." if lo > 0
+                               else "En kötü senaryoda NPV negatif: sonuç tasarruf oranına duyarlı, uygulamadan önce saha etüdüyle doğrula.")
+                    blocks.append("Senaryo aralığı:\n" + "\n".join(rows_) + "\n\n" + verdict)
+            out.append("\n\n".join(blocks))
+        return "\n\n---\n\n".join(out) or None
+
+    def a_query(self, q, t, qd: dict) -> str:
+        p = t.projects[t.current]
+        metric = qd["metric"]
+        years = sorted({r.year for r in p.readings})
+        year = qd["year"] if qd["year"] in years else p.year
+        if qd["year"] and qd["year"] not in years:
+            return f"{qd['year']} yılına ait veri yok; elimdeki yıllar: {', '.join(map(str, years))}."
+        vals, unit = self._series(p, year, metric)
+        idx = qd["months"] or list(range(12))
+        scope = qd["period"] or "yıl"
+        label = f"{self.LABELS[metric]}, {year}" + (f" · {', '.join(MONTH_NAMES[i] for i in idx)}" if qd["period"] == "ay" else f" · {scope}" if qd["period"] else "")
+        sel = [(i, vals[i]) for i in idx if vals[i] or True]
+        if not any(v for _, v in sel):
+            return f"{label} için kayıtlı tüketim yok."
+        if qd["agg"] in ("max", "min"):
+            i, v = (max if qd["agg"] == "max" else min)(sel, key=lambda x: x[1])
+            word = "en yüksek" if qd["agg"] == "max" else "en düşük"
+            rest = sorted(sel, key=lambda x: -x[1] if qd["agg"] == "max" else x[1])[1:3]
+            head = f"{self.LABELS[metric]} {word} **{MONTH_NAMES[i]}** ayında: **{self._fmt(v, unit)}**."
+            body = (" Sonrakiler: " + ", ".join(f"{MONTH_NAMES[j]} ({self._fmt(x, unit)})" for j, x in rest) + ".") if rest else ""
+            avg = sum(v_ for _, v_ in sel) / len(sel)
+            tail = f" Dönem ortalamasından %{abs(v / avg - 1) * 100:.0f} {'yüksek' if v > avg else 'düşük'}." if avg else ""
+            ans = head + body + tail
+        else:
+            total = sum(v for _, v in sel)
+            if qd["agg"] == "avg":
+                ans = f"{label}: aylık ortalama **{self._fmt(total / len(sel), unit)}** (toplam {self._fmt(total, unit)}, {len(sel)} ay)."
+            else:
+                ans = f"{label}: toplam **{self._fmt(total, unit)}**" + (f" (aylık ortalama {self._fmt(total / len(sel), unit)})" if len(sel) > 1 else "") + "."
+        prev = year - 1 if (year - 1) in years else None
+        if qd["compare"] or (prev and qd["agg"] == "sum" and len(sel) > 1 and qd["compare"]):
+            if prev is None:
+                ans += "\n\nKıyas için önceki yıla ait veri yok."
+            else:
+                pv, _ = self._series(p, prev, metric)
+                a_, b_ = sum(vals[i] for i in idx), sum(pv[i] for i in idx)
+                if b_:
+                    ch = (a_ / b_ - 1) * 100
+                    ans += f"\n\nAynı dönem {prev}: {self._fmt(b_, unit)} -> %{abs(ch):.1f} {'arttı' if ch > 0 else 'azaldı'}."
+                    worst = max(idx, key=lambda i: abs(vals[i] - pv[i]))
+                    if len(idx) > 1 and abs(vals[worst] - pv[worst]) > 0:
+                        ans += f" En büyük fark {MONTH_NAMES[worst]} ayında ({self._fmt(vals[worst] - pv[worst], unit).replace('-', '−')})."
+        self._chart = self._monthly_chart(p)
+        return ans
+
+    def _understood(self, qd: dict) -> str:
+        bits = []
+        if qd["metric"]:
+            bits.append(f"konu: {self.LABELS[qd['metric']].lower()}")
+        if qd["months"]:
+            bits.append("dönem: " + (qd["period"] if qd["period"] != "ay" else ", ".join(MONTH_NAMES[i] for i in qd["months"])))
+        if qd["agg"] != "sum":
+            bits.append({"max": "en yüksek", "min": "en düşük", "avg": "ortalama"}[qd["agg"]])
+        return ("Şunu anladım: " + "; ".join(bits) + ". Ama ne istediğini (toplam, en yüksek ay, geçen yılla kıyas…) kesinleştiremedim.\n\n") if bits else ""
+
     def _unknown(self, question: str = "", mem: Memory | None = None, ranked=None) -> str:
         if mem is not None:
             mem.unknown, mem.pending_unknown = question, question
             mem.suggest = [i for i, sc in (ranked or [])[:3] if sc >= 0.15 and i != "greet" and self.model.coverage(question, i) >= 0.4 and (i != "weather" or weather_topic(question))][:3]
             if mem.suggest:
-                return "Tam emin olamadım. Aşağıdakilerden birini mi kastettin? Seçersen bunu öğrenirim."
-        return ("Bunu tam anlayamadım. Şunları cevaplayabilirim:\n\n"
+                return self._understood(parse_query(question)) + "Tam emin olamadım. Aşağıdakilerden birini mi kastettin? Seçersen bunu öğrenirim."
+        return (self._understood(parse_query(question)) + "Bunu tam anlayamadım. Şunları cevaplayabilirim:\n\n"
                 "- Bina özeti, sağlık skoru, enerji sınıfı\n- Enerji, karbon, su, maliyet ve yıllık değişim\n"
                 "- Pik ay ve tüketim anomalileri\n- Dönüşüm önerileri, nereden başlanacağı, bütçeye göre paket\n"
                 "- Senaryo (ör. “LED ve VFD yaparsam”), geri ödeme, NPV, IRR\n- Ekipman envanteri, portföy karşılaştırması\n"
