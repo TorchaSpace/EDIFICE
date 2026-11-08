@@ -33,7 +33,8 @@ def tune_spin(sp):
 
 def scroll(inner: QWidget) -> QScrollArea:
     """İçerik doğal boyutunda kalır; sığmazsa yumuşakça kayar (alanlar asla birbirine girmez)."""
-    area = QScrollArea()
+    from .widgets import SmoothScrollArea
+    area = SmoothScrollArea()
     area.setWidgetResizable(True)
     area.setFrameShape(QScrollArea.NoFrame)
     area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)

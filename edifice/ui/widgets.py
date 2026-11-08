@@ -3,12 +3,12 @@ from __future__ import annotations
 
 from typing import Callable
 
-from PySide6.QtCore import (Property, QEasingCurve, QParallelAnimationGroup, QPointF, QPropertyAnimation, QRectF, QSize, Qt,
-                            QVariantAnimation)
+from PySide6.QtCore import (Property, QEasingCurve, QEvent, QObject, QParallelAnimationGroup, QPointF, QPropertyAnimation, QRectF,
+                            QSize, Qt, QTimer, QVariantAnimation)
 from PySide6.QtGui import (QColor, QFont, QIcon, QLinearGradient, QPainter, QPainterPath, QPen,
                            QPixmap)
-from PySide6.QtWidgets import (QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel, QPushButton,
-                               QStackedWidget, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QAbstractSpinBox, QComboBox, QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel, QPushButton,
+                               QScrollArea, QSlider, QStackedWidget, QVBoxLayout, QWidget)
 
 # ---- Tasarım tokenları (Figma Make: App.tsx) -------------------------------
 G = "#0DDD96"
@@ -26,6 +26,23 @@ BORDER = "rgba(255,255,255,0.07)"
 G_SOFT = "rgba(13,221,150,0.10)"
 INK = TEXT  # geriye dönük isim
 ACCENT = G
+
+# ---- Hareket (motion) tokenları: kısa ve tutarlı süreler arayüzün "akıcı" hissetmesini sağlar.
+# Sayfa geçişi göz kırpması kadar kısa olmalı; giriş animasyonları yalnız ilk açılışta oynar.
+MOTION_PAGE = 200        # sayfa/sekme geçişi
+MOTION_NAV = 260         # kenar menü göstergesi
+MOTION_COUNT = 650       # KPI sayaç animasyonu
+MOTION_CHART = 850       # grafik/gösterge giriş animasyonu
+
+
+def first_show(widget, e) -> bool:
+    """Giriş animasyonu oynatılsın mı? Yalnız widget'ın ilk (kullanıcı kaynaklı olmayan) gösteriminde True.
+    Sekmeler arasında gidip gelince ya da pencere küçültülüp açılınca animasyonlar tekrar oynamaz."""
+    if getattr(widget, "_intro_done", False):
+        return False
+    widget._intro_done = True
+    return True
+
 
 GRADE_COLORS = {"A": G, "B": "#5BE3B4", "C": AMBER, "D": "#FB923C", "E": RED}
 SANS = ["Manrope", "SF Pro Display", "Helvetica Neue", "Arial"]
@@ -168,6 +185,13 @@ QSlider::handle:horizontal {{ width: 24px; height: 24px; margin: -9px 0; border-
     border: 5px solid {G}; }}
 QSlider::handle:horizontal:hover {{ border: 5px solid #5BF0BD; }}
 QFrame#rowPill {{ background: rgba(13,221,150,0.07); border: 1px solid rgba(13,221,150,0.30); border-radius: 15px; }}
+QFrame#toast {{ background: #0F1D30; border: 1px solid rgba(13,221,150,0.28); border-radius: 14px; }}
+QLabel#toastText {{ color: {TEXT}; font-size: 13px; font-weight: 600; }}
+QPushButton#toastBtn {{ background: {G_SOFT}; color: {G}; border: 1px solid rgba(13,221,150,0.25); border-radius: 9px;
+    padding: 6px 12px; font-size: 12px; font-weight: 700; }}
+QPushButton#toastBtn:hover {{ background: rgba(13,221,150,0.18); }}
+QPushButton#toastClose {{ background: transparent; color: {MUTED}; border: none; border-radius: 12px; font-size: 11px; }}
+QPushButton#toastClose:hover {{ color: {TEXT}; background: rgba(255,255,255,0.06); }}
 QToolTip {{ background: {SIDEBAR_BG}; color: {TEXT}; border: 1px solid {BORDER}; padding: 6px; }}
 """
 
@@ -240,7 +264,7 @@ class _Animated(QWidget):
         super().__init__()
         self._score, self._frac = score, 0.0
         self._anim = QPropertyAnimation(self, b"frac", self)
-        self._anim.setDuration(ms)
+        self._anim.setDuration(min(ms, MOTION_CHART))
         self._anim.setEasingCurve(QEasingCurve.OutQuart)
 
     def _get(self) -> float:
@@ -254,6 +278,10 @@ class _Animated(QWidget):
 
     def showEvent(self, e):
         super().showEvent(e)
+        if not first_show(self, e):
+            if self._anim.state() != QPropertyAnimation.Running:
+                self._frac = self._score / 100
+            return
         self._anim.stop()
         self._anim.setStartValue(0.0)
         self._anim.setEndValue(self._score / 100)
@@ -321,7 +349,7 @@ class Card(QFrame):
 
     def showEvent(self, e):
         super().showEvent(e)
-        if self._target is not None and self._fmt is not None:
+        if self._target is not None and self._fmt is not None and first_show(self, e):
             self._play(0.0)
 
     def _play(self, start: float):
@@ -331,7 +359,7 @@ class Card(QFrame):
         self._anim = QVariantAnimation(self)
         self._anim.setStartValue(float(start))
         self._anim.setEndValue(float(target))
-        self._anim.setDuration(1100)
+        self._anim.setDuration(MOTION_COUNT)
         self._anim.setEasingCurve(QEasingCurve.OutQuart)
 
         def step(v):
@@ -472,33 +500,188 @@ class ScoreBar(_Animated):
 
 
 class FadeStack(QStackedWidget):
-    """Sayfa geçişlerinde yumuşak fade-in + hafif aşağıdan yukarı kayma."""
+    """Sayfa geçişlerinde kısa fade-in + hafif aşağıdan yukarı kayma.
+    Aynı sayfaya tekrar basınca animasyon oynamaz; hızlı art arda tıklamada önceki animasyon temizce kesilir."""
 
     def setCurrentIndex(self, index: int):
+        if index == self.currentIndex() and self.currentWidget() is not None:
+            return
+        prev = getattr(self, "_anim", None)
+        if prev is not None:
+            prev.stop()
+            pw = getattr(self, "_anim_widget", None)
+            try:
+                if pw is not None:
+                    pw.setGraphicsEffect(None)
+                    pw.move(0, 0)
+            except RuntimeError:          # widget bu arada silinmiş (bina değişimi)
+                pass
+            self._anim = None
         super().setCurrentIndex(index)
         w = self.currentWidget()
-        if w is None:
+        if w is None or not self.isVisible():
             return
         group = QParallelAnimationGroup(w)
         eff = QGraphicsOpacityEffect(w)
         w.setGraphicsEffect(eff)
         fade = QPropertyAnimation(eff, b"opacity", w)
-        fade.setDuration(520)
+        fade.setDuration(MOTION_PAGE)
         fade.setStartValue(0.0)
         fade.setEndValue(1.0)
-        fade.setEasingCurve(QEasingCurve.OutQuart)
+        fade.setEasingCurve(QEasingCurve.OutCubic)
         group.addAnimation(fade)
         if w.width() > 0:
             slide = QPropertyAnimation(w, b"pos", w)
-            slide.setDuration(520)
-            end = w.pos()
-            slide.setStartValue(QPointF(end.x(), end.y() + 18).toPoint())
+            slide.setDuration(MOTION_PAGE + 60)
+            end = QPointF(0, 0).toPoint()
+            slide.setStartValue(QPointF(0, 10).toPoint())
             slide.setEndValue(end)
-            slide.setEasingCurve(QEasingCurve.OutQuart)
+            slide.setEasingCurve(QEasingCurve.OutCubic)
             group.addAnimation(slide)
         group.finished.connect(lambda: (w.setGraphicsEffect(None), w.move(0, 0)))
         group.start()
-        self._anim = group
+        self._anim, self._anim_widget = group, w
+
+
+class SmoothScrollArea(QScrollArea):
+    """Fare tekerleğiyle kaydırmayı yumuşatır (dokunmatik yüzey/trackpad zaten piksel piksel kaydırır, ona dokunulmaz)."""
+
+    STEP = 110
+
+    def __init__(self, *a, **k):
+        super().__init__(*a, **k)
+        self._target = None
+        self._sanim = QVariantAnimation(self)
+        self._sanim.setDuration(240)
+        self._sanim.setEasingCurve(QEasingCurve.OutCubic)
+        self._sanim.valueChanged.connect(lambda v: self.verticalScrollBar().setValue(int(v)))
+        self._sanim.finished.connect(lambda: setattr(self, "_target", None))
+
+    def wheelEvent(self, e):
+        bar = self.verticalScrollBar()
+        dy = e.angleDelta().y()
+        if not e.pixelDelta().isNull() or dy == 0 or bar.maximum() == 0 or e.modifiers():
+            super().wheelEvent(e)
+            return
+        base = self._target if self._target is not None else bar.value()
+        target = max(bar.minimum(), min(bar.maximum(), base - dy / 120 * self.STEP))
+        if target == bar.value():
+            super().wheelEvent(e)
+            return
+        self._target = target
+        self._sanim.stop()
+        self._sanim.setStartValue(float(bar.value()))
+        self._sanim.setEndValue(float(target))
+        self._sanim.start()
+        e.accept()
+
+
+class WheelGuard(QObject):
+    """Odakta olmayan sayı kutusu / açılır liste / kaydırıcı üzerinde tekerlek, değeri yanlışlıkla değiştirmesin:
+    olay sayfaya geçer ve sayfa kayar. (Kullanıcı kutuya tıklayınca tekerlekle değiştirmek yine mümkün.)"""
+
+    _instance = None
+
+    @classmethod
+    def install(cls):
+        """Uygulama başına tek bir filtre (her pencere için ayrı kurmak her olayı yavaşlatır)."""
+        from PySide6.QtWidgets import QApplication
+        app = QApplication.instance()
+        if cls._instance is None and app is not None:
+            cls._instance = cls(app)
+            app.installEventFilter(cls._instance)
+
+    def eventFilter(self, obj, e):
+        if e.type() == QEvent.Wheel and isinstance(obj, (QAbstractSpinBox, QComboBox, QSlider)) and not obj.hasFocus():
+            e.ignore()
+            return True
+        return False
+
+
+class Toast(QFrame):
+    """Pencerenin altında beliren kısa bilgi kartı (isteğe bağlı eylem düğmesiyle); birkaç saniye sonra kendiliğinden kaybolur."""
+
+    def __init__(self, host: QWidget):
+        super().__init__(host)
+        self.setObjectName("toast")
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(16, 10, 10, 10)
+        lay.setSpacing(12)
+        self._icon = QLabel("✓")
+        self._icon.setObjectName("toastIcon")
+        self._text = QLabel("")
+        self._text.setObjectName("toastText")
+        self._btn = QPushButton("")
+        self._btn.setObjectName("toastBtn")
+        self._btn.setCursor(Qt.PointingHandCursor)
+        close = QPushButton("✕")
+        close.setObjectName("toastClose")
+        close.setCursor(Qt.PointingHandCursor)
+        close.setFixedSize(24, 24)
+        close.clicked.connect(self.dismiss)
+        lay.addWidget(self._icon)
+        lay.addWidget(self._text, 1)
+        lay.addWidget(self._btn)
+        lay.addWidget(close)
+        self._eff = QGraphicsOpacityEffect(self)
+        self.setGraphicsEffect(self._eff)
+        self._fade = QPropertyAnimation(self._eff, b"opacity", self)
+        self._fade.setDuration(180)
+        self._hiding = False
+        self._fade.finished.connect(lambda: self._hiding and self.hide())
+        self._timer = QTimer(self)
+        self._timer.setSingleShot(True)
+        self._timer.timeout.connect(self.dismiss)
+        self._action = None
+        self._btn.clicked.connect(self._run)
+        host.installEventFilter(self)
+        self.hide()
+
+    def show_message(self, text: str, kind: str = "ok", action: tuple[str, Callable] | None = None, ms: int = 4500):
+        icon, color = {"ok": ("✓", G), "info": ("i", INDIGO), "warn": ("!", AMBER), "error": ("✕", RED)}.get(kind, ("✓", G))
+        self._icon.setText(icon)
+        self._icon.setStyleSheet(f"color: {color}; border: 1px solid {color}; border-radius: 10px; min-width: 20px; max-width: 20px;"
+                                 "min-height: 20px; max-height: 20px; font-size: 11px; font-weight: 800; qproperty-alignment: AlignCenter;")
+        self._text.setText(text)
+        self._action = action[1] if action else None
+        self._btn.setText(action[0] if action else "")
+        self._btn.setVisible(bool(action))
+        self.adjustSize()
+        self._place()
+        self.show()
+        self.raise_()
+        self._fade.stop()
+        self._fade.setStartValue(self._eff.opacity() if self.isVisible() else 0.0)
+        self._fade.setEndValue(1.0)
+        self._hiding = False
+        self._fade.start()
+        self._timer.start(ms + (2500 if action else 0))
+
+    def dismiss(self):
+        self._timer.stop()
+        self._fade.stop()
+        self._fade.setStartValue(self._eff.opacity())
+        self._fade.setEndValue(0.0)
+        self._hiding = True
+        self._fade.start()
+
+    def _run(self):
+        fn = self._action
+        self.dismiss()
+        if fn:
+            fn()
+
+    def _place(self):
+        host = self.parentWidget()
+        w = min(max(self.sizeHint().width(), 320), host.width() - 48)
+        self.resize(w, self.sizeHint().height())
+        self.move(host.width() - w - 24, host.height() - self.height() - 24)
+
+    def eventFilter(self, obj, e):
+        if e.type() == QEvent.Resize and self.isVisible():
+            self._place()
+        return False
 
 
 # ---- Navigasyon -----------------------------------------------------------
@@ -628,8 +811,8 @@ class NavBar(QWidget):
                 self.buttons.append(b)
         self._current = 0
         self._anim = QPropertyAnimation(self.indicator, b"geometry", self)
-        self._anim.setDuration(520)
-        self._anim.setEasingCurve(QEasingCurve.OutQuart)
+        self._anim.setDuration(MOTION_NAV)
+        self._anim.setEasingCurve(QEasingCurve.OutCubic)
 
     def _target(self, i: int):
         return self.buttons[i].geometry()

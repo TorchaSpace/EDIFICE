@@ -11,7 +11,7 @@ from ..ai.tools import Toolbox
 from ..db import Store
 from ..service import Project
 from .dropdown import PremiumCombo
-from .widgets import AMBER, G, MUTED, SUB, Panel, header
+from .widgets import AMBER, G, MUTED, SUB, Panel, SmoothScrollArea, header
 
 SUGGESTIONS = ["Bu binanın en büyük sorunu ne?", "Hangi öneriyle başlamalıyım?", "2 milyon ₺ bütçeyle ne yapmalıyım?",
                "Skorum neden düştü?", "Elektrik mi doğalgaz mı daha çok?", "Portföyde en kötü bina hangisi?"]
@@ -121,7 +121,7 @@ class ChatPage:
         top.addWidget(self.live, 0, Qt.AlignTop)
         lay.addLayout(top)
 
-        self.area = QScrollArea()
+        self.area = SmoothScrollArea()
         self.area.setWidgetResizable(True)
         self.area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.area.setFrameShape(QScrollArea.NoFrame)

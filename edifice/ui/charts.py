@@ -8,7 +8,7 @@ from PySide6.QtCore import Property, QEasingCurve, QPointF, QPropertyAnimation, 
 from PySide6.QtGui import QColor, QFontMetrics, QLinearGradient, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
-from .widgets import AMBER, G, INDIGO, MUTED, RED, SUB, TEXT, fmt, qfont, rgba
+from .widgets import AMBER, MOTION_CHART, G, INDIGO, MUTED, RED, SUB, TEXT, first_show, fmt, qfont, rgba
 
 COLORS = {"green": G, "indigo": INDIGO, "amber": AMBER, "red": RED, "slate": "#5B7089"}
 
@@ -39,7 +39,7 @@ class _Chart(QWidget):
         self._hover: int | None = None
         self._progress = 0.0
         self._anim = QPropertyAnimation(self, b"progress", self)
-        self._anim.setDuration(1600)
+        self._anim.setDuration(MOTION_CHART)
 
     def _get(self) -> float:
         return self._progress
@@ -58,7 +58,8 @@ class _Chart(QWidget):
 
     def showEvent(self, e):
         super().showEvent(e)
-        self.replay()
+        if first_show(self, e):
+            self.replay()
 
     def color(self, gi: int) -> str:
         return COLORS[self.colors[gi % len(self.colors)]]
@@ -315,7 +316,7 @@ class _Progress(QWidget):
         super().__init__()
         self._p = 0.0
         self._anim = QPropertyAnimation(self, b"progress", self)
-        self._anim.setDuration(ms)
+        self._anim.setDuration(min(ms, MOTION_CHART))
         self._anim.setEasingCurve(QEasingCurve.OutQuart)
 
     def _get(self) -> float:
@@ -335,7 +336,8 @@ class _Progress(QWidget):
 
     def showEvent(self, e):
         super().showEvent(e)
-        self.replay()
+        if first_show(self, e):
+            self.replay()
 
 
 class ClassScale(_Progress):
@@ -485,7 +487,7 @@ class CashFlowChart(QWidget):
         self._hover = None
         self._progress = 0.0
         self._anim = QPropertyAnimation(self, b"progress", self)
-        self._anim.setDuration(1500)
+        self._anim.setDuration(MOTION_CHART)
         self._anim.setEasingCurve(QEasingCurve.OutQuart)
         self._mix = 1.0
         self._morph = QPropertyAnimation(self, b"mix", self)
@@ -512,6 +514,8 @@ class CashFlowChart(QWidget):
 
     def showEvent(self, e):
         super().showEvent(e)
+        if not first_show(self, e):
+            return
         self._anim.stop()
         self._anim.setStartValue(0.0)
         self._anim.setEndValue(1.0)

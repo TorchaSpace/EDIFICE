@@ -36,12 +36,36 @@ class TabsPage:
             bl.addWidget(b)
             self.stack.addWidget(page.widget)
         bl.addStretch()
-        self.group.idClicked.connect(self.stack.setCurrentIndex)
+        self.names = [n for n, _ in tabs]
+        self.on_change = None                       # MainWindow: üst çubuktaki konum ve oturum hafızası için
+        self.group.idClicked.connect(self._clicked)
         lay.addWidget(bar)
         lay.addWidget(self.stack, 1)
         self.bar = bar if len(tabs) > 1 else None
         if len(tabs) == 1:
             bar.hide()
+
+    def _clicked(self, i: int):
+        self.stack.setCurrentIndex(i)
+        if self.on_change:
+            self.on_change(self.names[i])
+
+    def current(self) -> str:
+        return self.names[max(0, self.group.checkedId())]
+
+    def select(self, name: str) -> bool:
+        """Sekmeyi adıyla seçer (animasyonsuz geçiş için set_current'tan önce çağrılabilir)."""
+        if name not in self.names:
+            return False
+        i = self.names.index(name)
+        self.group.button(i).setChecked(True)
+        self._clicked(i)
+        return True
+
+    def step(self, delta: int):
+        """Ctrl+Tab / Ctrl+Shift+Tab: sonraki/önceki sekme (döngüsel)."""
+        if len(self.names) > 1:
+            self.select(self.names[(self.group.checkedId() + delta) % len(self.names)])
 
 
 class ComingSoonPage:

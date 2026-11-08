@@ -117,3 +117,13 @@ Statik analiz (pyflakes; kullanılmayan importlar temizlendi), eski veritabanı 
 - **Yük analizi** (`engine/loadprofile.py`, `ui/load_page.py`, Finans > Yük profili ve tarife): akıllı sayaç CSV'si (15 dk/30 dk/saatlik, kWh ya da kW) -> pik, temel yük, yük faktörü, gece+hafta sonu payı, bulgular, çok zamanlı tarife karşılaştırması. T1/T2/T3 saat dilimleri ve fiyat ORANLARI (1,0/1,5/0,6) varsayımdır, arayüzden değiştirilir. Talep (kW) bedeli ve reaktif modellenmedi. Veri `interval_data` tablosunda.
 - **Kayıt sayfaları**: Ortaklar, Sertifikalar (Sürdürülebilirlik sekmesi), Finansman karması (pasta grafik), Rapor geçmişi (`report_log`), proje harcaması (`projects.spent`). Genel mekanizma `Store.RECORDS` beyaz listesi + `ui/records.py`. Gantt (bitiş tarihli) ve Digital Twin hâlâ yok.
 - **CRREM**: esnek sayfa/sütun tanıma, içe aktarma özeti, vekil ülke ipucu, İndirilenler'de otomatik bulma, sürükle-bırak. Veri hâlâ gömülü DEĞİL.
+
+## Akıcılık ve kullanım kolaylığı (eklendi)
+- **Hareket**: süreler `widgets.py` başındaki `MOTION_*` tokenlarında (sayfa geçişi 200 ms, gösterge 260 ms, sayaç 650 ms, grafik 850 ms). Giriş animasyonları `first_show()` ile yalnız ilk gösterimde oynar; sekmeler arasında gidip gelince tekrar oynamaz. Yeni animasyonlu widget yazarken aynı kuralı kullan.
+- **Kaydırma**: sayfalar `SmoothScrollArea` (fare tekerleği yumuşak, trackpad'e dokunulmaz). `WheelGuard` (uygulama başına tek filtre): odakta olmayan sayı kutusu/açılır liste/kaydırıcı tekerlekle değişmez, sayfa kayar.
+- **Gezinme**: bina değiştirmek/düzenlemek/içe aktarmak kullanıcıyı bulunduğu sayfa ve sekmede tutar (`set_project(select=None)`); portföyden/uyarıdan bina açmak Genel Bakış'a gider. Üst çubukta "Sayfa / Sekme" konumu, geri/ileri geçmişi.
+- **Komut paleti** (`ui/palette.py`, Ctrl/⌘+K ve üst çubukta "Hızlı git"): sayfa, sekme, bina ve eylemler; Türkçe karakterden bağımsız arama (`norm`), eş anlamlılar `main_window.KEYWORDS`. Yeni sayfa/eylem eklerken `MainWindow.commands()`'a ve gerekirse `KEYWORDS`'e ekle.
+- **Kısayollar**: Ctrl+1…0 sayfalar, Ctrl+K, Ctrl+F, Ctrl+N, Ctrl+E, Ctrl+B, Ctrl+I, Ctrl+P, Ctrl+PgUp/PgDown sekme, Alt+←/→ geri/ileri, F1 liste (`palette.SHORTCUTS`). macOS'ta Ctrl = ⌘ olarak gösterilir.
+- **Geri bildirim**: `MainWindow.notify()` alt köşede kısa bildirim (isteğe bağlı eylem düğmesi: "Klasörü aç"); uzun işlerde `busy()` bekleme imleci. Silme onayı "Sil / Vazgeç" (varsayılan Vazgeç).
+- **Oturum hafızası**: son bina, sayfa, sekme ve pencere boyutu `QSettings("EDIFICE","EDIFICE")`; yalnız `main.py` `restore_session()` çağırır (testler kullanıcı ayarına dokunmaz). Qt'nin kendi düğmeleri `qtbase_tr` çevirisiyle Türkçe.
+- Testler: `tests/test_ux_flow.py`.
