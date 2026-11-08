@@ -164,3 +164,30 @@ def test_goal_solver_finds_cheapest_package_and_admits_unreachable(ai, tb):
     assert "ulaşılamıyor" in ai.answer("karbonu %80 azalt", tb, mem)
     assert mem.answered == "goal"
     assert "C'ye" in ai.answer("sınıfımı C yapmak için ne gerekir", tb, mem)
+
+
+def test_compound_questions_are_split_but_entity_lists_are_not(ai, tb):
+    mem = Memory()
+    ans = ai.answer("sağlık skorum kaç? bir de karbon ne kadar", tb, mem)
+    assert "**1)" in ans and "**2)" in ans and "tCO₂" in ans and "/100" in ans
+    ans = ai.answer("led ve vfd yaparsam ne olur", tb, mem)       # varlık listesi: bölünmemeli
+    assert "**1)" not in ans and "LED" in ans and "VFD" in ans
+
+
+def test_goal_followup_building_followup_and_synonyms(ai, tb):
+    mem = Memory()
+    ai.answer("karbonu yüzde 10 azaltmak için ne yapmalıyım", tb, mem)
+    assert "karbonu %15 azaltma" in ai.answer("peki %15 olursa", tb, mem)
+    assert "Gerekçe" in ai.answer("enerji tüketimini %10 düşürmek istiyorum", tb, mem)
+    ai.answer("doğalgaz tüketimi ne kadar", tb, mem)
+    assert mem.answered == "energy"
+    ai.answer("peki Plaza Kule için", tb, mem)
+    assert mem.answered == "energy"                                # önceki soru yeni bina için tekrarlandı
+    ai.answer("elektrik masrafım ne kadar", tb, mem)
+    assert mem.answered == "cost"                                  # eş anlamlı: masraf -> maliyet
+
+
+def test_proactive_findings(ai, tb):
+    mem = Memory()
+    ans = ai.answer("dikkat etmem gereken bir şey var mı", tb, mem)
+    assert mem.answered == "proactive" and "Yaşlı ve zayıf ekipman" in ans
