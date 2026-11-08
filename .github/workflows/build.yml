@@ -61,7 +61,7 @@ jobs:
             dist/EDIFICE-*-windows-x64.exe
 
   macos:
-    runs-on: macos-14   # Apple Silicon (arm64)
+    runs-on: macos-15   # Apple Silicon (arm64); macos-14 GitHub tarafından kaldırıldı
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
