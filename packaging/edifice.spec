@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(SPECPATH).parent
-VERSION = "1.2.1"
+VERSION = "1.3.0"
 mac, win = sys.platform == "darwin", sys.platform.startswith("win")
 
 EXCLUDES = [  # uygulamanın kullanmadığı büyük Qt modülleri
