@@ -132,3 +132,20 @@ def test_regression_guard_rejects_harmful_example():
     assert accepts([], "equipment", "tesisin ısı pompası var mı")
     assert not accepts([], "equipment", "skorum neden düştü")          # başka niyetin örneğini bozar
     assert not accepts([], "nonexistent", "herhangi bir şey")
+
+
+def test_building_facts_month_and_payback_filter(ai, tb):
+    mem = Memory()
+    assert "6.000 m²" in ai.answer("bina kaç m2", tb, mem)
+    assert "kişi" in ai.answer("kaç kişi çalışıyor", tb, mem)
+    assert "Haziran" in ai.answer("haziran ayında ne kadar elektrik harcadık", tb, mem)
+    ans = ai.answer("geri ödeme 5 yıldan kısa olanlar", tb, mem)
+    assert "5 yıldan kısa" in ans and "VFD" in ans and "Chiller" not in ans
+
+
+def test_misroutes_fixed(ai, tb):
+    mem = Memory()
+    assert "tam anlayamadım" in ai.answer("ısı pompası mantıklı mı", tb, mem)     # GES sanılmasın
+    ai.answer("kazanı değiştirmeye değer mi", tb, mem)
+    assert mem.actions == [] and mem.answered == "finance"                         # durum değiştirme eylemi üretmesin
+    assert "Rica ederim" in ai.answer("teşekkürler", tb, mem)

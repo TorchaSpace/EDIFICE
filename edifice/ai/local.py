@@ -34,7 +34,8 @@ INTENTS: dict[str, list[str]] = {
     "peak": ["en çok tüketim hangi ay", "pik ay", "aylık tüketim", "hangi ay yüksek", "mevsimsel dağılım", "aylara göre tüketim"],
     "anomaly": ["anomali var mı", "olağandışı tüketim", "garip bir ay var mı", "sapma var mı", "ani artış", "tuhaf bir şey var mı"],
     "opportunities": ["öneriler neler", "dönüşüm önerileri", "hangi iyileştirmeler yapılabilir", "fırsatlar neler", "tasarruf önerileri",
-                      "ne yapabiliriz", "hangi yatırımlar var", "öneri listesi"],
+                      "ne yapabiliriz", "hangi yatırımlar var", "öneri listesi",
+                      "geri ödemesi 5 yıldan kısa olanlar", "3 yılda geri dönen yatırımlar", "geri ödeme süresi kısa olan öneriler"],
     "start": ["hangi öneriyle başlamalıyım", "önce ne yapmalıyım", "en iyi öneri hangisi", "en hızlı geri dönen", "en kârlı yatırım",
               "öncelik sırası", "nereden başlayayım", "en mantıklı yatırım"],
     "budget": ["bütçem var ne yapmalıyım", "2 milyon tl bütçeyle ne yapabilirim", "bütçeye göre paket", "param var ne önerirsin",
@@ -70,6 +71,9 @@ INTENTS: dict[str, list[str]] = {
                 "gerçek tasarruf mu hava mı", "iklimden arındırılmış", "hava normalizasyonu"],
     "quality": ["veri kalitesi", "verilerim güvenilir mi", "eksik veri var mı", "veri güvenilirliği", "girdiler doğru mu",
                 "hatalı veri var mı", "veriye güvenebilir miyim", "sonuçlar ne kadar güvenilir"],
+    "facts": ["bina kaç m2", "kaç kişi çalışıyor", "yapım yılı ne", "kaç katlı", "binanın adresi nerede", "bina alanı kaç metrekare",
+              "kullanım tipi ne", "kaç kat var", "bina ne zaman yapıldı", "kullanıcı sayısı"],
+    "thanks": ["teşekkürler", "teşekkür ederim", "sağ ol", "eyvallah", "tamam anladım", "harika", "süper", "çok iyi", "mersi"],
     "evidence": ["bu oranlar nereden", "kaynak nedir", "neye dayanıyor", "kanıt düzeyi", "tasarruf oranları hangi kaynaklara dayanıyor",
                  "emisyon faktörü kaynağı", "güvenilir mi", "nasıl hesaplıyorsun", "varsayımlar neler", "literatür"],
 }
@@ -80,6 +84,7 @@ OPP_WORDS = {"LED": ["led", "aydinlatma", "armatur", "floresan"], "CHILLER": ["c
 STOP = set("nasil ne nedir kadar kac neden hangi var mi mu bu su bir icin ile ve da de en cok daha ben bana sen biz mi ya peki bunu sunu olur olursa yapayim yapmaliyim yapabilirim".split())
 MONTH_NAMES_SHORT = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"]
 ACTION_VERBS = {"sec", "secili", "secin", "koy", "koyun", "ac", "acin", "goster", "ekle", "isaretle", "ayarla", "uygula"}
+SOLAR_WORDS = {"ges", "gunes", "solar", "fotovoltaik", "pv", "panel", "paneli", "cati", "catiya", "kwp"}
 OPEN_VERBS = {"ac", "acin", "git", "gidelim", "goster", "gosterin", "don", "gec", "ziyaret"}
 FOLD = str.maketrans("çğıöşüÇĞİÖŞÜâîû", "cgiosuCGIOSUaiu")
 
@@ -158,7 +163,7 @@ INTENT_LABELS = {
     "opportunities": "Öneri listesi", "start": "Nereden başlamalı", "budget": "Bütçeye göre paket", "scenario": "Senaryo (ne olur?)",
     "finance": "Finans (NPV, geri ödeme)", "equipment": "Ekipman", "portfolio": "Portföy", "why": "Neden?", "compare": "Karşılaştırma",
     "climate": "Anlık hava ve haftalık öngörü", "solar": "Güneş enerjisi (GES)", "price": "Birim fiyat analizi", "mv": "Gerçekleşen tasarruf (M&V)", "weather": "Hava düzeltmesi", "quality": "Veri kalitesi", "evidence": "Kaynak / kanıt", "act_status": "İşlem: proje durumu", "act_report": "İşlem: rapor", "act_open": "İşlem: sayfa aç",
-    "act_scenario": "İşlem: senaryo seç", "greet": "Selamlama / yardım"}
+    "act_scenario": "İşlem: senaryo seç", "greet": "Selamlama / yardım", "facts": "Bina bilgileri", "thanks": "Teşekkür"}
 
 
 @dataclass
@@ -309,6 +314,10 @@ class LocalAssistant:
                 intent = mem.intent         # "ya chiller?"
             else:
                 return self._unknown(question, mem, ranked)
+        if intent == "solar" and not SOLAR_WORDS & qtok:
+            return self._unknown(question, mem, ranked)       # "ısı pompası mantıklı mı" GES sanılmasın: bilmediğini söylesin
+        if intent == "act_status" and not find_status(question) and codes:
+            intent = "finance"                                # "kazanı değiştirmeye değer mi": durum değiştirme değil, kârlılık sorusu
         if intent == "act_open" and not OPEN_VERBS & set(norm(question).split()):
             nq = norm(question)       # "sürdürülebilirlik durumu" gibi fiilsiz soru: sayfa açma değil, konunun kendisi
             intent = next((i for words, i in (("portfoy", "portfolio"), ("finans", "finance"), ("surdurulebilir", "carbon"), ("oneri", "opportunities"),
@@ -480,7 +489,39 @@ class LocalAssistant:
     def _kpi(self, t):
         return json.loads(t.run("get_building", {}))["kpi"]
 
+    def a_facts(self, q, t, b, c):
+        d = json.loads(t.run("get_building", {}))
+        n = norm(q)
+        kat = d["kat"] and f"{d['kat']} katlı"
+        if any(w in n for w in ("kisi", "kullanici", "calisan")):
+            return f"**{d['ad']}** için girilen kullanıcı sayısı **{_n(d['kisi'])}** kişi." if d["kisi"] else "Kullanıcı sayısı girilmemiş (Bina düzenle'den ekleyebilirsin)."
+        if any(w in n for w in ("adres", "nerede", "konum")):
+            return f"Adres: **{d['adres'] or 'girilmemiş'}**."
+        if any(w in n for w in ("kat", "katli")):
+            return f"**{d['ad']}** {kat or 'kat sayısı girilmemiş'}."
+        if any(w in n for w in ("yapim", "yapildi", "yili")):
+            return f"Yapım yılı **{d['yapim_yili']}**."
+        return (f"**{d['ad']}**: {d['kullanim']}, **{_n(d['alan_m2'])} m²**, {kat or 'kat sayısı yok'}, yapım yılı {d['yapim_yili']}, "
+                f"{_n(d['kisi'])} kişi. Adres: {d['adres'] or '-'}.")
+
+    def a_thanks(self, q, t, b, c):
+        return "Rica ederim! Başka bir sorun olursa buradayım; örneğin “nereden başlamalıyım” ya da “2 milyon ₺ bütçeyle ne yapabilirim” diye sorabilirsin."
+
+    def _month_energy(self, t, m: int, q: str) -> str:
+        from ..models import UtilityType
+        p = t.projects[t.current]
+        n = norm(q)
+        pick = [(UtilityType.ELECTRICITY, "Elektrik")] if "elektrik" in n and "gaz" not in n else \
+               [(UtilityType.GAS, "Doğalgaz")] if "gaz" in n and "elektrik" not in n else \
+               [(UtilityType.ELECTRICITY, "Elektrik"), (UtilityType.GAS, "Doğalgaz")]
+        lines = [f"- {label}: {_n(p.monthly(p.year, u)[m] / 1000, 1)} MWh" for u, label in pick]
+        self._chart = self._monthly_chart(p)
+        return f"**{MONTH_NAMES[m]}** {p.year}:\n\n" + "\n".join(lines)
+
     def a_energy(self, q, t, b, c):
+        months = find_months(q)
+        if months:
+            return self._month_energy(t, months[0], q)
         k = self._kpi(t)
         self._chart = self._monthly_chart(t.projects[t.current])
         return (f"Yıllık toplam enerji **{_n(k['toplam_enerji_kwh'] / 1000)} MWh** (EUI {_n(k['eui_kwh_m2'], 1)} kWh/m²·yıl).\n\n"
@@ -527,8 +568,19 @@ class LocalAssistant:
 
     def a_opportunities(self, q, t, b, c):
         rows = [r for r in json.loads(t.run("get_opportunities", {})) if r["uygunluk"] != "none"]
+        nq, limit = norm(q), None
+        if re.search(r"\byil", nq) and any(w in nq for w in ("kisa", "icinde", "geri don", "altinda", "daha az")):
+            m = re.search(r"(\d+(?:[.,]\d+)?)\s*yil", nq)
+            limit = float(m.group(1).replace(",", ".")) if m else None
+        if limit is not None:
+            fast = [r for r in rows if r["geri_odeme_yil"] is not None and r["geri_odeme_yil"] <= limit]
+            if not fast:
+                return f"Geri ödemesi {_n(limit, 0)} yıldan kısa olan uygun bir öneri yok. “Nereden başlamalıyım” ile en hızlı geri dönene bakabilirsin."
+            rows = sorted(fast, key=lambda r: r["geri_odeme_yil"])
         lines = "\n".join(f"- **{r['ad']}**: CAPEX {_m(r['capex_TL'])}, tasarruf {_tl(r['yillik_tasarruf_TL'])}/yıl, geri ödeme "
                           f"{'-' if r['geri_odeme_yil'] is None else _n(r['geri_odeme_yil'], 1) + ' yıl'} · uygunluk: {r['uygunluk']}" for r in rows)
+        if limit is not None:
+            return f"Geri ödemesi {_n(limit, 0)} yıldan kısa {len(rows)} öneri var:\n\n{lines}"
         return f"Ekipmanına göre uygun {len(rows)} öneri var:\n\n{lines}\n\nKanıt düzeyini ya da senaryosunu sorabilirsin."
 
     def a_start(self, q, t, b, c):
