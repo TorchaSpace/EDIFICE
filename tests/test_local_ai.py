@@ -149,3 +149,18 @@ def test_misroutes_fixed(ai, tb):
     ai.answer("kazanı değiştirmeye değer mi", tb, mem)
     assert mem.actions == [] and mem.answered == "finance"                         # durum değiştirme eylemi üretmesin
     assert "Rica ederim" in ai.answer("teşekkürler", tb, mem)
+
+
+def test_goal_solver_finds_cheapest_package_and_admits_unreachable(ai, tb):
+    p = tb.projects[1]
+    mem = Memory()
+    ans = ai.answer("enerji tüketimini %10 düşürmek istiyorum", tb, mem)
+    assert mem.answered == "goal" and "en düşük CAPEX" in ans
+    from itertools import combinations
+    codes = p.applicable_codes()
+    cheapest = min(p.scenario(list(c)).capex for r in range(1, len(codes) + 1) for c in combinations(codes, r)
+                   if p.scenario(list(c)).energy_reduction_pct >= 0.10)
+    assert f"CAPEX {cheapest / 1e6:,.2f}".replace(".", ",") in ans
+    assert "ulaşılamıyor" in ai.answer("karbonu %80 azalt", tb, mem)
+    assert mem.answered == "goal"
+    assert "C'ye" in ai.answer("sınıfımı C yapmak için ne gerekir", tb, mem)

@@ -71,6 +71,9 @@ INTENTS: dict[str, list[str]] = {
                 "gerçek tasarruf mu hava mı", "iklimden arındırılmış", "hava normalizasyonu"],
     "quality": ["veri kalitesi", "verilerim güvenilir mi", "eksik veri var mı", "veri güvenilirliği", "girdiler doğru mu",
                 "hatalı veri var mı", "veriye güvenebilir miyim", "sonuçlar ne kadar güvenilir"],
+    "goal": ["sınıfımı C yapmak için ne gerekir", "enerji sınıfını B ye çıkarmak için ne yapmalıyım", "A sınıfına ulaşmak için hangi paket",
+             "karbonu yüzde 30 azaltmak için ne yapmalıyım", "karbon salımını %20 düşürmek istiyorum", "enerji tüketimini yüzde 15 azaltmak için ne yapmalı",
+             "hedefe ulaşmak için en ucuz paket", "sınıf atlamak için ne yapmalıyım", "karbon azaltım hedefi için öneri"],
     "facts": ["bina kaç m2", "kaç kişi çalışıyor", "yapım yılı ne", "kaç katlı", "binanın adresi nerede", "bina alanı kaç metrekare",
               "kullanım tipi ne", "kaç kat var", "bina ne zaman yapıldı", "kullanıcı sayısı"],
     "thanks": ["teşekkürler", "teşekkür ederim", "sağ ol", "eyvallah", "tamam anladım", "harika", "süper", "çok iyi", "mersi"],
@@ -163,7 +166,7 @@ INTENT_LABELS = {
     "opportunities": "Öneri listesi", "start": "Nereden başlamalı", "budget": "Bütçeye göre paket", "scenario": "Senaryo (ne olur?)",
     "finance": "Finans (NPV, geri ödeme)", "equipment": "Ekipman", "portfolio": "Portföy", "why": "Neden?", "compare": "Karşılaştırma",
     "climate": "Anlık hava ve haftalık öngörü", "solar": "Güneş enerjisi (GES)", "price": "Birim fiyat analizi", "mv": "Gerçekleşen tasarruf (M&V)", "weather": "Hava düzeltmesi", "quality": "Veri kalitesi", "evidence": "Kaynak / kanıt", "act_status": "İşlem: proje durumu", "act_report": "İşlem: rapor", "act_open": "İşlem: sayfa aç",
-    "act_scenario": "İşlem: senaryo seç", "greet": "Selamlama / yardım", "facts": "Bina bilgileri", "thanks": "Teşekkür"}
+    "act_scenario": "İşlem: senaryo seç", "greet": "Selamlama / yardım", "goal": "Hedef planlama", "facts": "Bina bilgileri", "thanks": "Teşekkür"}
 
 
 @dataclass
@@ -488,6 +491,55 @@ class LocalAssistant:
 
     def _kpi(self, t):
         return json.loads(t.run("get_building", {}))["kpi"]
+
+    def a_goal(self, q, t, b, c):
+        """Hedeften geriye doğru: sınıf / karbon / enerji hedefini sağlayan en ucuz öneri paketini tüm kombinasyonlar arasından bulur."""
+        from itertools import combinations
+        from ..engine.rating import CLASSES
+        p = t.projects[t.current]
+        codes = p.applicable_codes()
+        if not codes:
+            return "Uygun öneri olmadığı için hedefe götüren bir paket kuramıyorum."
+        low = q.replace("İ", "i").replace("I", "ı").lower()
+        n = norm(q)
+        pct = re.search(r"(?:%|yuzde|yüzde)\s*(\d+(?:[.,]\d+)?)|(\d+(?:[.,]\d+)?)\s*%", low)
+        target_cls = re.search(r"(?:\b([a-g])\s*(?:'?\s*(?:ye|ya|e|a|yi|yı))?\s*(?:sinif)|sinif\w*\s+([a-g])\b)", n)
+        cur_cls = p.rating()["class"]
+        if pct:
+            val = float((pct.group(1) or pct.group(2)).replace(",", ".")) / 100
+            if any(w in n for w in ("karbon", "emisyon", "co2")):
+                ok, label = (lambda s_, combo: s_.carbon_reduction_pct >= val), f"karbonu %{val * 100:.0f} azaltma"
+            else:
+                ok, label = (lambda s_, combo: s_.energy_reduction_pct >= val), f"enerji tüketimini %{val * 100:.0f} azaltma"
+        else:
+            letter = next((g.upper() for g in (target_cls.groups() if target_cls else ()) if g), None)
+            if letter is None:       # "sınıf atlamak": bir üst sınıf
+                i = CLASSES.index(cur_cls)
+                if i == 0:
+                    return f"Zaten en iyi sınıftasın (**{cur_cls}**)."
+                letter = CLASSES[i - 1]
+            if CLASSES.index(letter) >= CLASSES.index(cur_cls):
+                return f"Tahmini sınıfın zaten **{cur_cls}**; hedef **{letter}** için bir şey gerekmiyor."
+            ok = lambda s_, combo, L=letter: CLASSES.index(p.rating_after(list(combo))) <= CLASSES.index(L)
+            label = f"enerji sınıfını {letter}'ye çıkarma"
+        best, best_s = None, None
+        for r in range(1, len(codes) + 1):
+            for combo in combinations(codes, r):
+                s_ = p.scenario(list(combo))
+                if ok(s_, combo) and (best is None or s_.capex < best_s.capex):
+                    best, best_s = combo, s_
+        names = {o.code: o.name for o in p.opportunities}
+        if best is None:
+            return (f"Hedef (**{label}**) mevcut önerilerle ulaşılamıyor. Hepsini uygulasam bile en fazla enerjide "
+                    f"%{p.scenario(codes).energy_reduction_pct * 100:.1f}, karbonda %{p.scenario(codes).carbon_reduction_pct * 100:.1f} azalma olur "
+                    f"(tahmini sınıf {p.rating_after(codes)}). Daha fazlası için ek önlem (ör. GES) ya da katalog dışı yatırım gerekir.")
+        f_ = p.finance(list(best))
+        return (f"Hedef: **{label}**. Bunu sağlayan **en düşük CAPEX'li** paket:\n\n" +
+                "\n".join(f"- {names[c_]}" for c_ in best) +
+                f"\n\nCAPEX {_m(best_s.capex)}, yıllık tasarruf {_tl(best_s.annual_saving)}, basit geri ödeme "
+                f"{'-' if best_s.payback_years is None else _n(best_s.payback_years, 1) + ' yıl'}, NPV {_m(f_.npv)}; "
+                f"enerji %{best_s.energy_reduction_pct * 100:.1f}, karbon %{best_s.carbon_reduction_pct * 100:.1f} azalır, tahmini sınıf {p.rating_after(list(best))}."
+                "\n\nTasarruf oranları tipik literatür değeridir (kanıt düzeyi: ikincil); aralık için Senaryo ekranına bak.")
 
     def a_facts(self, q, t, b, c):
         d = json.loads(t.run("get_building", {}))
